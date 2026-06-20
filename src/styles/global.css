@@ -1110,14 +1110,19 @@ button {
   inset: 0;
   pointer-events: none;
 }
+/* Menu BG is the LIVE 3D game (visible through), with only a light vignette +
+   a soft paper wash at the lower-left for legibility of the print/comic chrome. */
 .fr-bg--menu {
-  background: radial-gradient(125% 95% at 50% 14%, #f8f4ec 0%, #ece5d5 54%, #e2d8c5 100%);
+  background: transparent;
 }
 .fr-bg--menu::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(120% 95% at 50% 42%, transparent 58%, rgb(214 203 182 / 0.55) 100%);
+  background:
+    radial-gradient(80% 70% at 24% 70%, rgb(233 226 211 / 0.4) 0%, rgb(233 226 211 / 0) 60%),
+    linear-gradient(180deg, rgb(26 19 11 / 0.06) 0%, transparent 16%, transparent 84%, rgb(26 19 11 / 0.1) 100%),
+    radial-gradient(120% 100% at 50% 40%, transparent 60%, rgb(80 58 30 / 0.18) 100%);
 }
 .fr-ghost {
   position: absolute;

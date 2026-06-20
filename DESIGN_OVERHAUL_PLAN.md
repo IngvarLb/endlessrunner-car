@@ -71,16 +71,18 @@ Hinweis: Das sind kosmetische Stats (4 Achsen) — passend zu früherer User-Ent
 
 ---
 
-## 4. Integration mit 3D (der Kern)
+## 4. Integration mit 3D (der Kern) — KORRIGIERT 2026-06-20
 
-Das neue Design ist **2D-Editorial mit eingebettetem 3D-Auto-Render** (nicht Vollbild-3D-Garage):
-- **Garage:** Der Three.js-Renderer rendert NUR das Auto (+ optional Drehscheibe) und wird als `<canvas>` **in den Slot-Bereich** positioniert/skaliert. Hintergrund transparent (`alpha:true`), damit das 2D-Paper durchscheint. Spotlight/Drehscheibe/Geister-Kanji/Auto-Wort kommen aus 2D-CSS. Die bisherige 3D-Garagen-Shell (Raum/Wände/Wand-Kanji/Spec-Card) wird **entfernt/ersetzt** durch das 2D-Editorial.
-- **Run:** bleibt Vollbild-3D (Gameplay) mit HUD in der neuen Sprache (separat, nicht im Import — wird abgeleitet).
-- **Menu/Settings:** rein 2D (kein 3D sichtbar; Canvas verstecken oder überdecken).
+**Wichtigstes Prinzip (User-Klarstellung):** Die neuen Design-Screens sind **transparente Druck-/Comic-Overlays ÜBER der LIVE-3D-Szene** — sie decken das 3D NICHT mit Papier zu. Der Import (`Feudal Runner.dc.html`) hat einen flachen Papier-Hintergrund + einen „PLATZHALTER"-Slot, weil dort kein echtes 3D lief; im Spiel ist die 3D-Szene der Hintergrund.
 
-Renderer-Anpassung: `alpha:true` + transparenter Clear; Canvas-Position/-Größe je State (Garage=Slot, Run=Vollbild).
+- **Menu:** Die **3D-Run-Szene (Spielstart: Torii-Straße + Auto) ist live sichtbar**; darüber liegen Comic-Textur (Screentone/Geister-Kanji/Korn) + die Print-Chrome (Monument-Titel, Top-Bar, START/GARAGE, Stats, Bottom-Strip). KEIN opakes Paper. (✅ bereits umgesetzt: `.fr-bg--menu` ist transparent, nur leichte Vignette/Legibility-Wash; das Spiel scheint durch.)
+- **Garage:** Die **3D-Garage (Raum + Auto + Spotlight) bleibt voll sichtbar** als Hintergrund. NUR die darüberliegenden Chrome-Elemente werden das neue Editorial-Design (Top-Bar, linkes Info-Panel mit Stats, Roster-Rail unten, großes Auto-Wort/Kanji). Das Auto wird **NICHT** in einen kleinen Slot geschrumpft — die echte 3D-Garage ist der „Slot". Das **Wort/Kanji hinter dem Auto** (Import-Platzhalter) darf als **2D-Layer über dem 3D** liegen (oder das bestehende 3D-Backdrop-Kanji nutzen).
+- **Run:** Vollbild-3D + HUD in neuer Sprache (abgeleitet).
+- **Settings:** Overlay über dem Spiel (kann etwas stärker abdunkeln für Lesbarkeit, aber Spiel darf durchscheinen).
 
-Responsiv: Der Import nutzt eine fixe 1600×900-Bühne (scale-to-fit, Letterbox). Für das echte Spiel bauen wir die Screens **responsiv/fluid** in derselben Bildsprache (besser für Mobile), statt hart zu letterboxen. Mobile = eigene, kompaktere Anordnung derselben Regionen.
+**Renderer:** bleibt **Vollbild** und sichtbar in allen States (Menu/Garage/Run). `alpha`/Slot-Placement ist damit **NICHT nötig** — die Screens overlayen einfach. (Step 5 entfällt weitgehend; statt „transparent + Slot" nur sicherstellen, dass die Overlays transparent sind und das 3D nicht verdecken.) Für die Garage ggf. die bestehende 3D-Garage beibehalten/leicht anpassen statt ersetzen — die alte HTML-Chrome (unteres Band/Hanko-Rail/Diegetik-Stencil) wird durch die neue Editorial-Chrome ersetzt.
+
+Responsiv: Der Import nutzt eine fixe 1600×900-Bühne (scale-to-fit). Wir bauen **responsiv/fluid** in derselben Bildsprache (besser für Mobile). Legibility der dunklen Print-Chrome über der hellen 3D-Szene: leichte Wash/Vignette/Text-Schatten wo nötig; Comic-Textur darf gern etwas kräftiger sein, damit sie über dem Spiel sichtbar bleibt (tunable).
 
 ---
 
@@ -111,12 +113,12 @@ Git ist aktiv (`main`). Arbeitsmodus: **autonom im Projektordner, pro Meilenstei
 - `d35aa0e` Step 2 `VehicleCatalog`: neue Felder `kanji/romaji/tier/paint/tag/stats` + `TIER_META`; neue Namen/Kosten; sakura jetzt owned.
 - `977972f` Step 3-4 Menu-Screen: `.fr-menu` in `GameApp.setupUi()` (großer innerHTML-Block) + `.fr-*` CSS am Ende von `global.css` + `updateMenuUi()` + Buttons verdrahtet (`.fr-start-action`→start, `.fr-garage-action`→openGarage, `.fr-settings-open`→toggleSettingsPanel). Legacy-UI wird im `menu`-State per CSS ausgeblendet.
 
-### Als Nächstes (Step 5 → 6/7, der große Brocken)
-**Step 5 — Renderer transparent + Canvas-Placement je State.** `RendererService` nutzt aktuell `alpha:false` + `setClearColor(0x58c7f3)`. Für die Garage (3D-Auto im 2D-Slot) muss der Renderer **transparent** sein (`alpha:true`, `setClearAlpha(0)`), und das `<canvas>` muss je State positioniert/skaliert werden: **Garage = in den Slot-Bereich** (CSS-positioniert), **Run = Vollbild**, **Menu/Settings = versteckt**. Vorschlag: `RendererService` bekommt eine Methode, um den Canvas-Modus zu setzen (full vs. rect via CSS), oder GameApp setzt CSS-Klassen am Canvas. Achtung: `setSize(false)` lässt CSS-Größe; mit alpha durchscheint Paper.
+### Als Nächstes (Garage ist der große Brocken)
+**Step 5 entfällt weitgehend** (s. korrigiertes §4): Renderer bleibt Vollbild + sichtbar; keine Slot-/Alpha-Umstellung nötig. Die Screens sind transparente Overlays über dem 3D. (Menu ✅ schon so.)
 
-**Step 6/7 — Garage-Screen `.fr-garage` (analog `.fr-menu`)** nach dem Import bauen (siehe §2 Garage) und das **3D-Auto in den Slot** rendern. Die **alte 3D-Garagen-Shell ersetzen**: `GarageSceneFactory` soll nur noch das Auto (+ ggf. Drehscheibe) in einer transparenten Szene rendern; **`GarageBackdrop.ts` (Raum-Wand/Kanji/Spec-Card) entfällt** (Geister-Kanji/Spotlight/Drehscheibe/Auto-Wort kommen jetzt aus 2D-CSS). Die `GarageShowroomController`-Logik (prev/next/owned/unlock, Carousel) bleibt nutzbar; die 2D-UI (Info-Panel mit Stats-Balken aus `vehicle.stats`, Tier-Badge aus `TIER_META[vehicle.tier]`, DRIVE/UNLOCK/LOCKED, Roster-Rail mit 7 Karten) wird neu in `.fr-garage` gebaut und an `GameApp`-Handler (`handleGarageMove`, `startFromGarage`, `unlock`) gebunden. Geister-/Display-Kanji = `vehicle.kanji`, Auto-Wort = `displayName.split(' ')[0].toUpperCase()`, Farben = `vehicle.paint`.
+**Garage-Screen `.fr-garage` (analog `.fr-menu`)** nach §2/§4 bauen: Die **bestehende 3D-Garage bleibt sichtbar** (Raum + Auto + Spotlight). Darüber kommt die neue Editorial-Chrome **transparent**: Top-Bar (ZURÜCK + 車庫/GARAGE + Coin/LV + 設), **linkes Info-Panel** (Tier-Badge aus `TIER_META[vehicle.tier]`, Auto-Name Anton, Kanji+Romaji+Tag, **Stats-Balken** aus `vehicle.stats` {speed,grip,handle,power} in `vehicle.paint`, Divider, **DRIVE/UNLOCK·解放/金不足** je nach owned/afford), **Roster-Rail unten** (7 Karten: `vehicle.kanji`+Name, Tier-Farbe, 鍵 für locked, selektiert = weiß+roter Rahmen), großes **Auto-Wort/Kanji** als 2D-Layer über dem 3D (Wort = `displayName.split(' ')[0].toUpperCase()`, Kanji = `vehicle.kanji`, Farbe `vehicle.paint`), ◀▶-Pfeile. An `GameApp`-Handler binden: `handleGarageMove(±1)`, `startFromGarage()` (Drive/Unlock-Logik existiert), `getPreview()`. Das **alte HTML-Garage-Chrome im `garage`-State ausblenden** (wie beim Menu) — also `.menu-panel`/`.hanko-rail`/`.garage-balance` etc. Die 3D-`GarageBackdrop`-Spec-Card/Wand-Kanji kann **bleiben oder entfallen** (das Auto-Wort/Kanji macht jetzt die 2D-Chrome) — entscheiden beim Bauen; wenn entfernt, in `GarageSceneFactory` rausnehmen und tsc-Aufräumen.
 
-Danach: Step 8 Settings-Overlay `.fr-settings` (Slider an `updateAudioSettings`, Toggles an Mute/Perf, Quality 低/中/高 → `saveData.settings.quality` + Renderer-Quality live; das Settings-Overlay ersetzt die alte `.settings-panel`). Step 9 Run-HUD + Game-Over in neuer Sprache. Step 10 Mobile + Aufräumen (alte `DESIGN_VISION/SYSTEM`-CSS/DOM und `GarageBackdrop`/Hanko/print-frame entfernen).
+Danach: Settings-Overlay `.fr-settings` (Slider an `updateAudioSettings`, Toggles an Mute/Perf, Quality 低/中/高 → `saveData.settings.quality`; ersetzt alte `.settings-panel`; darf das Spiel etwas abdunkeln). Run-HUD + Game-Over in neuer Sprache. Mobile + Aufräumen (alte `DESIGN_VISION/SYSTEM`-CSS/DOM, ggf. `GarageBackdrop`/Hanko/print-frame entfernen).
 
 ### Wichtige Dateien
 - `src/app/GameApp.ts` — UI-Template (`setupUi`), State-getriebene Sichtbarkeit (`updateUi`), alle Handler. Hier kommen `.fr-garage`/`.fr-settings`/`.fr-hud` rein.
