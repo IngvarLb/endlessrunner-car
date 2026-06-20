@@ -24,12 +24,38 @@ export type VehicleBounds = {
   z: number;
 };
 
+/** Rarity tier shown in the new design (COMMON/RARE/EPIC/LEGEND). */
+export type VehicleTier = "common" | "rare" | "epic" | "legend";
+
+export type VehicleStats = {
+  speed: number;
+  grip: number;
+  handle: number;
+  power: number;
+};
+
+export type TierMeta = { en: string; jp: string; color: string };
+
+export const TIER_META: Record<VehicleTier, TierMeta> = {
+  common: { en: "COMMON", jp: "常", color: "#9a938a" },
+  rare: { en: "RARE", jp: "稀", color: "#4f97bd" },
+  epic: { en: "EPIC", jp: "極", color: "#a35fa8" },
+  legend: { en: "LEGENDARY", jp: "伝", color: "#cf9d2a" }
+};
+
 export type VehicleDefinition = {
   id: string;
   displayName: string;
   modelKey: VehicleModelKey;
   unlockState: VehicleUnlockState;
   economy: VehicleEconomy;
+  /** Display-system fields (from the Claude Design import). */
+  kanji: string;
+  romaji: string;
+  tier: VehicleTier;
+  paint: string;
+  tag: string;
+  stats: VehicleStats;
   run: {
     scale: number;
     forwardRotationY: number;
@@ -46,13 +72,16 @@ export const DEFAULT_VEHICLE_ID = "sports-car";
 export const VEHICLE_CATALOG: VehicleDefinition[] = [
   {
     id: "sports-car",
-    displayName: "Akai Striker",
+    displayName: "Crimson Bolt",
     modelKey: "sports-car",
     unlockState: "owned",
-    economy: {
-      price: 0,
-      tier: "starter"
-    },
+    economy: { price: 0, tier: "starter" },
+    kanji: "赤",
+    romaji: "AKA",
+    tier: "common",
+    paint: "#e23b2e",
+    tag: "江戸 ・ 街道仕様",
+    stats: { speed: 6, grip: 5, handle: 7, power: 6 },
     run: {
       scale: 0.84,
       forwardRotationY: 0,
@@ -65,13 +94,16 @@ export const VEHICLE_CATALOG: VehicleDefinition[] = [
   },
   {
     id: "drift-coupe",
-    displayName: "Aoi Drift Coupe",
+    displayName: "Indigo Drift",
     modelKey: "drift-coupe",
     unlockState: "owned",
-    economy: {
-      price: 0,
-      tier: "starter"
-    },
+    economy: { price: 0, tier: "starter" },
+    kanji: "藍",
+    romaji: "AI",
+    tier: "common",
+    paint: "#3f6f9e",
+    tag: "藍染 ・ 夜行型",
+    stats: { speed: 5, grip: 7, handle: 6, power: 5 },
     run: {
       scale: 0.84,
       forwardRotationY: 0,
@@ -86,11 +118,14 @@ export const VEHICLE_CATALOG: VehicleDefinition[] = [
     id: "sakura-roadster",
     displayName: "Sakura Roadster",
     modelKey: "sakura-roadster",
-    unlockState: "locked",
-    economy: {
-      price: 350,
-      tier: "street"
-    },
+    unlockState: "owned",
+    economy: { price: 0, tier: "street" },
+    kanji: "桜",
+    romaji: "SAKURA",
+    tier: "rare",
+    paint: "#e0738d",
+    tag: "花見 ・ 限定塗装",
+    stats: { speed: 7, grip: 6, handle: 8, power: 6 },
     run: {
       scale: 0.86,
       forwardRotationY: 0,
@@ -103,13 +138,16 @@ export const VEHICLE_CATALOG: VehicleDefinition[] = [
   },
   {
     id: "kitsune-rally",
-    displayName: "Kitsune Rally",
+    displayName: "Kitsune GT",
     modelKey: "kitsune-rally",
     unlockState: "locked",
-    economy: {
-      price: 850,
-      tier: "sport"
-    },
+    economy: { price: 1200, tier: "sport" },
+    kanji: "狐",
+    romaji: "KITSUNE",
+    tier: "rare",
+    paint: "#e08a2a",
+    tag: "稲荷 ・ 高速仕様",
+    stats: { speed: 8, grip: 6, handle: 7, power: 8 },
     run: {
       scale: 0.82,
       forwardRotationY: 0,
@@ -122,13 +160,16 @@ export const VEHICLE_CATALOG: VehicleDefinition[] = [
   },
   {
     id: "shogun-gtr",
-    displayName: "Shogun GTR",
+    displayName: "Daimyo Coupe",
     modelKey: "shogun-gtr",
     unlockState: "locked",
-    economy: {
-      price: 1600,
-      tier: "sport"
-    },
+    economy: { price: 3500, tier: "sport" },
+    kanji: "将",
+    romaji: "SHOGUN",
+    tier: "epic",
+    paint: "#9a5fa6",
+    tag: "武家 ・ 重装型",
+    stats: { speed: 8, grip: 8, handle: 6, power: 9 },
     run: {
       scale: 0.8,
       forwardRotationY: 0,
@@ -141,13 +182,16 @@ export const VEHICLE_CATALOG: VehicleDefinition[] = [
   },
   {
     id: "oni-interceptor",
-    displayName: "Oni Interceptor",
+    displayName: "Oni Racer",
     modelKey: "oni-interceptor",
     unlockState: "locked",
-    economy: {
-      price: 2800,
-      tier: "elite"
-    },
+    economy: { price: 6000, tier: "elite" },
+    kanji: "鬼",
+    romaji: "ONI",
+    tier: "epic",
+    paint: "#b8332b",
+    tag: "鬼門 ・ 攻撃的",
+    stats: { speed: 9, grip: 7, handle: 7, power: 9 },
     run: {
       scale: 0.78,
       forwardRotationY: 0,
@@ -160,13 +204,16 @@ export const VEHICLE_CATALOG: VehicleDefinition[] = [
   },
   {
     id: "ryujin-hypercar",
-    displayName: "Ryujin Hypercar",
+    displayName: "Dragon Zero",
     modelKey: "ryujin-hypercar",
     unlockState: "locked",
-    economy: {
-      price: 5000,
-      tier: "legend"
-    },
+    economy: { price: 12000, tier: "legend" },
+    kanji: "龍",
+    romaji: "RYU",
+    tier: "legend",
+    paint: "#cf9d2a",
+    tag: "昇龍 ・ 伝説機",
+    stats: { speed: 10, grip: 9, handle: 9, power: 10 },
     run: {
       scale: 0.78,
       forwardRotationY: 0,
