@@ -96,6 +96,11 @@ export class GameApp {
   private perfHudInput?: HTMLInputElement;
   private hankoRail?: HTMLElement;
   private lastHankoActiveId = "";
+  private frMenuCoins?: HTMLElement;
+  private frMenuLevel?: HTMLElement;
+  private frMenuXpText?: HTMLElement;
+  private frMenuXpFill?: HTMLElement;
+  private frMenuBest?: HTMLElement;
 
   constructor(
     private readonly root: HTMLElement,
@@ -401,6 +406,63 @@ export class GameApp {
           <button class="secondary-action garage-back-action" type="button">戻 ZURÜCK</button>
         </div>
       </section>
+      <section class="fr-menu" data-fr-menu>
+        <div class="fr-bg fr-bg--menu"></div>
+        <div class="fr-ghost fr-ghost--menu">走</div>
+        <div class="fr-screentone fr-screentone--menu"></div>
+        <div class="fr-grain"></div>
+        <span class="fr-corner fr-corner--tl">+</span>
+        <span class="fr-corner fr-corner--br">+</span>
+
+        <header class="fr-topbar">
+          <div class="fr-brand">
+            <span class="fr-seal">走</span>
+            <div class="fr-brand-text">
+              <span class="fr-brand-name">FEUDAL RUNNER</span>
+              <span class="fr-brand-sub">封建 ランナー</span>
+            </div>
+          </div>
+          <div class="fr-topright">
+            <div class="fr-chip fr-chip--coin"><span class="fr-coin-k">金</span><span data-fr-coins>0</span></div>
+            <div class="fr-chip fr-lvl">
+              <div class="fr-lvl-row"><span class="fr-lvl-num">LV.<span data-fr-level>1</span></span><span class="fr-lvl-pct" data-fr-xptext>0%</span></div>
+              <div class="fr-lvl-bar"><div class="fr-lvl-fill" data-fr-xpfill></div></div>
+            </div>
+            <button class="fr-iconbtn fr-settings-open" type="button" aria-label="Settings" title="Settings">設</button>
+          </div>
+        </header>
+
+        <div class="fr-hero">
+          <div class="fr-kicker">
+            <span class="fr-kicker-jp">道</span>
+            <span class="fr-kicker-en">ENDLESS RUN</span>
+            <span class="fr-kicker-sub">· 江戸</span>
+            <span class="fr-kicker-rule"></span>
+            <span class="fr-kicker-no">.01</span>
+          </div>
+          <h1 class="fr-monument">FEUDAL</h1>
+          <h1 class="fr-monument">RUNNER<span class="fr-dot">.</span></h1>
+          <div class="fr-subtitle">無限走行 ・ 終わりなき道</div>
+          <div class="fr-cta">
+            <button class="fr-btn fr-btn--primary fr-start-action" type="button"><span class="fr-btn-jp">走</span>START</button>
+            <button class="fr-btn fr-btn--ghost fr-garage-action" type="button"><span class="fr-btn-jp fr-accent">車</span>GARAGE</button>
+          </div>
+          <div class="fr-stats">
+            <div class="fr-stat"><div class="fr-stat-label">最長 BEST</div><div class="fr-stat-val"><span data-fr-best>0</span><span class="fr-stat-unit">M</span></div></div>
+            <div class="fr-stat-div"></div>
+            <div class="fr-stat"><div class="fr-stat-label">記録 TIME</div><div class="fr-stat-val">—</div></div>
+            <div class="fr-stat-div"></div>
+            <div class="fr-stat"><div class="fr-stat-label">走行 RUNS</div><div class="fr-stat-val" data-fr-runs>—</div></div>
+          </div>
+        </div>
+
+        <div class="fr-vkana">エンドレス・ランナー</div>
+
+        <div class="fr-bottomstrip">
+          <span>© 2026 FEUDAL RUNNER</span>
+          <span class="fr-strip-right">［ REAL-TIME 3D · 江戸大通り ］<span class="fr-barcode"></span><span class="fr-accent">✦</span></span>
+        </div>
+      </section>
       <pre class="perf-hud" data-perf-hud hidden aria-hidden="true"></pre>
       <div class="hanko-rail" data-hanko-rail hidden aria-hidden="true"></div>
       <span class="garage-balance" data-garage-balance hidden></span>
@@ -444,6 +506,14 @@ export class GameApp {
     this.coinsLabel = ui.querySelector('[data-stat="coins"]') ?? undefined;
     this.comboLabel = ui.querySelector('[data-stat="combo"]') ?? undefined;
     this.pressureLabel = ui.querySelector('[data-stat="pressure"]') ?? undefined;
+    this.frMenuCoins = ui.querySelector("[data-fr-coins]") ?? undefined;
+    this.frMenuLevel = ui.querySelector("[data-fr-level]") ?? undefined;
+    this.frMenuXpText = ui.querySelector("[data-fr-xptext]") ?? undefined;
+    this.frMenuXpFill = ui.querySelector("[data-fr-xpfill]") ?? undefined;
+    this.frMenuBest = ui.querySelector("[data-fr-best]") ?? undefined;
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-start-action") ?? undefined, () => this.start());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-action") ?? undefined, () => this.openGarage());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-settings-open") ?? undefined, () => this.toggleSettingsPanel());
     this.bindButton(this.actionButton, () => this.handlePrimaryAction());
     this.bindButton(this.garageButton, () => this.openGarage());
     this.bindButton(this.mainMenuButton, () => this.returnToMainMenu());
@@ -890,7 +960,30 @@ export class GameApp {
     }
     this.updateGarageUi();
     this.updateGameOverUi();
+    this.updateMenuUi();
     this.updateStats();
+  }
+
+  private updateMenuUi(): void {
+    const coins = Math.max(0, Math.floor(this.saveData.totalCoins));
+    const best = Math.max(0, Math.floor(this.saveData.bestDistance));
+    const level = 1 + Math.floor(coins / 1500);
+    const intoLevel = (coins % 1500) / 1500;
+    if (this.frMenuCoins) {
+      this.frMenuCoins.textContent = coins.toLocaleString("en-US");
+    }
+    if (this.frMenuLevel) {
+      this.frMenuLevel.textContent = String(level);
+    }
+    if (this.frMenuXpText) {
+      this.frMenuXpText.textContent = `${Math.round(intoLevel * 100)}%`;
+    }
+    if (this.frMenuXpFill) {
+      this.frMenuXpFill.style.width = `${Math.round(intoLevel * 100)}%`;
+    }
+    if (this.frMenuBest) {
+      this.frMenuBest.textContent = best.toLocaleString("en-US");
+    }
   }
 
   private updateGameOverUi(): void {
