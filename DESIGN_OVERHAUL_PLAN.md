@@ -101,6 +101,37 @@ Jeder Schritt: `npm run build` grün + (wo sinnvoll) Screenshot-Check + Git-Comm
 
 ---
 
+## 7. ÜBERGABE-STATUS (Stand 2026-06-20, für neue KI-Session)
+
+Git ist aktiv (`main`). Arbeitsmodus: **autonom im Projektordner, pro Meilenstein committen** (Co-Authored-By-Trailer; nur bei Installationen/Änderungen außerhalb des Ordners nachfragen).
+
+### Erledigt (committed)
+- `ba45e13` Baseline (Stand vor Umbau: enthält noch die ALTE 3D-Garage mit Spotlight/Diegetik-Wand-Stencil/Hanko-Rail).
+- `cb93334` Step 1 Foundation: `index.html` Fonts (Anton/Archivo/Noto Sans JP/Shippori/Space Mono) + `global.css` `:root`-Tokens (neue Palette).
+- `d35aa0e` Step 2 `VehicleCatalog`: neue Felder `kanji/romaji/tier/paint/tag/stats` + `TIER_META`; neue Namen/Kosten; sakura jetzt owned.
+- `977972f` Step 3-4 Menu-Screen: `.fr-menu` in `GameApp.setupUi()` (großer innerHTML-Block) + `.fr-*` CSS am Ende von `global.css` + `updateMenuUi()` + Buttons verdrahtet (`.fr-start-action`→start, `.fr-garage-action`→openGarage, `.fr-settings-open`→toggleSettingsPanel). Legacy-UI wird im `menu`-State per CSS ausgeblendet.
+
+### Als Nächstes (Step 5 → 6/7, der große Brocken)
+**Step 5 — Renderer transparent + Canvas-Placement je State.** `RendererService` nutzt aktuell `alpha:false` + `setClearColor(0x58c7f3)`. Für die Garage (3D-Auto im 2D-Slot) muss der Renderer **transparent** sein (`alpha:true`, `setClearAlpha(0)`), und das `<canvas>` muss je State positioniert/skaliert werden: **Garage = in den Slot-Bereich** (CSS-positioniert), **Run = Vollbild**, **Menu/Settings = versteckt**. Vorschlag: `RendererService` bekommt eine Methode, um den Canvas-Modus zu setzen (full vs. rect via CSS), oder GameApp setzt CSS-Klassen am Canvas. Achtung: `setSize(false)` lässt CSS-Größe; mit alpha durchscheint Paper.
+
+**Step 6/7 — Garage-Screen `.fr-garage` (analog `.fr-menu`)** nach dem Import bauen (siehe §2 Garage) und das **3D-Auto in den Slot** rendern. Die **alte 3D-Garagen-Shell ersetzen**: `GarageSceneFactory` soll nur noch das Auto (+ ggf. Drehscheibe) in einer transparenten Szene rendern; **`GarageBackdrop.ts` (Raum-Wand/Kanji/Spec-Card) entfällt** (Geister-Kanji/Spotlight/Drehscheibe/Auto-Wort kommen jetzt aus 2D-CSS). Die `GarageShowroomController`-Logik (prev/next/owned/unlock, Carousel) bleibt nutzbar; die 2D-UI (Info-Panel mit Stats-Balken aus `vehicle.stats`, Tier-Badge aus `TIER_META[vehicle.tier]`, DRIVE/UNLOCK/LOCKED, Roster-Rail mit 7 Karten) wird neu in `.fr-garage` gebaut und an `GameApp`-Handler (`handleGarageMove`, `startFromGarage`, `unlock`) gebunden. Geister-/Display-Kanji = `vehicle.kanji`, Auto-Wort = `displayName.split(' ')[0].toUpperCase()`, Farben = `vehicle.paint`.
+
+Danach: Step 8 Settings-Overlay `.fr-settings` (Slider an `updateAudioSettings`, Toggles an Mute/Perf, Quality 低/中/高 → `saveData.settings.quality` + Renderer-Quality live; das Settings-Overlay ersetzt die alte `.settings-panel`). Step 9 Run-HUD + Game-Over in neuer Sprache. Step 10 Mobile + Aufräumen (alte `DESIGN_VISION/SYSTEM`-CSS/DOM und `GarageBackdrop`/Hanko/print-frame entfernen).
+
+### Wichtige Dateien
+- `src/app/GameApp.ts` — UI-Template (`setupUi`), State-getriebene Sichtbarkeit (`updateUi`), alle Handler. Hier kommen `.fr-garage`/`.fr-settings`/`.fr-hud` rein.
+- `src/styles/global.css` — Tokens (`:root`) + `.fr-*`-CSS (am Dateiende). Legacy-CSS davor wird später entfernt.
+- `src/game/vehicles/VehicleCatalog.ts` — Auto-Daten + `TIER_META`.
+- `src/engine/rendering/RendererService.ts` — alpha/Canvas-Placement (Step 5).
+- `src/engine/rendering/GarageSceneFactory.ts` + `GarageBackdrop.ts` — alte 3D-Garage, in Step 6/7 stark vereinfachen/ersetzen.
+- `index.html` — Fonts.
+
+### Workflow / Gotchas
+- Build: `npm run build` (tsc strict — unbenutzte Felder/Methoden = Fehler, also beim Entfernen aufräumen).
+- Visuelle Prüfung: System-Chrome via `puppeteer-core` (bereits `--no-save` installiert). Dev-Server `npm run dev` (Port 5173/5174). Ein Screenshot-Skript-Muster liegt als `garage-shot.mjs` (gitignored) im Ordner; headless-WebGL braucht die Flags `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`.
+- Design erneut abrufen: **DesignSync MCP**, `projectId 6ad9a379-08ca-4e00-b4ec-fa96caccaa77`, Datei `Feudal Runner.dc.html` (enthält Menu/Garage/Settings + die `Component`-State mit Auto-Daten). Falls DesignSync Auth braucht: User `/design-login`.
+- `.fr-*`-Konventionen: jeder Screen = `<section class="fr-xxx">` absolute inset:0, eigene BG-Layer (`.fr-bg`/`.fr-ghost`/`.fr-screentone`/`.fr-grain`), per CSS nur im passenden `data-state` sichtbar; Legacy-UI im selben State ausblenden.
+
 ## 6. Offene Punkte / bewusste Abweichungen
 - **LV/XP** existiert im Spiel noch nicht — vorerst Platzhalter (LV aus einer simplen Ableitung von totalCoins/distance) oder ausblenden, bis ein echtes Level-System kommt.
 - **BEST/TIME/RUNS** im Menu: BEST/Distance haben wir (SaveData.bestDistance); TIME/RUNS müssten ergänzt werden (oder vorerst Platzhalter/ableiten).
