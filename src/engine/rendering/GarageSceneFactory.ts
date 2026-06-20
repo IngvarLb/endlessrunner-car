@@ -55,10 +55,13 @@ class GarageCameraController {
     // so the car rides low (cut from below) and the kanji towers out of the top.
     const portrait = aspect < 0.72;
     const snug = aspect < 1;
-    this.pullback = portrait ? -0.7 : snug ? 1.1 : 0;
-    this.sideOffset = portrait ? -1.55 : snug ? -0.7 : 0;
-    this.heightOffset = portrait ? -0.32 : 0;
-    this.targetLift = portrait ? 0.82 : snug ? 0.1 : 0;
+    // Portrait: the new 2D chrome owns the kanji, and the info panel is a bottom
+    // sheet — so frame the car near-centred and pulled back to fit in the upper
+    // band (not shoved low/left as in the old kanji-towering layout).
+    this.pullback = portrait ? 1.0 : snug ? 1.1 : 0;
+    this.sideOffset = portrait ? -0.15 : snug ? -0.7 : 0;
+    this.heightOffset = portrait ? 0.55 : 0;
+    this.targetLift = portrait ? -0.15 : snug ? 0.1 : 0;
     this.camera.updateProjectionMatrix();
   }
 

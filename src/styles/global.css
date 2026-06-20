@@ -2031,23 +2031,51 @@ button {
     display: none;
   }
   .fr-gkanji {
-    top: 74px;
+    top: 70px;
   }
   .fr-gkanji-big {
-    font-size: clamp(82px, 22vw, 120px);
+    font-size: clamp(72px, 19vw, 108px);
   }
+  /* compact bottom-sheet info card; the car stays visible in the upper band */
   .fr-gpanel {
     left: 10px;
     right: 10px;
     width: auto;
     max-width: none;
     top: auto;
-    bottom: calc(clamp(14px, 2.4vh, 34px) + 142px);
-    max-height: 42vh;
+    bottom: calc(clamp(12px, 2vh, 22px) + 134px);
+    max-height: 40vh;
     overflow: auto;
+    padding: 14px 16px;
+    background: rgb(250 246 238 / 0.95);
+  }
+  .fr-gname {
+    font-size: clamp(30px, 8vw, 40px);
+    margin-top: 10px;
+  }
+  .fr-gstats-label {
+    margin: 14px 0 8px;
+  }
+  .fr-gstats {
+    gap: 7px;
+  }
+  .fr-gseg {
+    height: 8px;
+  }
+  .fr-gpanel-div {
+    margin: 12px 0 11px;
+  }
+  .fr-roster {
+    bottom: clamp(12px, 2vh, 22px);
+  }
+  .fr-roster-head {
+    margin-bottom: 7px;
   }
   .fr-roster-cards {
     gap: 6px;
+  }
+  .fr-rcard {
+    height: clamp(64px, 11vh, 88px);
   }
   .fr-rcard-name {
     display: none;
