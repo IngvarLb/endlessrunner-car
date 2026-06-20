@@ -110,6 +110,13 @@ export class GameApp {
   private setMasterInput?: HTMLInputElement;
   private setMusicInput?: HTMLInputElement;
   private setSfxInput?: HTMLInputElement;
+  private hudMeta?: HTMLElement;
+  private hudCoins?: HTMLElement;
+  private hudCombo?: HTMLElement;
+  private hudPressure?: HTMLElement;
+  private goMeta?: HTMLElement;
+  private goCoins?: HTMLElement;
+  private goScore?: HTMLElement;
 
   constructor(
     private readonly root: HTMLElement,
@@ -595,6 +602,65 @@ export class GameApp {
           <button class="fr-set-done fr-settings-close" type="button"><span class="fr-gbtn-jp">閉</span>DONE · 完了</button>
         </div>
       </section>
+      <section class="fr-hud" data-fr-hud aria-hidden="true">
+        <div class="fr-hud-top">
+          <div class="fr-hud-meta">
+            <span class="fr-hud-meta-k">走</span>
+            <span class="fr-hud-meta-val" data-hud-meta>0</span>
+            <span class="fr-hud-meta-unit">M</span>
+          </div>
+          <div class="fr-hud-chips">
+            <div class="fr-hud-chip fr-hud-chip--coin"><span class="fr-hud-chip-k">金</span><span data-hud-coins>0</span></div>
+            <div class="fr-hud-chip"><span class="fr-hud-chip-k">×</span><span data-hud-combo>0</span></div>
+            <div class="fr-hud-chip"><span class="fr-hud-chip-k">圧</span><span data-hud-pressure>0</span></div>
+            <button class="fr-hud-pause fr-hud-pause-action" type="button" aria-label="Pause" title="Pause">止</button>
+          </div>
+        </div>
+      </section>
+      <div class="fr-countdown" data-fr-countdown aria-hidden="true">
+        <span class="fr-countdown-jp">用意</span>
+        <span class="fr-countdown-en">READY</span>
+      </div>
+      <section class="fr-pause" data-fr-pause aria-hidden="true">
+        <div class="fr-bg fr-bg--scrim"></div>
+        <div class="fr-pause-card">
+          <div class="fr-kicker">
+            <span class="fr-kicker-jp">止</span>
+            <span class="fr-kicker-en">PAUSED</span>
+            <span class="fr-kicker-rule"></span>
+            <span class="fr-kicker-no">.II</span>
+          </div>
+          <h1 class="fr-monument fr-pause-title">PAUSED</h1>
+          <div class="fr-pause-actions">
+            <button class="fr-btn fr-btn--primary fr-resume-action" type="button"><span class="fr-btn-jp">続</span>RESUME</button>
+            <button class="fr-btn fr-btn--ghost fr-pause-menu-action" type="button"><span class="fr-btn-jp fr-accent">戻</span>MENU</button>
+          </div>
+        </div>
+      </section>
+      <section class="fr-gameover" data-fr-gameover aria-hidden="true">
+        <div class="fr-bg fr-bg--scrim"></div>
+        <div class="fr-go-card">
+          <div class="fr-kicker">
+            <span class="fr-kicker-jp">終</span>
+            <span class="fr-kicker-en">RUN COMPLETE</span>
+            <span class="fr-kicker-rule"></span>
+            <span class="fr-kicker-no">江戸</span>
+          </div>
+          <div class="fr-go-meta">
+            <span class="fr-go-meta-k">走</span>
+            <span class="fr-go-meta-val" data-go-meta>0</span>
+            <span class="fr-go-meta-unit">M</span>
+          </div>
+          <div class="fr-go-chips">
+            <div class="fr-go-chip fr-go-chip--coin"><span class="fr-go-chip-lab"><span class="fr-go-chip-k">金</span>KOBAN</span><b data-go-coins>0</b></div>
+            <div class="fr-go-chip"><span class="fr-go-chip-lab"><span class="fr-go-chip-k">点</span>SCORE</span><b data-go-score>0</b></div>
+          </div>
+          <div class="fr-go-actions">
+            <button class="fr-btn fr-btn--primary fr-restart-action" type="button"><span class="fr-btn-jp">再</span>RESTART</button>
+            <button class="fr-btn fr-btn--ghost fr-go-menu-action" type="button"><span class="fr-btn-jp fr-accent">戻</span>MAIN MENU</button>
+          </div>
+        </div>
+      </section>
       <pre class="perf-hud" data-perf-hud hidden aria-hidden="true"></pre>
       <div class="hanko-rail" data-hanko-rail hidden aria-hidden="true"></div>
       <span class="garage-balance" data-garage-balance hidden></span>
@@ -653,6 +719,18 @@ export class GameApp {
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-settings") ?? undefined, () => this.toggleSettingsPanel());
     this.bindFrGarageDelegates();
     this.cacheAndBindFrSettings(ui);
+    this.hudMeta = ui.querySelector("[data-hud-meta]") ?? undefined;
+    this.hudCoins = ui.querySelector("[data-hud-coins]") ?? undefined;
+    this.hudCombo = ui.querySelector("[data-hud-combo]") ?? undefined;
+    this.hudPressure = ui.querySelector("[data-hud-pressure]") ?? undefined;
+    this.goMeta = ui.querySelector("[data-go-meta]") ?? undefined;
+    this.goCoins = ui.querySelector("[data-go-coins]") ?? undefined;
+    this.goScore = ui.querySelector("[data-go-score]") ?? undefined;
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-hud-pause-action") ?? undefined, () => this.pause());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-resume-action") ?? undefined, () => this.resume());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-pause-menu-action") ?? undefined, () => this.returnToMainMenu());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-restart-action") ?? undefined, () => this.start());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-go-menu-action") ?? undefined, () => this.returnToMainMenu());
     this.bindButton(this.actionButton, () => this.handlePrimaryAction());
     this.bindButton(this.garageButton, () => this.openGarage());
     this.bindButton(this.mainMenuButton, () => this.returnToMainMenu());
@@ -1227,11 +1305,24 @@ export class GameApp {
   }
 
   private updateGameOverUi(): void {
+    const stats = this.lastRunStats ?? this.runScene?.getRunStats();
+
+    if (stats) {
+      if (this.goMeta) {
+        this.goMeta.textContent = Math.round(stats.distance).toLocaleString("en-US");
+      }
+      if (this.goCoins) {
+        this.goCoins.textContent = stats.coins.toLocaleString("en-US");
+      }
+      if (this.goScore) {
+        this.goScore.textContent = stats.score.toLocaleString("en-US");
+      }
+    }
+
     if (!this.gameOverSummary) {
       return;
     }
 
-    const stats = this.lastRunStats ?? this.runScene?.getRunStats();
     if (!stats) {
       this.gameOverSummary.textContent = "";
       return;
@@ -1542,6 +1633,20 @@ export class GameApp {
     this.coinsLabel.textContent = `金 ${stats.coins.toLocaleString("en-US")}`;
     this.comboLabel.textContent = `× ${stats.combo}`;
     this.pressureLabel.textContent = `圧 ${Math.round(stats.pressure)}`;
+
+    // New print-language run HUD (.fr-hud)
+    if (this.hudMeta) {
+      this.hudMeta.textContent = Math.round(stats.distance).toLocaleString("en-US");
+    }
+    if (this.hudCoins) {
+      this.hudCoins.textContent = stats.coins.toLocaleString("en-US");
+    }
+    if (this.hudCombo) {
+      this.hudCombo.textContent = String(stats.combo);
+    }
+    if (this.hudPressure) {
+      this.hudPressure.textContent = String(Math.round(stats.pressure));
+    }
   }
 
   private formatCoinsShort(value: number): string {

@@ -2381,3 +2381,280 @@ button {
     font-size: 14px;
   }
 }
+
+/* =====================================================================
+   RUN HUD · COUNTDOWN · PAUSE · GAME-OVER — derived print-language screens
+   over the fullscreen 3D run.
+   ===================================================================== */
+.fr-hud,
+.fr-countdown,
+.fr-pause,
+.fr-gameover {
+  display: none;
+}
+.game-ui[data-state="running"] .fr-hud,
+.game-ui[data-state="countdown"] .fr-hud,
+.game-ui[data-state="paused"] .fr-hud {
+  display: block;
+}
+.game-ui[data-state="countdown"] .fr-countdown {
+  display: flex;
+}
+.game-ui[data-state="paused"] .fr-pause {
+  display: flex;
+}
+.game-ui[data-state="gameOver"] .fr-gameover {
+  display: flex;
+}
+.game-ui[data-state="running"] > .top-bar,
+.game-ui[data-state="running"] > .menu-panel,
+.game-ui[data-state="running"] > .print-frame,
+.game-ui[data-state="countdown"] > .top-bar,
+.game-ui[data-state="countdown"] > .menu-panel,
+.game-ui[data-state="countdown"] > .print-frame,
+.game-ui[data-state="paused"] > .top-bar,
+.game-ui[data-state="paused"] > .menu-panel,
+.game-ui[data-state="paused"] > .print-frame,
+.game-ui[data-state="gameOver"] > .top-bar,
+.game-ui[data-state="gameOver"] > .menu-panel,
+.game-ui[data-state="gameOver"] > .print-frame {
+  display: none !important;
+}
+
+/* run HUD */
+.fr-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  font-family: var(--font-body);
+}
+.fr-hud-top {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: clamp(14px, 2.4vw, 26px) clamp(16px, 3vw, 40px);
+}
+.fr-hud-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--color-accent);
+  color: #f4ede0;
+  box-shadow: 0 8px 22px rgb(226 59 46 / 0.34);
+  pointer-events: auto;
+}
+.fr-hud-meta-k {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 15px;
+  opacity: 0.9;
+}
+.fr-hud-meta-val {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: clamp(22px, 3vw, 32px);
+}
+.fr-hud-meta-unit {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  opacity: 0.85;
+}
+.fr-hud-chips {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+.fr-hud-chip {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  background: rgb(20 14 22 / 0.46);
+  border: 1px solid var(--color-border-ondark);
+  color: #f4ede0;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 15px;
+}
+.fr-hud-chip-k {
+  font-family: var(--font-jp);
+  font-weight: 700;
+  font-size: 13px;
+}
+.fr-hud-chip--coin .fr-hud-chip-k {
+  color: var(--color-gold);
+}
+.fr-hud-pause {
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  background: rgb(20 14 22 / 0.46);
+  border: 1px solid var(--color-border-ondark);
+  color: #f4ede0;
+  font-family: var(--font-jp);
+  font-weight: 700;
+  font-size: 16px;
+}
+.fr-hud-pause:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* countdown */
+.fr-countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+}
+.fr-countdown-jp {
+  font-family: var(--font-mincho);
+  font-weight: 800;
+  font-size: clamp(80px, 16vw, 200px);
+  line-height: 0.9;
+  color: var(--color-accent);
+  text-shadow: 0 0 36px rgb(244 237 224 / 0.7), 0 10px 30px rgb(226 59 46 / 0.3);
+}
+.fr-countdown-en {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5em;
+  color: var(--color-ink);
+  padding-left: 0.5em;
+}
+
+/* shared dark scrim for pause + game-over */
+.fr-bg--scrim {
+  background: rgb(18 12 20 / 0.66);
+}
+.fr-pause,
+.fr-gameover {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  color: #f4ede0;
+}
+.fr-pause-card,
+.fr-go-card {
+  position: relative;
+  text-align: center;
+  padding: clamp(24px, 4vw, 48px);
+}
+.fr-pause-card .fr-kicker,
+.fr-go-card .fr-kicker {
+  justify-content: center;
+}
+.fr-pause .fr-kicker-en,
+.fr-gameover .fr-kicker-en {
+  color: rgb(244 237 224 / 0.82);
+}
+.fr-pause .fr-kicker-no,
+.fr-gameover .fr-kicker-no {
+  color: rgb(244 237 224 / 0.6);
+}
+.fr-pause-title {
+  font-size: clamp(58px, 12vw, 150px);
+  color: #f4ede0;
+  text-shadow: 0 14px 40px rgb(0 0 0 / 0.4);
+}
+.fr-pause-actions,
+.fr-go-actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: clamp(20px, 3vh, 34px);
+  flex-wrap: wrap;
+}
+.fr-pause .fr-btn--ghost,
+.fr-gameover .fr-btn--ghost {
+  border-color: var(--color-border-ondark);
+  color: #f4ede0;
+}
+.fr-pause .fr-btn--ghost:hover,
+.fr-gameover .fr-btn--ghost:hover {
+  border-color: #f4ede0;
+  background: rgb(244 237 224 / 0.08);
+}
+
+/* game over stamp */
+.fr-go-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.fr-go-meta-k {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: clamp(28px, 4vw, 52px);
+  color: var(--color-accent);
+}
+.fr-go-meta-val {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(78px, 15vw, 190px);
+  line-height: 0.84;
+  letter-spacing: -0.01em;
+  color: #f4ede0;
+  text-shadow: 0 14px 40px rgb(0 0 0 / 0.4);
+}
+.fr-go-meta-unit {
+  font-family: var(--font-mono);
+  font-size: clamp(16px, 2vw, 24px);
+  color: rgb(244 237 224 / 0.7);
+}
+.fr-go-chips {
+  display: flex;
+  gap: clamp(14px, 2vw, 28px);
+  justify-content: center;
+  margin-top: 20px;
+}
+.fr-go-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 22px;
+  border: 1px solid var(--color-border-ondark);
+  background: rgb(244 237 224 / 0.06);
+}
+.fr-go-chip-lab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: rgb(244 237 224 / 0.66);
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.fr-go-chip-k {
+  font-family: var(--font-jp);
+  color: var(--color-gold);
+}
+.fr-go-chip b {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: clamp(20px, 2.4vw, 30px);
+  color: #f4ede0;
+}
+.fr-go-chip--coin b {
+  color: var(--color-gold);
+}
