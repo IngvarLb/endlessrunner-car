@@ -108,6 +108,7 @@ function normalizeSaveData(value: unknown): SaveData {
     selectedVehicleId: resolveVehicleId(normalizeString(raw.selectedVehicleId), unlockedVehicleIds),
     unlockedVehicleIds,
     settings: {
+      masterVolume: normalizeNumber(settings.masterVolume, DEFAULT_SAVE_DATA.settings.masterVolume),
       musicVolume: normalizeNumber(settings.musicVolume, DEFAULT_SAVE_DATA.settings.musicVolume),
       sfxVolume: normalizeNumber(settings.sfxVolume, DEFAULT_SAVE_DATA.settings.sfxVolume),
       muted: typeof settings.muted === "boolean" ? settings.muted : DEFAULT_SAVE_DATA.settings.muted,

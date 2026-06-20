@@ -8,6 +8,7 @@ export type SaveData = {
   selectedVehicleId: string;
   unlockedVehicleIds: string[];
   settings: {
+    masterVolume: number;
     musicVolume: number;
     sfxVolume: number;
     muted: boolean;
@@ -25,6 +26,7 @@ export const DEFAULT_SAVE_DATA: SaveData = {
   selectedVehicleId: "sports-car",
   unlockedVehicleIds: ["sports-car", "drift-coupe"],
   settings: {
+    masterVolume: 0.85,
     musicVolume: 0.55,
     sfxVolume: 0.75,
     muted: false,

@@ -26,6 +26,18 @@ export class RendererService {
     this.renderer.setSize(width, height, false);
   }
 
+  /**
+   * Apply a quality change live. Pixel ratio + shadow toggle take effect
+   * immediately; antialias / power-preference are baked into the GL context at
+   * creation, so those only change on the next launch (new scenes also pick up
+   * shadow detail from config.quality when they are rebuilt).
+   */
+  setQuality(quality: QualityMode): void {
+    this.renderer.setPixelRatio(this.getPixelRatio(quality));
+    this.renderer.shadowMap.enabled = quality !== "low";
+    this.renderer.shadowMap.needsUpdate = true;
+  }
+
   render(scene: THREE.Scene, camera: THREE.Camera): void {
     this.renderer.render(scene, camera);
   }

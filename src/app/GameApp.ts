@@ -1,4 +1,4 @@
-import { DEFAULT_GAME_CONFIG, type GameConfig } from "./GameConfig";
+import { DEFAULT_GAME_CONFIG, type GameConfig, type QualityMode } from "./GameConfig";
 import { GameEvents } from "./GameEvents";
 import { GameLoop } from "./GameLoop";
 import { ServiceRegistry } from "./ServiceRegistry";
@@ -106,6 +106,10 @@ export class GameApp {
   private frGarage?: HTMLElement;
   private frgEls: Record<string, HTMLElement | undefined> = {};
   private lastFrGarageVehicleId = "";
+  private frSettings?: HTMLElement;
+  private setMasterInput?: HTMLInputElement;
+  private setMusicInput?: HTMLInputElement;
+  private setSfxInput?: HTMLInputElement;
 
   constructor(
     private readonly root: HTMLElement,
@@ -120,6 +124,7 @@ export class GameApp {
     this.models = new ModelFactory(this.materials);
     this.audio = new ProceduralAudioService({
       ...this.config.audio,
+      masterVolume: this.saveData.settings.masterVolume,
       musicVolume: this.saveData.settings.musicVolume,
       sfxVolume: this.saveData.settings.sfxVolume,
       muted: this.saveData.settings.muted
@@ -530,6 +535,66 @@ export class GameApp {
           <div class="fr-roster-cards" data-frg-roster></div>
         </div>
       </section>
+      <section class="fr-settings" data-fr-settings hidden aria-label="Settings">
+        <div class="fr-bg fr-bg--settings"></div>
+        <div class="fr-ghost fr-ghost--settings">設</div>
+        <div class="fr-screentone fr-screentone--settings"></div>
+        <div class="fr-grain"></div>
+        <span class="fr-corner fr-corner--tl">+</span>
+        <span class="fr-corner fr-corner--br">+</span>
+
+        <header class="fr-topbar fr-topbar--settings">
+          <div class="fr-brand">
+            <span class="fr-seal">走</span>
+            <span class="fr-brand-name">FEUDAL RUNNER</span>
+          </div>
+          <button class="fr-close-btn fr-settings-close" type="button"><span class="fr-close-x">✕</span><span class="fr-close-jp">閉</span>CLOSE</button>
+        </header>
+
+        <div class="fr-set-body">
+          <div class="fr-set-title">
+            <div class="fr-kicker">
+              <span class="fr-kicker-jp">設</span>
+              <span class="fr-kicker-en">SYSTEM CONFIG</span>
+              <span class="fr-kicker-rule"></span>
+              <span class="fr-kicker-no">.SYS</span>
+            </div>
+            <h1 class="fr-monument fr-set-monument">SETTINGS</h1>
+            <div class="fr-set-sub"><span class="fr-set-sub-jp">設定</span><span class="fr-set-sub-div"></span><span class="fr-set-sub-tx">環境設定 ・ オーディオと表示</span></div>
+          </div>
+
+          <div class="fr-set-divider"></div>
+
+          <div class="fr-set-cols">
+            <div class="fr-set-col">
+              <div class="fr-set-secthead"><span class="fr-set-num">01</span><span class="fr-set-sectlabel">音響 · AUDIO</span></div>
+              <div class="fr-set-sliders">
+                <label class="fr-srow"><span class="fr-srow-label"><span class="fr-srow-jp">主</span>MASTER</span><input type="range" min="0" max="100" data-set-master class="fr-range"><span class="fr-srow-val" data-set-master-val>0</span></label>
+                <label class="fr-srow"><span class="fr-srow-label"><span class="fr-srow-jp">楽</span>MUSIC</span><input type="range" min="0" max="100" data-set-music class="fr-range"><span class="fr-srow-val" data-set-music-val>0</span></label>
+                <label class="fr-srow"><span class="fr-srow-label"><span class="fr-srow-jp">効</span>SFX</span><input type="range" min="0" max="100" data-set-sfx class="fr-range"><span class="fr-srow-val" data-set-sfx-val>0</span></label>
+              </div>
+            </div>
+            <div class="fr-set-col fr-set-col--right">
+              <div class="fr-set-secthead"><span class="fr-set-num">02</span><span class="fr-set-sectlabel">表示 · DISPLAY</span></div>
+              <div class="fr-set-toggles">
+                <button class="fr-toggle fr-set-mute" type="button" aria-pressed="false"><span class="fr-toggle-label"><span class="fr-srow-jp">無音</span>MUTE</span><span class="fr-switch"><span class="fr-switch-thumb"></span></span></button>
+                <button class="fr-toggle fr-set-perf" type="button" aria-pressed="false"><span class="fr-toggle-label"><span class="fr-srow-jp">性能</span>PERF HUD</span><span class="fr-switch"><span class="fr-switch-thumb"></span></span></button>
+              </div>
+              <div class="fr-set-secthead fr-set-secthead--gfx"><span class="fr-set-num">03</span><span class="fr-set-sectlabel">画質 · GRAPHICS</span></div>
+              <div class="fr-set-quality">
+                <button class="fr-qbtn fr-set-q" type="button" data-quality="low"><span class="fr-srow-jp">低</span>LOW</button>
+                <button class="fr-qbtn fr-set-q" type="button" data-quality="medium"><span class="fr-srow-jp">中</span>MED</button>
+                <button class="fr-qbtn fr-set-q" type="button" data-quality="high"><span class="fr-srow-jp">高</span>HIGH</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fr-set-footer">
+          <span class="fr-set-build">BUILD 2026.06 · 江戸 · FEUDAL RUNNER</span>
+          <button class="fr-set-done fr-settings-close" type="button"><span class="fr-gbtn-jp">閉</span>DONE · 完了</button>
+        </div>
+      </section>
       <pre class="perf-hud" data-perf-hud hidden aria-hidden="true"></pre>
       <div class="hanko-rail" data-hanko-rail hidden aria-hidden="true"></div>
       <span class="garage-balance" data-garage-balance hidden></span>
@@ -587,6 +652,7 @@ export class GameApp {
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-back2") ?? undefined, () => this.returnToMenuFromGarage());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-settings") ?? undefined, () => this.toggleSettingsPanel());
     this.bindFrGarageDelegates();
+    this.cacheAndBindFrSettings(ui);
     this.bindButton(this.actionButton, () => this.handlePrimaryAction());
     this.bindButton(this.garageButton, () => this.openGarage());
     this.bindButton(this.mainMenuButton, () => this.returnToMainMenu());
@@ -631,6 +697,7 @@ export class GameApp {
     });
     this.events.on("settings:changed", ({ settings }) => {
       audio.setSettings({
+        masterVolume: settings.masterVolume,
         musicVolume: settings.musicVolume,
         sfxVolume: settings.sfxVolume,
         muted: settings.muted
@@ -670,14 +737,19 @@ export class GameApp {
   }
 
   private syncSettingsUi(): void {
+    // Legacy floating panel is retired — the .fr-settings overlay drives now.
     if (this.settingsPanel) {
-      this.settingsPanel.hidden = !this.settingsOpen;
+      this.settingsPanel.hidden = true;
+    }
+    if (this.frSettings) {
+      this.frSettings.hidden = !this.settingsOpen;
     }
 
     if (this.settingsButton) {
       this.settingsButton.setAttribute("aria-expanded", String(this.settingsOpen));
     }
 
+    // Keep the (hidden) legacy inputs in sync for safety.
     if (this.musicVolumeInput) {
       this.musicVolumeInput.value = String(this.saveData.settings.musicVolume);
     }
@@ -690,13 +762,105 @@ export class GameApp {
     if (this.perfHudInput) {
       this.perfHudInput.checked = this.saveData.settings.showPerfHud;
     }
+    this.syncFrSettings();
     this.perf?.setEnabled(this.saveData.settings.showPerfHud);
+  }
+
+  private cacheAndBindFrSettings(ui: HTMLElement): void {
+    this.frSettings = ui.querySelector("[data-fr-settings]") ?? undefined;
+    this.setMasterInput = ui.querySelector("[data-set-master]") ?? undefined;
+    this.setMusicInput = ui.querySelector("[data-set-music]") ?? undefined;
+    this.setSfxInput = ui.querySelector("[data-set-sfx]") ?? undefined;
+
+    this.setMasterInput?.addEventListener("input", () => {
+      this.updateAudioSettings({ masterVolume: this.getRangePercent(this.setMasterInput, this.saveData.settings.masterVolume) });
+    });
+    this.setMusicInput?.addEventListener("input", () => {
+      this.updateAudioSettings({ musicVolume: this.getRangePercent(this.setMusicInput, this.saveData.settings.musicVolume) });
+    });
+    this.setSfxInput?.addEventListener("input", () => {
+      this.updateAudioSettings({ sfxVolume: this.getRangePercent(this.setSfxInput, this.saveData.settings.sfxVolume) });
+    });
+
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-set-mute") ?? undefined, () =>
+      this.updateAudioSettings({ muted: !this.saveData.settings.muted })
+    );
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-set-perf") ?? undefined, () =>
+      this.setPerfHud(!this.saveData.settings.showPerfHud)
+    );
+    for (const button of Array.from(ui.querySelectorAll<HTMLButtonElement>(".fr-set-q"))) {
+      const quality = button.dataset.quality as QualityMode | undefined;
+      if (quality) {
+        this.bindButton(button, () => this.setQualitySetting(quality));
+      }
+    }
+    for (const button of Array.from(ui.querySelectorAll<HTMLButtonElement>(".fr-settings-close"))) {
+      this.bindButton(button, () => this.toggleSettingsPanel());
+    }
+  }
+
+  private syncFrSettings(): void {
+    if (!this.frSettings) {
+      return;
+    }
+
+    const settings = this.saveData.settings;
+    this.setRangeUi(this.setMasterInput, "[data-set-master-val]", settings.masterVolume);
+    this.setRangeUi(this.setMusicInput, "[data-set-music-val]", settings.musicVolume);
+    this.setRangeUi(this.setSfxInput, "[data-set-sfx-val]", settings.sfxVolume);
+    this.setToggleUi(".fr-set-mute", settings.muted);
+    this.setToggleUi(".fr-set-perf", settings.showPerfHud);
+    for (const button of Array.from(this.frSettings.querySelectorAll<HTMLButtonElement>(".fr-set-q"))) {
+      button.classList.toggle("is-active", button.dataset.quality === settings.quality);
+    }
+  }
+
+  private setRangeUi(input: HTMLInputElement | undefined, valSelector: string, value01: number): void {
+    const percent = Math.round(this.clamp01(value01) * 100);
+    if (input) {
+      input.value = String(percent);
+    }
+    const valEl = this.frSettings?.querySelector(valSelector);
+    if (valEl) {
+      valEl.textContent = String(percent);
+    }
+  }
+
+  private setToggleUi(selector: string, on: boolean): void {
+    const toggle = this.frSettings?.querySelector(selector);
+    if (toggle) {
+      toggle.classList.toggle("is-on", on);
+      toggle.setAttribute("aria-pressed", String(on));
+    }
+  }
+
+  private getRangePercent(input: HTMLInputElement | undefined, fallback: number): number {
+    if (!input) {
+      return fallback;
+    }
+    const value = Number.parseFloat(input.value);
+    return Number.isFinite(value) ? this.clamp01(value / 100) : fallback;
+  }
+
+  private setQualitySetting(quality: QualityMode): void {
+    if (this.saveData.settings.quality === quality) {
+      return;
+    }
+
+    this.saveData = saveSaveData({
+      ...this.saveData,
+      settings: { ...this.saveData.settings, quality }
+    });
+    this.config.quality = quality;
+    this.renderer?.setQuality(quality);
+    this.syncSettingsUi();
   }
 
   private updateAudioSettings(settings: Partial<SaveData["settings"]>): void {
     const nextSettings = {
       ...this.saveData.settings,
       ...settings,
+      masterVolume: this.clamp01(settings.masterVolume ?? this.saveData.settings.masterVolume),
       musicVolume: this.clamp01(settings.musicVolume ?? this.saveData.settings.musicVolume),
       sfxVolume: this.clamp01(settings.sfxVolume ?? this.saveData.settings.sfxVolume)
     };
@@ -705,6 +869,7 @@ export class GameApp {
       ...this.saveData,
       settings: nextSettings
     });
+    this.config.audio.masterVolume = nextSettings.masterVolume;
     this.config.audio.musicVolume = nextSettings.musicVolume;
     this.config.audio.sfxVolume = nextSettings.sfxVolume;
     this.config.audio.muted = nextSettings.muted;
