@@ -1,63 +1,74 @@
 :root {
   /* ===== Neo-Ukiyo Riso-Print tokens ===== */
 
-  /* Paper / surfaces — cooler, cleaner cream so scarlet screams */
-  --color-bg: #ece5d6;
-  --color-surface: #f1ebdc;
-  --color-surface-raised: #f7f2e6;
-  --color-surface-sunken: #e2d6bd;
+  /* Paper / surfaces — warm washi (Neo-Ukiyo print import) */
+  --color-bg: #e9e2d3;
+  --color-letterbox: #ddd4c2;
+  --color-surface: #faf6ee;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #ddd2bd;
+  --color-chip: rgb(255 255 255 / 0.5);
 
-  /* Sumi ink */
-  --color-ink: #15141a;
-  --color-ink-strong: #2a2320;
-  --color-ink-muted: #6b6157;
-  --color-ink-faint: #8c8174;
+  /* Warm sumi ink */
+  --color-ink: #1a130b;
+  --color-ink-strong: #1a130b;
+  --color-ink-muted: #6f6452;
+  --color-ink-faint: #8a7f6a;
+  --color-ink-soft: rgb(26 19 11 / 0.45);
 
-  /* HOT scarlet 朱 — the one scream per screen */
-  --color-accent: #e1261c;
-  --color-accent-press: #b81d14;
-  --color-accent-hover: #f23d2d;
-  --color-accent-tint: #f7d9d2;
+  /* Vermillion — the accent */
+  --color-accent: #e23b2e;
+  --color-accent-press: #c92f24;
+  --color-accent-hover: #c92f24;
+  --color-accent-tint: rgb(226 59 46 / 0.12);
 
-  /* Indigo 藍 — rare cool counter */
-  --color-accent-2: #20305c;
-  --color-accent-2-hover: #2f4585;
+  /* Indigo — kept for legacy/run-pause; rarely used now */
+  --color-accent-2: #3f6f9e;
+  --color-accent-2-hover: #355f88;
   --color-accent-2-tint: #d6dded;
 
-  /* Gold leaf 金 — value only */
-  --color-gold: #c9a24a;
-  --color-gold-hover: #e0c266;
+  /* Gold — value / coins */
+  --color-gold: #c79a3e;
+  --color-gold-hover: #d8ad4e;
   --color-gold-press: #a9842f;
-  --color-gold-tint: #f3e6c2;
+  --color-gold-tint: rgb(199 154 62 / 0.16);
 
-  /* Functional */
-  --color-owned: #2e8b6f;
-  --color-owned-ink: #1d4f3f;
+  /* Functional + tier colours */
+  --color-owned: #2e8b57;
+  --color-owned-ink: #3a7a52;
   --color-owned-tint: #d3e7df;
-  --color-warn: #c47a1e;
+  --color-warn: #9c8a55;
   --color-warn-ink: #8a4f10;
   --color-warn-tint: #f3e2c8;
-  --color-danger: #9e2b22;
+  --color-danger: #b8332b;
+  --tier-common: #9a938a;
+  --tier-rare: #4f97bd;
+  --tier-epic: #a35fa8;
+  --tier-legend: #cf9d2a;
 
-  /* Borders / lines */
-  --color-border: #2a2320;
-  --color-border-soft: rgb(42 35 32 / 0.3);
+  /* Borders / lines (hairline ink) */
+  --color-border: rgb(26 19 11 / 0.16);
+  --color-border-strong: rgb(26 19 11 / 0.3);
+  --color-border-soft: rgb(26 19 11 / 0.12);
   --color-border-ondark: rgb(246 239 224 / 0.22);
 
-  /* Scrim / over-scene */
-  --color-scrim: rgb(21 20 26 / 0.62);
-  --color-scrim-strong: rgb(21 20 26 / 0.82);
-  --color-onscrim: #f6efe0;
-  --color-onscrim-muted: rgb(246 239 224 / 0.74);
-  --color-on-accent: #f7f2e6;
-  --color-on-gold: #15141a;
+  /* Scrim / over-scene (legacy run HUD) */
+  --color-scrim: rgb(26 19 11 / 0.62);
+  --color-scrim-strong: rgb(26 19 11 / 0.82);
+  --color-onscrim: #f4ede0;
+  --color-onscrim-muted: rgb(244 237 224 / 0.74);
+  --color-on-accent: #f4ede0;
+  --color-on-gold: #1a130b;
 
-  /* Fonts */
-  --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --font-gothic: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-  --font-brush: "Yuji Syuku", "Shippori Mincho B1", serif;
-  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Menlo", monospace;
+  /* Fonts — Anton monument · Archivo UI · Noto Sans JP · Shippori ghost · Space Mono tech */
+  --font-display: "Anton", system-ui, sans-serif;
+  --font-body: "Archivo", system-ui, sans-serif;
+  --font-jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-mincho: "Shippori Mincho B1", "Hiragino Mincho ProN", serif;
+  --font-mono: "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* legacy aliases (old components reference these until rebuilt) */
+  --font-gothic: "Archivo", system-ui, sans-serif;
+  --font-brush: "Noto Sans JP", "Hiragino Sans", serif;
 
   /* Spacing */
   --space-1: 4px;
