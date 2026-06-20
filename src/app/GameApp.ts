@@ -27,8 +27,10 @@ import {
   getAllVehicles,
   getOwnedVehicleDefinition,
   isVehicleOwned,
+  TIER_META,
   type VehicleDefinition
 } from "../game/vehicles/VehicleCatalog";
+import type { GarageVehiclePreview } from "../game/garage/GarageTypes";
 import { getVehicleKanji } from "../game/vehicles/vehicleKanji";
 
 const countdownDurationMs = 720;
@@ -101,6 +103,9 @@ export class GameApp {
   private frMenuXpText?: HTMLElement;
   private frMenuXpFill?: HTMLElement;
   private frMenuBest?: HTMLElement;
+  private frGarage?: HTMLElement;
+  private frgEls: Record<string, HTMLElement | undefined> = {};
+  private lastFrGarageVehicleId = "";
 
   constructor(
     private readonly root: HTMLElement,
@@ -463,6 +468,68 @@ export class GameApp {
           <span class="fr-strip-right">［ REAL-TIME 3D · 江戸大通り ］<span class="fr-barcode"></span><span class="fr-accent">✦</span></span>
         </div>
       </section>
+      <section class="fr-garage" data-fr-garage>
+        <div class="fr-bg fr-bg--garage"></div>
+        <div class="fr-ghost fr-ghost--garage" data-frg-ghost>赤</div>
+        <div class="fr-grain"></div>
+        <span class="fr-corner fr-corner--tl">+</span>
+        <span class="fr-corner fr-corner--br">+</span>
+
+        <div class="fr-gword" data-frg-word>CRIMSON</div>
+
+        <header class="fr-topbar fr-topbar--garage">
+          <div class="fr-gtop-left">
+            <button class="fr-back-btn fr-garage-back2" type="button"><span class="fr-back-jp">戻</span>ZURÜCK</button>
+            <div class="fr-gtop-label">
+              <div class="fr-gtop-kicker">車庫 · GARAGE</div>
+              <div class="fr-gtop-no"><span data-frg-no>N°.01</span> <span class="fr-gtop-no-sub">· 蔵 SELECT</span></div>
+            </div>
+          </div>
+          <div class="fr-topright">
+            <div class="fr-chip fr-chip--coin"><span class="fr-coin-k">金</span><span data-frg-coins>0</span></div>
+            <div class="fr-chip fr-lvl">
+              <div class="fr-lvl-row"><span class="fr-lvl-num">LV.<span data-frg-level>1</span></span><span class="fr-lvl-pct" data-frg-xptext>0%</span></div>
+              <div class="fr-lvl-bar"><div class="fr-lvl-fill" data-frg-xpfill></div></div>
+            </div>
+            <button class="fr-iconbtn fr-garage-settings" type="button" aria-label="Settings" title="Settings">設</button>
+          </div>
+        </header>
+
+        <div class="fr-gkanji">
+          <div class="fr-gkanji-big" data-frg-kanji>赤</div>
+          <div class="fr-gkanji-romaji" data-frg-romaji>AKA</div>
+          <div class="fr-gkanji-tag" data-frg-tag></div>
+        </div>
+
+        <button class="fr-garrow fr-garrow--prev fr-garage-prev2" type="button" aria-label="Previous vehicle">◀</button>
+        <button class="fr-garrow fr-garrow--next fr-garage-next2" type="button" aria-label="Next vehicle">▶</button>
+
+        <aside class="fr-gpanel">
+          <div class="fr-gpanel-head">
+            <span class="fr-tierbadge" data-frg-tier><span class="fr-tierbadge-jp">常</span><span class="fr-tierbadge-en">COMMON</span></span>
+            <span class="fr-gpanel-no" data-frg-no2>N°.01 · 蔵</span>
+          </div>
+          <div class="fr-gname" data-frg-name>CRIMSON BOLT</div>
+          <div class="fr-gmeta">
+            <span class="fr-gmeta-k" data-frg-mk>赤</span>
+            <span class="fr-gmeta-romaji" data-frg-mr>AKA</span>
+            <span class="fr-gmeta-div"></span>
+            <span class="fr-gmeta-tag" data-frg-mt></span>
+          </div>
+          <div class="fr-gstats-label">性能 · STATS</div>
+          <div class="fr-gstats" data-frg-stats></div>
+          <div class="fr-gpanel-div"></div>
+          <div class="fr-gaction" data-frg-action></div>
+        </aside>
+
+        <div class="fr-roster">
+          <div class="fr-roster-head">
+            <span class="fr-roster-title">車両 ROSTER · 七台</span>
+            <span class="fr-roster-hint">← → SELECT</span>
+          </div>
+          <div class="fr-roster-cards" data-frg-roster></div>
+        </div>
+      </section>
       <pre class="perf-hud" data-perf-hud hidden aria-hidden="true"></pre>
       <div class="hanko-rail" data-hanko-rail hidden aria-hidden="true"></div>
       <span class="garage-balance" data-garage-balance hidden></span>
@@ -511,9 +578,15 @@ export class GameApp {
     this.frMenuXpText = ui.querySelector("[data-fr-xptext]") ?? undefined;
     this.frMenuXpFill = ui.querySelector("[data-fr-xpfill]") ?? undefined;
     this.frMenuBest = ui.querySelector("[data-fr-best]") ?? undefined;
+    this.cacheFrGarageRefs(ui);
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-start-action") ?? undefined, () => this.start());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-action") ?? undefined, () => this.openGarage());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-settings-open") ?? undefined, () => this.toggleSettingsPanel());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-prev2") ?? undefined, () => this.handleGarageMove(-1), "garageSwitch");
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-next2") ?? undefined, () => this.handleGarageMove(1), "garageSwitch");
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-back2") ?? undefined, () => this.returnToMenuFromGarage());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-settings") ?? undefined, () => this.toggleSettingsPanel());
+    this.bindFrGarageDelegates();
     this.bindButton(this.actionButton, () => this.handlePrimaryAction());
     this.bindButton(this.garageButton, () => this.openGarage());
     this.bindButton(this.mainMenuButton, () => this.returnToMainMenu());
@@ -731,6 +804,7 @@ export class GameApp {
     this.garageScene = this.createGarageScene();
     this.activateScene(this.garageScene);
     this.stateMachine.transition("garage", "garage-open");
+    this.lastFrGarageVehicleId = ""; // force a fresh chrome rebuild (coins/ownership may have changed)
     this.updateGarageUi();
     this.renderHankoRail();
   }
@@ -804,6 +878,7 @@ export class GameApp {
       this.saveData = result.saveData;
       this.syncVehicleStateFromSaveData();
       this.garageScene.refreshOwnership(this.unlockedVehicleIds, this.saveData.totalCoins);
+      this.lastFrGarageVehicleId = ""; // ownership changed without an id change → force chrome rebuild
       this.updateGarageUi();
       this.renderHankoRail();
       return;
@@ -1015,6 +1090,19 @@ export class GameApp {
     const isSwitching = garageScene?.isSwitching() ?? true;
     const preview = garageScene?.getPreview();
 
+    // New editorial chrome (.fr-garage): rebuild the heavy DOM only on vehicle change.
+    if (this.frGarage && preview && preview.vehicle.id !== this.lastFrGarageVehicleId) {
+      this.renderFrGarage();
+    }
+    const prevArrow = this.frGarage?.querySelector<HTMLButtonElement>(".fr-garrow--prev");
+    const nextArrow = this.frGarage?.querySelector<HTMLButtonElement>(".fr-garrow--next");
+    if (prevArrow) {
+      prevArrow.disabled = !isGarageState || isSwitching;
+    }
+    if (nextArrow) {
+      nextArrow.disabled = !isGarageState || isSwitching;
+    }
+
     if (this.garageVehicleLabel && preview) {
       this.garageVehicleLabel.textContent = preview.vehicle.displayName;
     }
@@ -1047,6 +1135,236 @@ export class GameApp {
     if (this.garageBackButton) {
       this.garageBackButton.disabled = !isGarageState;
     }
+  }
+
+  private cacheFrGarageRefs(ui: HTMLElement): void {
+    this.frGarage = ui.querySelector("[data-fr-garage]") ?? undefined;
+    const keys = [
+      "ghost",
+      "word",
+      "no",
+      "coins",
+      "level",
+      "xptext",
+      "xpfill",
+      "kanji",
+      "romaji",
+      "tag",
+      "tier",
+      "no2",
+      "name",
+      "mk",
+      "mr",
+      "mt",
+      "stats",
+      "action",
+      "roster"
+    ];
+    for (const key of keys) {
+      this.frgEls[key] = ui.querySelector<HTMLElement>(`[data-frg-${key}]`) ?? undefined;
+    }
+  }
+
+  private bindFrGarageDelegates(): void {
+    this.frgEls.action?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest("button");
+      if (!button || button.disabled) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.unlockAudio();
+      this.audio?.playMenuClick();
+      this.startFromGarage();
+    });
+
+    this.frgEls.roster?.addEventListener("click", (event) => {
+      const card = (event.target as HTMLElement).closest<HTMLElement>("[data-roster-id]");
+      if (!card) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.unlockAudio();
+      this.audio?.playGarageSwitch();
+      this.handleGarageJump(card.dataset.rosterId ?? "");
+    });
+  }
+
+  private handleGarageJump(vehicleId: string): void {
+    if (this.stateMachine.getState() !== "garage" || !this.garageScene || !vehicleId) {
+      return;
+    }
+
+    this.garageScene.jumpToVehicle(vehicleId);
+    this.updateGarageUi();
+  }
+
+  private renderFrGarage(): void {
+    const garageScene = this.garageScene;
+    if (!this.frGarage || !garageScene) {
+      return;
+    }
+
+    const preview = garageScene.getPreview();
+    const vehicle = preview.vehicle;
+    const tier = TIER_META[vehicle.tier];
+    const index = Math.max(0, getAllVehicles().findIndex((entry) => entry.id === vehicle.id));
+    const carNo = `N°.0${index + 1}`;
+    const word = vehicle.displayName.split(" ")[0].toUpperCase();
+    const els = this.frgEls;
+
+    if (els.ghost) {
+      els.ghost.textContent = vehicle.kanji;
+      els.ghost.style.color = this.hexToRgba(vehicle.paint, 0.1);
+    }
+    if (els.word) {
+      els.word.textContent = word;
+      els.word.style.color = vehicle.paint;
+    }
+    if (els.no) {
+      els.no.textContent = carNo;
+    }
+    if (els.kanji) {
+      els.kanji.textContent = vehicle.kanji;
+      els.kanji.style.color = vehicle.paint;
+    }
+    if (els.romaji) {
+      els.romaji.textContent = vehicle.romaji;
+    }
+    if (els.tag) {
+      els.tag.textContent = vehicle.tag;
+    }
+    if (els.tier) {
+      els.tier.style.background = tier.color;
+      els.tier.innerHTML = `<span class="fr-tierbadge-jp">${tier.jp}</span><span class="fr-tierbadge-en">${tier.en}</span>`;
+    }
+    if (els.no2) {
+      els.no2.textContent = `${carNo} · 蔵`;
+    }
+    if (els.name) {
+      els.name.textContent = vehicle.displayName;
+    }
+    if (els.mk) {
+      els.mk.textContent = vehicle.kanji;
+      els.mk.style.color = vehicle.paint;
+    }
+    if (els.mr) {
+      els.mr.textContent = vehicle.romaji;
+    }
+    if (els.mt) {
+      els.mt.textContent = vehicle.tag;
+    }
+    if (els.stats) {
+      els.stats.innerHTML = this.renderFrGarageStats(vehicle);
+    }
+    if (els.action) {
+      els.action.innerHTML = this.renderFrGarageAction(preview);
+    }
+    if (els.roster) {
+      els.roster.innerHTML = this.renderFrGarageRoster(vehicle.id);
+    }
+
+    this.updateFrGarageProfile(preview.totalCoins);
+    this.lastFrGarageVehicleId = vehicle.id;
+  }
+
+  private renderFrGarageStats(vehicle: VehicleDefinition): string {
+    const rows: Array<{ jp: string; en: string; value: number }> = [
+      { jp: "速", en: "SPEED", value: vehicle.stats.speed },
+      { jp: "握", en: "GRIP", value: vehicle.stats.grip },
+      { jp: "操", en: "HANDLE", value: vehicle.stats.handle },
+      { jp: "力", en: "POWER", value: vehicle.stats.power }
+    ];
+    const off = "rgb(31 24 19 / 0.1)";
+    return rows
+      .map((row) => {
+        const value = Math.max(0, Math.min(10, Math.round(row.value)));
+        const segs = Array.from({ length: 10 }, (_, i) => {
+          const bg = i < value ? vehicle.paint : off;
+          return `<span class="fr-gseg" style="background:${bg}"></span>`;
+        }).join("");
+        return `
+          <div class="fr-gstat-row">
+            <span class="fr-gstat-k">${row.jp}</span>
+            <span class="fr-gstat-en">${row.en}</span>
+            <span class="fr-gstat-bar">${segs}</span>
+            <span class="fr-gstat-val">${value}</span>
+          </div>`;
+      })
+      .join("");
+  }
+
+  private renderFrGarageAction(preview: GarageVehiclePreview): string {
+    const cost = this.formatCoinsShort(preview.price);
+    if (preview.owned) {
+      return `
+        <div class="fr-owned-row"><span class="fr-owned-dot"></span><span class="fr-owned-txt">所有済 · OWNED</span></div>
+        <button class="fr-gbtn fr-gbtn--drive" type="button"><span class="fr-gbtn-jp">走</span>DRIVE</button>`;
+    }
+
+    const costRow = `
+      <div class="fr-cost-row"><span class="fr-cost-lab">解放コスト</span><span class="fr-cost-val"><span class="fr-cost-k">金</span><b>${cost}</b></span></div>`;
+    if (preview.canAfford) {
+      return `${costRow}
+        <button class="fr-gbtn fr-gbtn--unlock" type="button"><span class="fr-gbtn-jp">鍵</span>UNLOCK · 解放</button>`;
+    }
+
+    return `${costRow}
+      <button class="fr-gbtn fr-gbtn--locked" type="button" disabled><span class="fr-gbtn-jp">鍵</span>金 不足 · INSUFFICIENT</button>`;
+  }
+
+  private renderFrGarageRoster(selectedId: string): string {
+    return getAllVehicles()
+      .map((vehicle) => {
+        const owned = isVehicleOwned(vehicle, this.unlockedVehicleIds);
+        const selected = vehicle.id === selectedId;
+        const tier = TIER_META[vehicle.tier];
+        const classes = ["fr-rcard"];
+        if (selected) {
+          classes.push("is-selected");
+        }
+        if (!owned) {
+          classes.push("is-locked");
+        }
+        const lock = owned ? "" : `<span class="fr-rcard-lock">鍵</span>`;
+        return `
+          <button class="${classes.join(" ")}" type="button" data-roster-id="${vehicle.id}">
+            <span class="fr-rcard-stripe" style="background:${tier.color}"></span>
+            <span class="fr-rcard-k" style="color:${vehicle.paint}">${vehicle.kanji}</span>
+            <span class="fr-rcard-name">${vehicle.displayName}</span>
+            ${lock}
+          </button>`;
+      })
+      .join("");
+  }
+
+  private updateFrGarageProfile(totalCoins: number): void {
+    const coins = Math.max(0, Math.floor(totalCoins));
+    const level = 1 + Math.floor(coins / 1500);
+    const intoLevel = (coins % 1500) / 1500;
+    const pct = `${Math.round(intoLevel * 100)}%`;
+    if (this.frgEls.coins) {
+      this.frgEls.coins.textContent = coins.toLocaleString("en-US");
+    }
+    if (this.frgEls.level) {
+      this.frgEls.level.textContent = String(level);
+    }
+    if (this.frgEls.xptext) {
+      this.frgEls.xptext.textContent = pct;
+    }
+    if (this.frgEls.xpfill) {
+      this.frgEls.xpfill.style.width = pct;
+    }
+  }
+
+  private hexToRgba(hex: string, alpha: number): string {
+    const value = hex.replace("#", "");
+    const int = Number.parseInt(value.length === 3 ? value.replace(/(.)/g, "$1$1") : value, 16);
+    const r = (int >> 16) & 255;
+    const g = (int >> 8) & 255;
+    const b = int & 255;
+    return `rgb(${r} ${g} ${b} / ${alpha})`;
   }
 
   private updateStats(): void {

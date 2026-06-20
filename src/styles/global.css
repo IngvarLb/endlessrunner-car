@@ -1512,3 +1512,544 @@ button {
     letter-spacing: 0.08em;
   }
 }
+
+/* =====================================================================
+   GARAGE screen — editorial chrome as a transparent overlay over the
+   LIVE 3D garage (dark spotlit room + car stay fully visible).
+   ===================================================================== */
+.fr-garage {
+  display: none;
+}
+.game-ui[data-state="garage"] .fr-garage {
+  display: block;
+}
+.game-ui[data-state="garage"] > .top-bar,
+.game-ui[data-state="garage"] > .menu-panel,
+.game-ui[data-state="garage"] > .hanko-rail,
+.game-ui[data-state="garage"] > .garage-balance,
+.game-ui[data-state="garage"] > .print-frame {
+  display: none !important;
+}
+
+.fr-garage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  font-family: var(--font-body);
+  color: var(--color-ink);
+}
+.fr-garage > * {
+  position: absolute;
+}
+
+/* layering + decorative pass-through */
+.fr-garage .fr-bg,
+.fr-garage .fr-ghost {
+  z-index: 0;
+}
+.fr-garage .fr-grain {
+  z-index: 1;
+}
+.fr-garage .fr-bg,
+.fr-garage .fr-ghost,
+.fr-garage .fr-grain,
+.fr-gword,
+.fr-gkanji,
+.fr-garage .fr-corner {
+  pointer-events: none;
+}
+.fr-garage .fr-topbar,
+.fr-garage .fr-gpanel,
+.fr-garage .fr-gkanji,
+.fr-garage .fr-garrow,
+.fr-garage .fr-roster,
+.fr-garage .fr-corner {
+  z-index: 6;
+}
+
+/* legibility wash over the dark room (keeps the spotlit car readable, darkens
+   the top for light topbar text + the bottom/left for the chrome) */
+.fr-bg--garage {
+  background: transparent;
+}
+.fr-bg--garage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgb(18 12 20 / 0.5) 0%, rgb(18 12 20 / 0.05) 20%, transparent 44%, rgb(18 12 20 / 0.34) 84%, rgb(18 12 20 / 0.58) 100%),
+    radial-gradient(72% 60% at 20% 58%, rgb(18 12 20 / 0.4) 0%, transparent 70%);
+}
+.fr-ghost--garage {
+  right: -5vw;
+  top: -4vh;
+  font-size: clamp(340px, 50vw, 740px);
+}
+
+/* light chips over the dark room need more body than the menu's 50%-white */
+.fr-garage .fr-chip,
+.fr-garage .fr-iconbtn {
+  background: rgb(250 246 238 / 0.86);
+}
+
+/* giant display word — printed backdrop; centre is masked out so the 3D car
+   reads in front of it */
+.fr-gword {
+  left: 50%;
+  top: clamp(70px, 11vh, 150px);
+  transform: translateX(-50%);
+  z-index: 2;
+  font-family: var(--font-display);
+  font-size: clamp(108px, 16.5vw, 240px);
+  line-height: 0.8;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.92;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 25%, transparent 39%, transparent 61%, #000 75%, #000 100%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 25%, transparent 39%, transparent 61%, #000 75%, #000 100%);
+}
+
+/* topbar (garage) */
+.fr-gtop-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.fr-back-btn {
+  height: 46px;
+  padding: 0 18px;
+  cursor: pointer;
+  background: rgb(250 246 238 / 0.86);
+  border: 1px solid var(--color-border);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.fr-back-btn:hover {
+  border-color: var(--color-ink);
+}
+.fr-back-jp {
+  font-family: var(--font-jp);
+  color: var(--color-accent);
+}
+.fr-gtop-label {
+  line-height: 1.2;
+}
+.fr-gtop-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  color: rgb(244 237 224 / 0.62);
+}
+.fr-gtop-no {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 0.05em;
+  color: #f4ede0;
+  margin-top: 3px;
+}
+.fr-gtop-no-sub {
+  color: rgb(244 237 224 / 0.5);
+  font-weight: 700;
+}
+
+/* big kanji top-right */
+.fr-gkanji {
+  right: clamp(18px, 3vw, 54px);
+  top: clamp(86px, 12vh, 120px);
+  text-align: right;
+}
+.fr-gkanji-big {
+  font-family: var(--font-mincho);
+  font-weight: 800;
+  font-size: clamp(118px, 16vw, 196px);
+  line-height: 0.82;
+  text-shadow: 0 0 30px rgb(239 231 214 / 0.55), 0 3px 0 rgb(239 231 214 / 0.18);
+}
+.fr-gkanji-romaji {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: clamp(14px, 1.3vw, 20px);
+  letter-spacing: 0.36em;
+  color: #f4ede0;
+  margin-top: 2px;
+}
+.fr-gkanji-tag {
+  font-family: var(--font-jp);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: rgb(244 237 224 / 0.66);
+  margin-top: 6px;
+}
+
+/* arrows flanking the car */
+.fr-garrow {
+  width: 50px;
+  height: 60px;
+  top: 47%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  background: rgb(250 246 238 / 0.82);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-ink);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fr-garrow:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.fr-garrow:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.fr-garrow--prev {
+  left: clamp(420px, 33vw, 520px);
+}
+.fr-garrow--next {
+  right: clamp(230px, 19vw, 360px);
+}
+
+/* left info panel — pinned washi card so the dark editorial text reads over
+   the dark room */
+.fr-gpanel {
+  left: clamp(18px, 3vw, 54px);
+  top: clamp(96px, 14vh, 152px);
+  width: clamp(296px, 30vw, 412px);
+  max-width: calc(100vw - 36px);
+  padding: clamp(16px, 1.5vw, 24px);
+  background: rgb(250 246 238 / 0.93);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 18px 50px rgb(40 26 10 / 0.34);
+}
+.fr-gpanel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fr-tierbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  color: #fff;
+}
+.fr-tierbadge-jp {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 12px;
+}
+.fr-tierbadge-en {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+.fr-gpanel-no {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--color-ink-faint);
+}
+.fr-gname {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(34px, 3.2vw, 54px);
+  line-height: 0.9;
+  margin-top: 14px;
+  text-transform: uppercase;
+  color: var(--color-ink);
+}
+.fr-gmeta {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 10px;
+}
+.fr-gmeta-k {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 24px;
+}
+.fr-gmeta-romaji {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--color-ink-muted);
+}
+.fr-gmeta-div {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border-strong);
+}
+.fr-gmeta-tag {
+  font-family: var(--font-jp);
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--color-ink-faint);
+}
+.fr-gstats-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: var(--color-ink-faint);
+  margin: 22px 0 12px;
+}
+.fr-gstats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fr-gstat-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.fr-gstat-k {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 15px;
+  width: 16px;
+  color: var(--color-ink);
+}
+.fr-gstat-en {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--color-ink-faint);
+  width: 50px;
+}
+.fr-gstat-bar {
+  flex: 1;
+  display: flex;
+  gap: 3px;
+}
+.fr-gseg {
+  flex: 1;
+  height: 9px;
+}
+.fr-gstat-val {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 13px;
+  width: 20px;
+  text-align: right;
+  color: var(--color-ink);
+}
+.fr-gpanel-div {
+  height: 1px;
+  background: var(--color-border);
+  margin: 18px 0 15px;
+}
+.fr-owned-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+.fr-owned-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-owned);
+}
+.fr-owned-txt {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--color-owned-ink);
+}
+.fr-cost-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.fr-cost-lab {
+  font-family: var(--font-jp);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--color-warn);
+}
+.fr-cost-val {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fr-cost-k {
+  font-family: var(--font-jp);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-gold);
+}
+.fr-cost-val b {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 19px;
+  color: var(--color-ink);
+}
+.fr-gbtn {
+  width: 100%;
+  height: 54px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}
+.fr-gbtn-jp {
+  font-family: var(--font-jp);
+  font-weight: 900;
+}
+.fr-gbtn--drive {
+  background: var(--color-accent);
+  color: #f4ede0;
+  box-shadow: 0 10px 24px rgb(226 59 46 / 0.3);
+}
+.fr-gbtn--drive:hover {
+  background: var(--color-accent-press);
+}
+.fr-gbtn--unlock {
+  background: var(--color-ink);
+  color: #f4ede0;
+}
+.fr-gbtn--unlock:hover {
+  background: var(--color-accent);
+}
+.fr-gbtn--locked {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-ink-faint);
+  cursor: not-allowed;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+/* roster rail */
+.fr-roster {
+  left: clamp(18px, 3vw, 54px);
+  right: clamp(18px, 3vw, 54px);
+  bottom: clamp(14px, 2.4vh, 34px);
+}
+.fr-roster-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.fr-roster-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  color: rgb(244 237 224 / 0.68);
+}
+.fr-roster-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: rgb(244 237 224 / 0.42);
+}
+.fr-roster-cards {
+  display: flex;
+  gap: 10px;
+}
+.fr-rcard {
+  flex: 1 1 0;
+  min-width: 0;
+  height: clamp(78px, 12vh, 106px);
+  position: relative;
+  cursor: pointer;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 6px 16px rgb(40 26 10 / 0.18);
+}
+.fr-rcard.is-selected {
+  background: var(--color-surface-raised);
+  border-color: var(--color-accent);
+  box-shadow: 0 8px 22px rgb(226 59 46 / 0.22);
+}
+.fr-rcard-stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 4px;
+}
+.fr-rcard-k {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1;
+}
+.fr-rcard-name {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(26 19 11 / 0.64);
+}
+.fr-rcard-lock {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  font-family: var(--font-jp);
+  font-weight: 700;
+  font-size: 12px;
+  color: rgb(26 19 11 / 0.45);
+}
+.fr-rcard.is-locked .fr-rcard-stripe,
+.fr-rcard.is-locked .fr-rcard-k,
+.fr-rcard.is-locked .fr-rcard-name {
+  opacity: 0.4;
+}
+
+@media (max-width: 860px) {
+  .fr-gword,
+  .fr-garrow {
+    display: none;
+  }
+  .fr-gkanji {
+    top: 74px;
+  }
+  .fr-gkanji-big {
+    font-size: clamp(82px, 22vw, 120px);
+  }
+  .fr-gpanel {
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: none;
+    top: auto;
+    bottom: calc(clamp(14px, 2.4vh, 34px) + 142px);
+    max-height: 42vh;
+    overflow: auto;
+  }
+  .fr-roster-cards {
+    gap: 6px;
+  }
+  .fr-rcard-name {
+    display: none;
+  }
+}

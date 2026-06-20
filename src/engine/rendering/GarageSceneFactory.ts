@@ -11,10 +11,10 @@ import {
 import { MaterialFactory } from "../assets/MaterialFactory";
 import { ModelFactory } from "../assets/ModelFactory";
 import type { AppScene } from "./AppScene";
-import { GarageBackdrop } from "./GarageBackdrop";
 
 export type GarageSceneBundle = AppScene & {
   moveSelection(direction: -1 | 1): void;
+  jumpToVehicle(vehicleId: string): void;
   confirmSelection(): GarageSelectionResult;
   cancelPreview(): void;
   isSwitching(): boolean;
@@ -98,9 +98,6 @@ export class GarageSceneFactory {
     buildLighting(scene, config.quality);
     buildGarageShell(showroomRoot, materials);
 
-    const backdrop = new GarageBackdrop();
-    scene.add(backdrop.group);
-
     const controller = new GarageShowroomController(
       models,
       showroomRoot,
@@ -110,20 +107,16 @@ export class GarageSceneFactory {
       totalCoins
     );
     cameraController.setVehicle(controller.getPreviewVehicle(), true);
-    backdrop.setVehicle(controller.getPreviewVehicle().id, controller.getPreview().owned);
 
     const update = (dt: number, elapsed: number, _state: GameState): void => {
       controller.update(dt, elapsed);
       const previewVehicle = controller.getPreviewVehicle();
       cameraController.setVehicle(previewVehicle);
-      backdrop.setVehicle(previewVehicle.id, controller.getPreview().owned);
-      backdrop.update(dt);
       cameraController.update(dt, elapsed);
     };
 
     const dispose = (): void => {
       controller.dispose();
-      backdrop.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();
@@ -142,6 +135,7 @@ export class GarageSceneFactory {
       update,
       dispose,
       moveSelection: (direction) => controller.moveSelection(direction),
+      jumpToVehicle: (vehicleId) => controller.jumpToVehicle(vehicleId),
       confirmSelection: () => controller.confirmSelection(),
       cancelPreview: () => controller.cancelPreview(),
       isSwitching: () => controller.getSwitchState() !== "idle",
@@ -193,6 +187,10 @@ function buildGarageShell(root: THREE.Group, materials: MaterialFactory): void {
   const floorRing = mesh(new THREE.CylinderGeometry(1.92, 2.0, 0.04, 40), materials.stone, [0, 0.0, 0]);
   const leftWall = mesh(new THREE.BoxGeometry(0.18, 2.8, 9), materials.darkWood, [-4.1, 1.3, -0.6]);
   const rightWall = mesh(new THREE.BoxGeometry(0.18, 2.8, 9), materials.darkWood, [4.1, 1.3, -0.6]);
+  // Back wall closes the room (the new 2D chrome owns the kanji/word; the old
+  // GarageBackdrop print is gone) so the car reads against a lit dark wall, not a void.
+  const backWall = mesh(new THREE.BoxGeometry(8.4, 2.8, 0.18), materials.darkWood, [0, 1.3, -3.0]);
+  backWall.receiveShadow = true;
 
   const turntable = mesh(new THREE.CylinderGeometry(1.5, 1.6, 0.12, 40), materials.stone, [0, 0.02, 0]);
   const turntableTrim = mesh(new THREE.TorusGeometry(1.55, 0.04, 8, 40), materials.gold, [0, 0.11, 0]);
@@ -212,7 +210,7 @@ function buildGarageShell(root: THREE.Group, materials: MaterialFactory): void {
   const shelf = createToolShelf(materials);
   shelf.position.set(-3.15, 0, -0.4);
 
-  root.add(floor, floorRing, leftWall, rightWall, turntable, turntableTrim, lanternRail, shelf);
+  root.add(floor, floorRing, leftWall, rightWall, backWall, turntable, turntableTrim, lanternRail, shelf);
 
   root.traverse((object) => {
     if (object instanceof THREE.Mesh) {

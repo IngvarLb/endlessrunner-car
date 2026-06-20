@@ -103,6 +103,21 @@ export class GarageShowroomController {
     this.activateVehicle(this.confirmedIndex, 0);
   }
 
+  /** Jump straight to a vehicle (roster pick) — instant snap, no slide. */
+  jumpToVehicle(vehicleId: string): void {
+    if (this.switchState !== "idle") {
+      return;
+    }
+
+    const index = this.vehicles.findIndex((vehicle) => vehicle.id === vehicleId);
+    if (index < 0 || index === this.previewIndex) {
+      return;
+    }
+
+    this.previewIndex = index;
+    this.activateVehicle(index, 0);
+  }
+
   getPreviewVehicle(): VehicleDefinition {
     return this.vehicles[this.previewIndex];
   }
