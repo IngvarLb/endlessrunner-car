@@ -31,7 +31,6 @@ import {
   type VehicleDefinition
 } from "../game/vehicles/VehicleCatalog";
 import type { GarageVehiclePreview } from "../game/garage/GarageTypes";
-import { getVehicleKanji } from "../game/vehicles/vehicleKanji";
 
 const countdownDurationMs = 720;
 const idleFrameInterval = 1 / 24;
@@ -56,29 +55,6 @@ export class GameApp {
   private runScene?: RunScene;
   private garageScene?: GarageSceneBundle;
   private ui?: HTMLElement;
-  private stateLabel?: HTMLElement;
-  private actionButton?: HTMLButtonElement;
-  private garageButton?: HTMLButtonElement;
-  private garageControls?: HTMLElement;
-  private garageVehicleLabel?: HTMLElement;
-  private garageTierBadge?: HTMLElement;
-  private garageShopMeta?: HTMLElement;
-  private garageBalanceLabel?: HTMLElement;
-  private gameOverSummary?: HTMLElement;
-  private mainMenuButton?: HTMLButtonElement;
-  private garagePreviousButton?: HTMLButtonElement;
-  private garageNextButton?: HTMLButtonElement;
-  private garageStartButton?: HTMLButtonElement;
-  private garageBackButton?: HTMLButtonElement;
-  private settingsButton?: HTMLButtonElement;
-  private settingsPanel?: HTMLElement;
-  private musicVolumeInput?: HTMLInputElement;
-  private sfxVolumeInput?: HTMLInputElement;
-  private muteInput?: HTMLInputElement;
-  private metaLabel?: HTMLElement;
-  private coinsLabel?: HTMLElement;
-  private comboLabel?: HTMLElement;
-  private pressureLabel?: HTMLElement;
   private saveData = loadSaveData();
   private unlockedVehicleIds = [...this.saveData.unlockedVehicleIds];
   private selectedVehicle: VehicleDefinition = getOwnedVehicleDefinition(
@@ -95,9 +71,6 @@ export class GameApp {
   private runRewardsClaimed = false;
   private perf?: PerfMonitor;
   private perfHud?: HTMLElement;
-  private perfHudInput?: HTMLInputElement;
-  private hankoRail?: HTMLElement;
-  private lastHankoActiveId = "";
   private frMenuCoins?: HTMLElement;
   private frMenuLevel?: HTMLElement;
   private frMenuXpText?: HTMLElement;
@@ -365,64 +338,6 @@ export class GameApp {
     const ui = document.createElement("div");
     ui.className = "game-ui";
     ui.innerHTML = `
-      <header class="top-bar">
-        <div class="brand-block">
-          <span class="brand-mark">走</span>
-          <strong>Feudal Runner</strong>
-        </div>
-        <div class="top-actions">
-          <div class="run-stats" aria-label="Run stats">
-            <span data-stat="meta" title="Meta (Distanz)">走 0</span>
-            <span data-stat="coins" title="Koban">金 0</span>
-            <span data-stat="combo" title="Combo">× 0</span>
-            <span data-stat="pressure" title="Pressure">圧 0</span>
-          </div>
-          <button class="settings-action" type="button" aria-label="Settings" title="Settings">&#9881;</button>
-        </div>
-      </header>
-      <section class="settings-panel" data-settings-panel hidden aria-label="Settings">
-        <label class="settings-toggle">
-          <input type="checkbox" data-setting-muted />
-          <span>Mute</span>
-        </label>
-        <label class="settings-toggle">
-          <input type="checkbox" data-setting-perf />
-          <span>Perf HUD</span>
-        </label>
-        <label>
-          <span>Music</span>
-          <input type="range" min="0" max="1" step="0.01" data-setting-music />
-        </label>
-        <label>
-          <span>SFX</span>
-          <input type="range" min="0" max="1" step="0.01" data-setting-sfx />
-        </label>
-      </section>
-      <section class="menu-panel" aria-live="polite">
-        <p class="state-label">Loading</p>
-        <h1>Feudal Runner</h1>
-        <p class="garage-vehicle-label" data-garage-vehicle hidden></p>
-        <span class="garage-tier-badge" data-garage-tier hidden></span>
-        <div class="garage-shop-meta" data-garage-shop hidden>
-          <span class="garage-shop-status" data-garage-status></span>
-          <span data-garage-price></span>
-          <span class="garage-shop-need" data-garage-need></span>
-        </div>
-        <div class="game-over-summary" data-game-over-summary hidden></div>
-        <div class="menu-actions">
-          <button class="primary-action" type="button">Start</button>
-          <button class="secondary-action garage-entry-action" type="button">Garage</button>
-          <button class="secondary-action main-menu-action" type="button" hidden>Main Menu</button>
-        </div>
-        <div class="garage-controls" hidden>
-          <div class="garage-switch-row">
-            <button class="icon-action garage-prev-action" type="button" aria-label="Previous vehicle">&lsaquo;</button>
-            <button class="primary-action garage-start-action" type="button">Starten</button>
-            <button class="icon-action garage-next-action" type="button" aria-label="Next vehicle">&rsaquo;</button>
-          </div>
-          <button class="secondary-action garage-back-action" type="button">戻 ZURÜCK</button>
-        </div>
-      </section>
       <section class="fr-menu" data-fr-menu>
         <div class="fr-bg fr-bg--menu"></div>
         <div class="fr-ghost fr-ghost--menu">走</div>
@@ -662,48 +577,14 @@ export class GameApp {
         </div>
       </section>
       <pre class="perf-hud" data-perf-hud hidden aria-hidden="true"></pre>
-      <div class="hanko-rail" data-hanko-rail hidden aria-hidden="true"></div>
-      <span class="garage-balance" data-garage-balance hidden></span>
-      <div class="print-frame" aria-hidden="true">
-        <span class="reg-mark reg-tl"></span>
-        <span class="reg-mark reg-tr"></span>
-        <span class="reg-mark reg-bl"></span>
-        <span class="reg-mark reg-br"></span>
-        <p class="print-footer">走 FEUDAL RUNNER · 江戸 NEO-UKIYO PRESS · CAT. N°.02 · © 2026</p>
-      </div>
     `;
 
     this.root.appendChild(ui);
     this.ui = ui;
-    this.stateLabel = ui.querySelector(".state-label") ?? undefined;
-    this.actionButton = ui.querySelector(".menu-actions .primary-action") ?? undefined;
-    this.garageButton = ui.querySelector(".garage-entry-action") ?? undefined;
-    this.garageControls = ui.querySelector(".garage-controls") ?? undefined;
-    this.garageVehicleLabel = ui.querySelector('[data-garage-vehicle]') ?? undefined;
-    this.garageTierBadge = ui.querySelector("[data-garage-tier]") ?? undefined;
-    this.garageShopMeta = ui.querySelector("[data-garage-shop]") ?? undefined;
-    this.garageBalanceLabel = ui.querySelector("[data-garage-balance]") ?? undefined;
-    this.gameOverSummary = ui.querySelector('[data-game-over-summary]') ?? undefined;
-    this.mainMenuButton = ui.querySelector(".main-menu-action") ?? undefined;
-    this.garagePreviousButton = ui.querySelector(".garage-prev-action") ?? undefined;
-    this.garageNextButton = ui.querySelector(".garage-next-action") ?? undefined;
-    this.garageStartButton = ui.querySelector(".garage-start-action") ?? undefined;
-    this.garageBackButton = ui.querySelector(".garage-back-action") ?? undefined;
-    this.settingsButton = ui.querySelector(".settings-action") ?? undefined;
-    this.settingsPanel = ui.querySelector("[data-settings-panel]") ?? undefined;
-    this.musicVolumeInput = ui.querySelector("[data-setting-music]") ?? undefined;
-    this.sfxVolumeInput = ui.querySelector("[data-setting-sfx]") ?? undefined;
-    this.muteInput = ui.querySelector("[data-setting-muted]") ?? undefined;
-    this.perfHudInput = ui.querySelector("[data-setting-perf]") ?? undefined;
     this.perfHud = ui.querySelector("[data-perf-hud]") ?? undefined;
-    this.hankoRail = ui.querySelector("[data-hanko-rail]") ?? undefined;
     if (this.perfHud && this.renderer) {
       this.perf = new PerfMonitor(this.perfHud, this.renderer.renderer);
     }
-    this.metaLabel = ui.querySelector('[data-stat="meta"]') ?? undefined;
-    this.coinsLabel = ui.querySelector('[data-stat="coins"]') ?? undefined;
-    this.comboLabel = ui.querySelector('[data-stat="combo"]') ?? undefined;
-    this.pressureLabel = ui.querySelector('[data-stat="pressure"]') ?? undefined;
     this.frMenuCoins = ui.querySelector("[data-fr-coins]") ?? undefined;
     this.frMenuLevel = ui.querySelector("[data-fr-level]") ?? undefined;
     this.frMenuXpText = ui.querySelector("[data-fr-xptext]") ?? undefined;
@@ -731,14 +612,6 @@ export class GameApp {
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-pause-menu-action") ?? undefined, () => this.returnToMainMenu());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-restart-action") ?? undefined, () => this.start());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-go-menu-action") ?? undefined, () => this.returnToMainMenu());
-    this.bindButton(this.actionButton, () => this.handlePrimaryAction());
-    this.bindButton(this.garageButton, () => this.openGarage());
-    this.bindButton(this.mainMenuButton, () => this.returnToMainMenu());
-    this.bindButton(this.garagePreviousButton, () => this.handleGarageMove(-1), "garageSwitch");
-    this.bindButton(this.garageNextButton, () => this.handleGarageMove(1), "garageSwitch");
-    this.bindButton(this.garageStartButton, () => this.startFromGarage());
-    this.bindButton(this.garageBackButton, () => this.returnToMenuFromGarage());
-    this.bindSettingsControls();
     this.syncSettingsUi();
   }
 
@@ -783,23 +656,6 @@ export class GameApp {
     });
   }
 
-  private bindSettingsControls(): void {
-    this.bindButton(this.settingsButton, () => this.toggleSettingsPanel());
-
-    this.musicVolumeInput?.addEventListener("input", () => {
-      this.updateAudioSettings({ musicVolume: this.getRangeValue(this.musicVolumeInput, this.saveData.settings.musicVolume) });
-    });
-    this.sfxVolumeInput?.addEventListener("input", () => {
-      this.updateAudioSettings({ sfxVolume: this.getRangeValue(this.sfxVolumeInput, this.saveData.settings.sfxVolume) });
-    });
-    this.muteInput?.addEventListener("change", () => {
-      this.updateAudioSettings({ muted: this.muteInput?.checked ?? this.saveData.settings.muted });
-    });
-    this.perfHudInput?.addEventListener("change", () => {
-      this.setPerfHud(this.perfHudInput?.checked ?? this.saveData.settings.showPerfHud);
-    });
-  }
-
   private setPerfHud(enabled: boolean): void {
     this.saveData = saveSaveData({
       ...this.saveData,
@@ -815,30 +671,8 @@ export class GameApp {
   }
 
   private syncSettingsUi(): void {
-    // Legacy floating panel is retired — the .fr-settings overlay drives now.
-    if (this.settingsPanel) {
-      this.settingsPanel.hidden = true;
-    }
     if (this.frSettings) {
       this.frSettings.hidden = !this.settingsOpen;
-    }
-
-    if (this.settingsButton) {
-      this.settingsButton.setAttribute("aria-expanded", String(this.settingsOpen));
-    }
-
-    // Keep the (hidden) legacy inputs in sync for safety.
-    if (this.musicVolumeInput) {
-      this.musicVolumeInput.value = String(this.saveData.settings.musicVolume);
-    }
-    if (this.sfxVolumeInput) {
-      this.sfxVolumeInput.value = String(this.saveData.settings.sfxVolume);
-    }
-    if (this.muteInput) {
-      this.muteInput.checked = this.saveData.settings.muted;
-    }
-    if (this.perfHudInput) {
-      this.perfHudInput.checked = this.saveData.settings.showPerfHud;
     }
     this.syncFrSettings();
     this.perf?.setEnabled(this.saveData.settings.showPerfHud);
@@ -955,15 +789,6 @@ export class GameApp {
     this.syncSettingsUi();
   }
 
-  private getRangeValue(input: HTMLInputElement | undefined, fallback: number): number {
-    if (!input) {
-      return fallback;
-    }
-
-    const value = Number.parseFloat(input.value);
-    return Number.isFinite(value) ? value : fallback;
-  }
-
   private clamp01(value: number): number {
     return Math.min(1, Math.max(0, value));
   }
@@ -1049,7 +874,6 @@ export class GameApp {
     this.stateMachine.transition("garage", "garage-open");
     this.lastFrGarageVehicleId = ""; // force a fresh chrome rebuild (coins/ownership may have changed)
     this.updateGarageUi();
-    this.renderHankoRail();
   }
 
   private returnToMenuFromGarage(): void {
@@ -1084,27 +908,6 @@ export class GameApp {
     this.updateGarageUi();
   }
 
-  private renderHankoRail(): void {
-    if (!this.hankoRail) {
-      return;
-    }
-    const previewId = this.garageScene?.getPreviewVehicle().id ?? "";
-    this.hankoRail.innerHTML = getAllVehicles()
-      .map((vehicle) => {
-        const owned = isVehicleOwned(vehicle, this.unlockedVehicleIds);
-        const classes = ["hanko"];
-        if (!owned) {
-          classes.push("is-locked");
-        }
-        if (vehicle.id === previewId) {
-          classes.push("is-active");
-        }
-        return `<span class="${classes.join(" ")}" data-hanko-id="${vehicle.id}">${getVehicleKanji(vehicle.id)}</span>`;
-      })
-      .join("");
-    this.lastHankoActiveId = previewId;
-  }
-
   private startFromGarage(): void {
     if (this.stateMachine.getState() !== "garage" || !this.garageScene) {
       return;
@@ -1123,7 +926,6 @@ export class GameApp {
       this.garageScene.refreshOwnership(this.unlockedVehicleIds, this.saveData.totalCoins);
       this.lastFrGarageVehicleId = ""; // ownership changed without an id change → force chrome rebuild
       this.updateGarageUi();
-      this.renderHankoRail();
       return;
     }
 
@@ -1239,43 +1041,13 @@ export class GameApp {
   }
 
   private updateUi(state: GameState): void {
-    if (!this.ui || !this.stateLabel || !this.actionButton) {
+    if (!this.ui) {
       return;
     }
 
+    // State-driven visibility is fully handled in CSS via [data-state]; each
+    // .fr-* screen shows itself in the right state.
     this.ui.dataset.state = state;
-    this.stateLabel.innerHTML = this.getStateLabel(state);
-    this.actionButton.textContent = this.getActionLabel(state);
-    this.actionButton.disabled = state === "loading" || state === "countdown";
-    this.actionButton.hidden = state === "garage";
-    if (this.garageButton) {
-      this.garageButton.hidden = state !== "menu";
-    }
-    if (this.mainMenuButton) {
-      this.mainMenuButton.hidden = state !== "gameOver";
-    }
-    if (this.garageControls) {
-      this.garageControls.hidden = state !== "garage";
-    }
-    if (this.garageVehicleLabel) {
-      this.garageVehicleLabel.hidden = state !== "garage";
-    }
-    if (this.garageBalanceLabel) {
-      this.garageBalanceLabel.hidden = state !== "garage";
-    }
-    if (this.hankoRail) {
-      this.hankoRail.hidden = state !== "garage";
-    }
-    // Tier + shop chips are now printed diegetically on the 3D wall stencil.
-    if (this.garageTierBadge) {
-      this.garageTierBadge.hidden = true;
-    }
-    if (this.garageShopMeta) {
-      this.garageShopMeta.hidden = true;
-    }
-    if (this.gameOverSummary) {
-      this.gameOverSummary.hidden = state !== "gameOver";
-    }
     this.updateGarageUi();
     this.updateGameOverUi();
     this.updateMenuUi();
@@ -1318,26 +1090,6 @@ export class GameApp {
         this.goScore.textContent = stats.score.toLocaleString("en-US");
       }
     }
-
-    if (!this.gameOverSummary) {
-      return;
-    }
-
-    if (!stats) {
-      this.gameOverSummary.textContent = "";
-      return;
-    }
-
-    this.gameOverSummary.innerHTML = `
-      <div class="go-meta">
-        <span class="t-micro"><span class="kicker-jp">終</span> META</span>
-        <strong>${Math.round(stats.distance).toLocaleString("en-US")}</strong>
-      </div>
-      <div class="go-chips">
-        <span class="go-chip-coins"><small class="t-micro">金 KOBAN</small><b>${stats.coins.toLocaleString("en-US")}</b></span>
-        <span><small class="t-micro">点 SCORE</small><b>${stats.score.toLocaleString("en-US")}</b></span>
-      </div>
-    `;
   }
 
   private updateGarageUi(): void {
@@ -1357,39 +1109,6 @@ export class GameApp {
     }
     if (nextArrow) {
       nextArrow.disabled = !isGarageState || isSwitching;
-    }
-
-    if (this.garageVehicleLabel && preview) {
-      this.garageVehicleLabel.textContent = preview.vehicle.displayName;
-    }
-    if (this.hankoRail && preview && preview.vehicle.id !== this.lastHankoActiveId) {
-      this.lastHankoActiveId = preview.vehicle.id;
-      for (const seal of Array.from(this.hankoRail.querySelectorAll("[data-hanko-id]"))) {
-        seal.classList.toggle("is-active", seal.getAttribute("data-hanko-id") === preview.vehicle.id);
-      }
-    }
-
-    // Tier / price / owned are printed diegetically on the 3D wall stencil now;
-    // only the coin balance stays as minimal corner chrome.
-    if (this.garageBalanceLabel && preview) {
-      this.garageBalanceLabel.textContent = `金 ${this.formatCoinsShort(preview.totalCoins)}`;
-    }
-
-    if (this.garagePreviousButton) {
-      this.garagePreviousButton.disabled = !isGarageState || isSwitching;
-    }
-    if (this.garageNextButton) {
-      this.garageNextButton.disabled = !isGarageState || isSwitching;
-    }
-    if (this.garageStartButton) {
-      const blockedByLock = preview ? !preview.owned && !preview.canAfford : true;
-      this.garageStartButton.disabled = !isGarageState || isSwitching || blockedByLock;
-      const canBuy = !!preview && !preview.owned && preview.canAfford;
-      this.garageStartButton.textContent = preview?.owned ? "走 DRIVE" : preview?.canAfford ? "金 UNLOCK" : "鍵 LOCKED";
-      this.garageStartButton.classList.toggle("primary-action--buy", canBuy);
-    }
-    if (this.garageBackButton) {
-      this.garageBackButton.disabled = !isGarageState;
     }
   }
 
@@ -1624,17 +1343,13 @@ export class GameApp {
   }
 
   private updateStats(): void {
-    if (!this.runScene || !this.metaLabel || !this.coinsLabel || !this.comboLabel || !this.pressureLabel) {
+    if (!this.runScene) {
       return;
     }
 
     const stats = this.runScene.getRunStats();
-    this.metaLabel.textContent = `走 ${Math.round(stats.distance).toLocaleString("en-US")}`;
-    this.coinsLabel.textContent = `金 ${stats.coins.toLocaleString("en-US")}`;
-    this.comboLabel.textContent = `× ${stats.combo}`;
-    this.pressureLabel.textContent = `圧 ${Math.round(stats.pressure)}`;
 
-    // New print-language run HUD (.fr-hud)
+    // Print-language run HUD (.fr-hud)
     if (this.hudMeta) {
       this.hudMeta.textContent = Math.round(stats.distance).toLocaleString("en-US");
     }
@@ -1651,48 +1366,6 @@ export class GameApp {
 
   private formatCoinsShort(value: number): string {
     return Math.max(0, Math.floor(value)).toLocaleString("en-US");
-  }
-
-  private getStateLabel(state: GameState): string {
-    const kicker = (kanji: string, latin: string): string =>
-      `<span class="kicker-jp">${kanji}</span><span>${latin}</span>`;
-
-    switch (state) {
-      case "loading":
-        return kicker("読", "LOADING");
-      case "countdown":
-        return kicker("用", "READY");
-      case "running":
-        return kicker("走", "RUNNING");
-      case "paused":
-        return kicker("止", "PAUSED");
-      case "gameOver":
-        return kicker("終", "RUN COMPLETE");
-      case "garage":
-        return kicker("蔵", "GARAGE");
-      case "menu":
-        return kicker("道", "ENDLESS RUN · 江戸");
-      case "boot":
-      case "reviving":
-        return kicker("待", "STANDBY");
-    }
-  }
-
-  private getActionLabel(state: GameState): string {
-    switch (state) {
-      case "running":
-        return "止 PAUSE";
-      case "paused":
-        return "続 RESUME";
-      case "gameOver":
-        return "再 RESTART";
-      case "countdown":
-        return "用 READY";
-      case "garage":
-        return "走 START";
-      default:
-        return "走 START";
-    }
   }
 
 }
