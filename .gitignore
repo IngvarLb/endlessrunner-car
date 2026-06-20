@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+phase*-*.png
+# local screenshot/dev tooling
+garage-shot.mjs
+garage-*.png
+spot-*.png
+ui-*.png
+car-*.png
+dieg-*.png
+m-*.png
