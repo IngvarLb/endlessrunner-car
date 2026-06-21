@@ -1,0 +1,14 @@
+import puppeteer from "puppeteer-core";
+const URL="http://localhost:4181/endlessrunner-car/"; const CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const b=await puppeteer.launch({executablePath:CHROME,headless:"new",args:["--no-sandbox","--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--enable-webgl"]});
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const p=await b.newPage();
+await p.evaluateOnNewDocument(()=>{window.__bip=false;window.addEventListener("beforeinstallprompt",()=>{window.__bip=true;});});
+await p.goto(URL,{waitUntil:"networkidle2",timeout:30000}); await wait(1500);
+const sw=await p.evaluate(async()=>{const r=await navigator.serviceWorker.ready.catch(()=>null);return{active:!!r?.active,scope:r?.scope};});
+const man=await p.evaluate(async()=>{const l=document.querySelector('link[rel=manifest]')?.href;const m=await fetch(l).then(r=>r.json());const st={};for(const ic of m.icons){st[ic.src]=(await fetch(new URL(ic.src,l))).status;}return{name:m.name,start:new URL(m.start_url,l).pathname,iconStatus:st};});
+const bip=await p.evaluate(()=>window.__bip);
+console.log("SW:",JSON.stringify(sw));
+console.log("MANIFEST:",JSON.stringify(man));
+console.log("installable(beforeinstallprompt):",bip);
+await b.close();
