@@ -1119,10 +1119,8 @@ button {
   position: absolute;
   right: 8px;
   top: 8px;
-  font-family: var(--font-jp);
-  font-weight: 700;
-  font-size: 12px;
-  color: rgb(244 237 224 / 0.5);
+  display: inline-flex;
+  color: rgb(244 237 224 / 0.62);
 }
 .fr-rcard.is-locked .fr-rcard-k,
 .fr-rcard.is-locked .fr-rcard-name {

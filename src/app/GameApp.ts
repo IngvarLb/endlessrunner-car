@@ -36,6 +36,10 @@ const countdownDurationMs = 720;
 const idleFrameInterval = 1 / 24;
 const garageFrameInterval = 1 / 40;
 
+// Lucide `lock` icon (lucide.dev, ISC license) — inlined to avoid a dependency.
+const LUCIDE_LOCK_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+
 export function createGameApp(root: HTMLElement, config: Partial<GameConfig> = {}): GameApp {
   return new GameApp(root, mergeConfig(config));
 }
@@ -1301,7 +1305,7 @@ export class GameApp {
         if (!owned) {
           classes.push("is-locked");
         }
-        const lock = owned ? "" : `<span class="fr-rcard-lock">鍵</span>`;
+        const lock = owned ? "" : `<span class="fr-rcard-lock">${LUCIDE_LOCK_ICON}</span>`;
         return `
           <button class="${classes.join(" ")}" type="button" data-roster-id="${vehicle.id}">
             <span class="fr-rcard-k" style="color:${vehicle.paint}">${vehicle.kanji}</span>
