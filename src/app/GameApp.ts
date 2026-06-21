@@ -36,9 +36,11 @@ const countdownDurationMs = 720;
 const idleFrameInterval = 1 / 24;
 const garageFrameInterval = 1 / 40;
 
-// Lucide `lock` icon (lucide.dev, ISC license) — inlined to avoid a dependency.
-const LUCIDE_LOCK_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+// Lucide `lock` icon (lucide.dev, ISC license), reshaped angular (square body +
+// rectangular shackle, square caps + miter joins) to match the game's cut-paper
+// edges. Drawn with an opaque colour so overlapping strokes don't double up.
+const LOCK_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V6h10v5"/></svg>';
 
 export function createGameApp(root: HTMLElement, config: Partial<GameConfig> = {}): GameApp {
   return new GameApp(root, mergeConfig(config));
@@ -432,9 +434,6 @@ export class GameApp {
           <div class="fr-gkanji-tag" data-frg-tag></div>
         </div>
 
-        <button class="fr-garrow fr-garrow--prev fr-garage-prev2" type="button" aria-label="Previous vehicle">◀</button>
-        <button class="fr-garrow fr-garrow--next fr-garage-next2" type="button" aria-label="Next vehicle">▶</button>
-
         <aside class="fr-gpanel">
           <div class="fr-gpanel-head">
             <span class="fr-tierbadge" data-frg-tier><span class="fr-tierbadge-jp">常</span><span class="fr-tierbadge-en">COMMON</span></span>
@@ -598,8 +597,6 @@ export class GameApp {
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-start-action") ?? undefined, () => this.start());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-action") ?? undefined, () => this.openGarage());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-settings-open") ?? undefined, () => this.toggleSettingsPanel());
-    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-prev2") ?? undefined, () => this.handleGarageMove(-1), "garageSwitch");
-    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-next2") ?? undefined, () => this.handleGarageMove(1), "garageSwitch");
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-back2") ?? undefined, () => this.returnToMenuFromGarage());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-garage-settings") ?? undefined, () => this.toggleSettingsPanel());
     this.bindFrGarageDelegates();
@@ -1097,22 +1094,11 @@ export class GameApp {
   }
 
   private updateGarageUi(): void {
-    const garageScene = this.garageScene;
-    const isGarageState = this.stateMachine.getState() === "garage";
-    const isSwitching = garageScene?.isSwitching() ?? true;
-    const preview = garageScene?.getPreview();
+    const preview = this.garageScene?.getPreview();
 
     // New editorial chrome (.fr-garage): rebuild the heavy DOM only on vehicle change.
     if (this.frGarage && preview && preview.vehicle.id !== this.lastFrGarageVehicleId) {
       this.renderFrGarage();
-    }
-    const prevArrow = this.frGarage?.querySelector<HTMLButtonElement>(".fr-garrow--prev");
-    const nextArrow = this.frGarage?.querySelector<HTMLButtonElement>(".fr-garrow--next");
-    if (prevArrow) {
-      prevArrow.disabled = !isGarageState || isSwitching;
-    }
-    if (nextArrow) {
-      nextArrow.disabled = !isGarageState || isSwitching;
     }
   }
 
@@ -1305,7 +1291,7 @@ export class GameApp {
         if (!owned) {
           classes.push("is-locked");
         }
-        const lock = owned ? "" : `<span class="fr-rcard-lock">${LUCIDE_LOCK_ICON}</span>`;
+        const lock = owned ? "" : `<span class="fr-rcard-lock">${LOCK_ICON}</span>`;
         return `
           <button class="${classes.join(" ")}" type="button" data-roster-id="${vehicle.id}">
             <span class="fr-rcard-k" style="color:${vehicle.paint}">${vehicle.kanji}</span>

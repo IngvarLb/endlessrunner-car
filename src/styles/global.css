@@ -670,11 +670,13 @@ button {
 }
 .fr-garage .fr-topbar,
 .fr-garage .fr-gpanel,
-.fr-garage .fr-gkanji,
-.fr-garage .fr-garrow,
 .fr-garage .fr-roster,
 .fr-garage .fr-corner {
   z-index: 6;
+}
+/* big car kanji sits behind the top-bar chrome (coins/level/settings) */
+.fr-garage .fr-gkanji {
+  z-index: 3;
 }
 
 /* legibility wash over the dark room (keeps the spotlit car readable, darkens
@@ -798,36 +800,6 @@ button {
   letter-spacing: 0.16em;
   color: rgb(244 237 224 / 0.66);
   margin-top: 6px;
-}
-
-/* arrows flanking the car */
-.fr-garrow {
-  width: 50px;
-  height: 60px;
-  top: 47%;
-  transform: translateY(-50%);
-  cursor: pointer;
-  background: rgb(250 246 238 / 0.82);
-  border: 1px solid var(--color-border-strong);
-  color: var(--color-ink);
-  font-size: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.fr-garrow:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-.fr-garrow:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.fr-garrow--prev {
-  left: clamp(420px, 33vw, 520px);
-}
-.fr-garrow--next {
-  right: clamp(230px, 19vw, 360px);
 }
 
 /* left info panel — pinned washi card so the dark editorial text reads over
@@ -1120,7 +1092,8 @@ button {
   right: 8px;
   top: 8px;
   display: inline-flex;
-  color: rgb(244 237 224 / 0.62);
+  /* opaque so the lock's overlapping strokes don't double up / darken */
+  color: #cdbfa6;
 }
 .fr-rcard.is-locked .fr-rcard-k,
 .fr-rcard.is-locked .fr-rcard-name {
@@ -1128,8 +1101,7 @@ button {
 }
 
 @media (max-width: 860px) {
-  .fr-gword,
-  .fr-garrow {
+  .fr-gword {
     display: none;
   }
   .fr-gkanji {
