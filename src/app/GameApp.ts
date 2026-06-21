@@ -1008,16 +1008,18 @@ export class GameApp {
     }
 
     if (state === "garage") {
+      // Swipe/press direction = the direction the car flies out: swipe left →
+      // current car exits left → next car in the row (+1); swipe right → -1.
       if (this.input.consumeAction("moveLeft")) {
         this.unlockAudio();
         this.audio?.playGarageSwitch();
-        this.handleGarageMove(-1);
+        this.handleGarageMove(1);
       }
 
       if (this.input.consumeAction("moveRight")) {
         this.unlockAudio();
         this.audio?.playGarageSwitch();
-        this.handleGarageMove(1);
+        this.handleGarageMove(-1);
       }
 
       return;
