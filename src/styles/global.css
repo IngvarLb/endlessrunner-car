@@ -162,9 +162,8 @@ button {
   top: 0;
   left: 0;
   right: 0;
-  height: 100vh;
-  height: 100dvh;
-  height: var(--app-height, 100dvh);
+  height: 100vh; /* fallback for browsers without dvh/max() */
+  height: max(100dvh, var(--app-height, 100dvh)); /* fullest of dvh / innerHeight */
   isolation: isolate;
   background: #1a130b;
 }
