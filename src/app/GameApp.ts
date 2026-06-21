@@ -1294,7 +1294,6 @@ export class GameApp {
       .map((vehicle) => {
         const owned = isVehicleOwned(vehicle, this.unlockedVehicleIds);
         const selected = vehicle.id === selectedId;
-        const tier = TIER_META[vehicle.tier];
         const classes = ["fr-rcard"];
         if (selected) {
           classes.push("is-selected");
@@ -1305,7 +1304,6 @@ export class GameApp {
         const lock = owned ? "" : `<span class="fr-rcard-lock">鍵</span>`;
         return `
           <button class="${classes.join(" ")}" type="button" data-roster-id="${vehicle.id}">
-            <span class="fr-rcard-stripe" style="background:${tier.color}"></span>
             <span class="fr-rcard-k" style="color:${vehicle.paint}">${vehicle.kanji}</span>
             <span class="fr-rcard-name">${vehicle.displayName}</span>
             ${lock}
