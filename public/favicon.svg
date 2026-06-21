@@ -1,5 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="8" fill="#273c75"/>
-  <path d="M32 6 52 20 45 56H19L12 20Z" fill="#00e5ff"/>
-  <path d="M18 36h28v8H18z" fill="#ffc857"/>
+  <rect width="64" height="64" rx="10" fill="#e23b2e"/>
+  <rect x="7" y="7" width="50" height="50" rx="6" fill="none" stroke="#f4ede0" stroke-width="2.5" opacity="0.9"/>
+  <text x="32" y="34" text-anchor="middle" dominant-baseline="central"
+    font-family="'Noto Sans JP','Hiragino Sans','Yu Gothic',sans-serif" font-weight="900"
+    font-size="42" fill="#f4ede0">走</text>
 </svg>

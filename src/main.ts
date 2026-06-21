@@ -11,3 +11,12 @@ const app = createGameApp(root);
 await app.init();
 
 window.addEventListener("beforeunload", () => app.dispose());
+
+// Register the PWA service worker (production builds only, so it never
+// interferes with the Vite dev server / HMR). BASE_URL keeps it deploy-agnostic.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  const base = import.meta.env.BASE_URL;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch(() => undefined);
+  });
+}
