@@ -137,6 +137,7 @@ body,
 
 body {
   min-width: 320px;
+  background: #1a130b;
 }
 
 button {
@@ -153,9 +154,12 @@ button {
 }
 
 .game-root {
-  position: relative;
+  /* Pin to the real viewport so the canvas is truly full-bleed on iOS
+     standalone PWAs (height:100% leaves a gap above the home indicator). */
+  position: fixed;
+  inset: 0;
   isolation: isolate;
-  background: #58c7f3;
+  background: #1a130b;
 }
 
 .game-canvas {
@@ -1792,4 +1796,36 @@ button {
 }
 .fr-go-chip--coin b {
   color: var(--color-gold);
+}
+
+/* =====================================================================
+   PWA / notch safe areas — the 3D canvas stays full-bleed (visible under the
+   Dynamic Island + home indicator); the chrome is kept inside the safe area.
+   ===================================================================== */
+/* Non-modal screens: inset the whole screen into the safe area. */
+.fr-menu,
+.fr-garage,
+.fr-hud,
+.fr-countdown {
+  top: env(safe-area-inset-top);
+  right: env(safe-area-inset-right);
+  bottom: env(safe-area-inset-bottom);
+  left: env(safe-area-inset-left);
+}
+/* The settings modal keeps its full-bleed paper but insets its edge content. */
+.fr-topbar--settings {
+  padding-top: max(clamp(20px, 3vw, 42px), calc(env(safe-area-inset-top) + 4px));
+  padding-left: max(clamp(20px, 3.4vw, 54px), env(safe-area-inset-left));
+  padding-right: max(clamp(20px, 3.4vw, 54px), env(safe-area-inset-right));
+}
+.fr-set-body {
+  top: calc(env(safe-area-inset-top) + clamp(94px, 13vh, 150px));
+  left: calc(env(safe-area-inset-left) + clamp(20px, 4vw, 56px));
+  right: calc(env(safe-area-inset-right) + clamp(20px, 4vw, 56px));
+  bottom: calc(env(safe-area-inset-bottom) + clamp(86px, 12vh, 108px));
+}
+.fr-set-footer {
+  left: calc(env(safe-area-inset-left) + clamp(20px, 4vw, 56px));
+  right: calc(env(safe-area-inset-right) + clamp(20px, 4vw, 56px));
+  bottom: calc(env(safe-area-inset-bottom) + clamp(18px, 3vh, 40px));
 }
