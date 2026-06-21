@@ -131,8 +131,18 @@ body,
 #app {
   width: 100%;
   height: 100%;
+  height: 100dvh; /* full dynamic viewport (fills under the home indicator) */
   margin: 0;
   overflow: hidden;
+}
+/* Installed PWA: use the large viewport so it spans the whole screen including
+   the home-indicator area (dvh can report short in iOS standalone). */
+@media all and (display-mode: standalone), all and (display-mode: fullscreen) {
+  html,
+  body,
+  #app {
+    height: 100vh;
+  }
 }
 
 body {
@@ -154,16 +164,10 @@ button {
 }
 
 .game-root {
-  /* Truly full-bleed on iOS standalone PWAs: don't rely on bottom:0 (which iOS
-     resolves against the small viewport, leaving a gap above the home
-     indicator). Anchor top, set the height explicitly — JS feeds the real
-     window.innerHeight into --app-height; 100dvh / 100vh are fallbacks. */
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100vh; /* fallback for browsers without dvh/max() */
-  height: max(100dvh, var(--app-height, 100dvh)); /* fullest of dvh / innerHeight */
+  /* Normal flow (NOT position:fixed — fixed elements don't fill the bottom
+     safe area on iOS). Fills #app, which is sized to the full viewport above. */
+  position: relative;
+  height: 100%;
   isolation: isolate;
   background: #1a130b;
 }
