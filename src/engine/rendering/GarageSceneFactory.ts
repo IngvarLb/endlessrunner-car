@@ -63,8 +63,8 @@ class GarageCameraController {
     // section — by dropping the camera and looking up.
     this.pullback = portrait ? 0.7 : snug ? 1.1 : 0;
     this.sideOffset = portrait ? -0.15 : snug ? -0.7 : 0;
-    this.heightOffset = portrait ? -0.15 : 0;
-    this.targetLift = portrait ? 0.95 : snug ? 0.1 : 0;
+    this.heightOffset = portrait ? -0.1 : 0;
+    this.targetLift = portrait ? 0.62 : snug ? 0.1 : 0;
     // Only the wide desktop layout has the left stats panel beside the car, so
     // only there do we push the car toward the right/golden section.
     this.frameShiftX = portrait || snug ? 0 : -1.25;

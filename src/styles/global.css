@@ -734,9 +734,9 @@ button {
   height: 46px;
   padding: 0 18px;
   cursor: pointer;
-  background: rgb(250 246 238 / 0.86);
-  border: 1px solid var(--color-border);
-  color: var(--color-ink);
+  background: transparent;
+  border: 1px solid rgb(244 237 224 / 0.35);
+  color: #f4ede0;
   font-family: var(--font-body);
   font-weight: 800;
   font-size: 14px;
@@ -746,7 +746,12 @@ button {
   gap: 9px;
 }
 .fr-back-btn:hover {
-  border-color: var(--color-ink);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+/* align the back button's left edge with the stats panel */
+.fr-topbar--garage {
+  padding-left: clamp(18px, 3vw, 54px);
 }
 .fr-back-jp {
   font-family: var(--font-jp);
@@ -1107,6 +1112,10 @@ button {
   .fr-gword {
     display: none;
   }
+  /* back button aligns with the stats panel + roster left edge */
+  .fr-topbar--garage {
+    padding-left: 14px;
+  }
   /* big kanji sits in the right third, its top edge aligned with the tier
      badge at the top of the stats panel (so it never slides under the topbar) */
   .fr-gkanji {
@@ -1140,8 +1149,40 @@ button {
   .fr-gseg {
     height: 8px;
   }
+  /* divider is unneeded — the action moves out of the panel to the bottom bar */
   .fr-gpanel-div {
-    margin: 12px 0 11px;
+    display: none;
+  }
+  /* action bar pinned to the bottom (below the car, above the roster): the
+     action button + status box share the width side by side */
+  .fr-gaction {
+    position: fixed;
+    left: 14px;
+    right: 14px;
+    bottom: calc(clamp(12px, 2vh, 22px) + 134px);
+    display: flex;
+    flex-direction: row-reverse;
+    gap: 10px;
+    align-items: stretch;
+    margin: 0;
+  }
+  .fr-gaction > * {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+  }
+  .fr-gbtn {
+    height: 52px;
+  }
+  .fr-owned-row,
+  .fr-cost-row {
+    height: 52px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid var(--color-border-ondark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .fr-roster {
     bottom: clamp(12px, 2vh, 22px);
