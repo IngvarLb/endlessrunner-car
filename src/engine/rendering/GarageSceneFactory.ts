@@ -159,14 +159,14 @@ export class GarageSceneFactory {
 
 function buildLighting(scene: THREE.Scene, quality: GameConfig["quality"]): void {
   // Dark, moody room with a single hero spotlight pooling on the turntable.
-  const ambient = new THREE.HemisphereLight(0xb6a488, 0x120d14, 0.42);
+  const ambient = new THREE.HemisphereLight(0xb6a488, 0x120d14, 0.58);
 
   // soft directional fill so the shadow side of the car isn't pure black
-  const fill = new THREE.DirectionalLight(0xffe6c0, 0.55);
+  const fill = new THREE.DirectionalLight(0xffe6c0, 0.95);
   fill.position.set(3.0, 3.4, 3.6);
 
-  // HERO spotlight from above-front, aimed down at the platform
-  const spot = new THREE.SpotLight(0xfff2d4, 16, 16, Math.PI / 7.5, 0.45, 1.0);
+  // HERO spotlight from above-front, aimed down at the platform — bright on the car
+  const spot = new THREE.SpotLight(0xfff2d4, 42, 18, Math.PI / 7, 0.5, 0.85);
   spot.position.set(0.5, 5.4, 1.8);
   spot.target.position.set(0, 0.2, -0.15);
   spot.castShadow = quality !== "low";
