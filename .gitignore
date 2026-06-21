@@ -11,3 +11,6 @@ ui-*.png
 car-*.png
 dieg-*.png
 m-*.png
+
+# temp puppeteer/test helper scripts
+_*.mjs
