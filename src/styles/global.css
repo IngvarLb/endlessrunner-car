@@ -1107,25 +1107,28 @@ button {
   .fr-gword {
     display: none;
   }
+  /* big kanji sits in the right third, its top edge aligned with the tier
+     badge at the top of the stats panel (so it never slides under the topbar) */
   .fr-gkanji {
-    top: 70px;
+    top: 92px;
   }
   .fr-gkanji-big {
-    font-size: clamp(72px, 19vw, 108px);
+    font-size: clamp(70px, 18vw, 104px);
   }
-  /* compact bottom-sheet (no card); the car stays visible in the upper band */
+  /* stats panel: upper-left, 2/3 width — leaves the right third for the kanji,
+     and the car is framed below it in the lower third */
   .fr-gpanel {
     left: 14px;
-    right: 14px;
-    width: auto;
+    right: auto;
+    width: 64%;
     max-width: none;
-    top: auto;
-    bottom: calc(clamp(12px, 2vh, 22px) + 134px);
-    max-height: 40vh;
+    top: 92px;
+    bottom: auto;
+    max-height: 50vh;
     overflow: auto;
   }
   .fr-gname {
-    font-size: clamp(30px, 8vw, 40px);
+    font-size: clamp(26px, 7vw, 36px);
     margin-top: 10px;
   }
   .fr-gstats-label {
