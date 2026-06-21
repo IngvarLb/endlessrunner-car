@@ -34,6 +34,9 @@ class GarageCameraController {
   private sideOffset = 0;
   private heightOffset = 0;
   private targetLift = 0;
+  // Horizontal look-offset: a negative value makes the car sit RIGHT of centre
+  // in the frame, freeing the left third for the editorial stats panel.
+  private frameShiftX = 0;
 
   constructor() {
     this.camera.position.copy(this.basePosition);
@@ -62,6 +65,9 @@ class GarageCameraController {
     this.sideOffset = portrait ? -0.15 : snug ? -0.7 : 0;
     this.heightOffset = portrait ? 0.55 : 0;
     this.targetLift = portrait ? -0.15 : snug ? 0.1 : 0;
+    // Only the wide desktop layout has the left stats panel beside the car, so
+    // only there do we push the car toward the right/golden section.
+    this.frameShiftX = portrait || snug ? 0 : -1.25;
     this.camera.updateProjectionMatrix();
   }
 
@@ -73,7 +79,7 @@ class GarageCameraController {
       this.basePosition.y + this.heightOffset,
       this.basePosition.z + this.pullback
     );
-    this.camera.lookAt(this.target.x, this.target.y + this.targetLift, this.target.z);
+    this.camera.lookAt(this.target.x + this.frameShiftX, this.target.y + this.targetLift, this.target.z);
   }
 }
 

@@ -1241,7 +1241,7 @@ export class GameApp {
       { jp: "操", en: "HANDLE", value: vehicle.stats.handle },
       { jp: "力", en: "POWER", value: vehicle.stats.power }
     ];
-    const off = "rgb(31 24 19 / 0.1)";
+    const off = "rgb(244 237 224 / 0.16)";
     return rows
       .map((row) => {
         const value = Math.max(0, Math.min(10, Math.round(row.value)));
