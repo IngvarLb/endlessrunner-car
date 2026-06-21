@@ -7,6 +7,16 @@ if (!root) {
   throw new Error("Missing #app root element");
 }
 
+// iOS standalone PWAs don't fill to the home indicator with bottom:0/100%, so
+// pin the real viewport height into a CSS var the root reads from.
+const updateAppHeight = (): void => {
+  document.documentElement.style.setProperty("--app-height", `${window.innerHeight}px`);
+};
+updateAppHeight();
+window.addEventListener("resize", updateAppHeight);
+window.addEventListener("orientationchange", () => window.setTimeout(updateAppHeight, 250));
+window.visualViewport?.addEventListener("resize", updateAppHeight);
+
 const app = createGameApp(root);
 await app.init();
 

@@ -154,10 +154,17 @@ button {
 }
 
 .game-root {
-  /* Pin to the real viewport so the canvas is truly full-bleed on iOS
-     standalone PWAs (height:100% leaves a gap above the home indicator). */
+  /* Truly full-bleed on iOS standalone PWAs: don't rely on bottom:0 (which iOS
+     resolves against the small viewport, leaving a gap above the home
+     indicator). Anchor top, set the height explicitly — JS feeds the real
+     window.innerHeight into --app-height; 100dvh / 100vh are fallbacks. */
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
   isolation: isolate;
   background: #1a130b;
 }
