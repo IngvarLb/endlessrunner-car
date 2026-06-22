@@ -1,0 +1,53 @@
+import type { ChargeTier } from "./AbilityTypes";
+
+/**
+ * Temple-Run-style charge meter for the Main ability. Fills from collected coins
+ * (+ a little distance/near-miss), is "ready" when full, and consumes on activation.
+ * Costs are relative starting values from UMSETZUNGSPLAN.md §7 (tunable).
+ */
+export const CHARGE_TIER_COST: Record<ChargeTier, number> = {
+  low: 150,
+  midLow: 220,
+  mid: 300,
+  midHigh: 400,
+  high: 550
+};
+
+export class ChargeMeter {
+  private charge = 0;
+  private readonly capacity: number;
+
+  constructor(tier: ChargeTier) {
+    this.capacity = Math.max(1, CHARGE_TIER_COST[tier]);
+  }
+
+  /** Add charge (ignores non-positive / non-finite amounts). Clamps at capacity. */
+  add(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return;
+    }
+    this.charge = Math.min(this.capacity, this.charge + amount);
+  }
+
+  /** Fill ratio [0,1] for the HUD bar. */
+  ratio(): number {
+    return Math.min(1, this.charge / this.capacity);
+  }
+
+  isReady(): boolean {
+    return this.charge >= this.capacity;
+  }
+
+  /** Spend a full charge. Returns false (and keeps the charge) when not yet ready. */
+  consume(): boolean {
+    if (!this.isReady()) {
+      return false;
+    }
+    this.charge = 0;
+    return true;
+  }
+
+  reset(): void {
+    this.charge = 0;
+  }
+}

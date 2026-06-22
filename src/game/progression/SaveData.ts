@@ -1,5 +1,13 @@
 import type { QualityMode } from "../../app/GameConfig";
 
+/** Per-vehicle progression: meters drive the Passive mastery level, mainLevel the coin-bought Main. */
+export type VehicleProgress = {
+  /** Cumulative meters driven with this vehicle → mastery level (`floor(meters/10000)`, cap 100). */
+  meters: number;
+  /** Purchased upgrade level of this vehicle's Main ability (0–30). */
+  mainLevel: number;
+};
+
 export type SaveData = {
   version: number;
   highScore: number;
@@ -7,6 +15,8 @@ export type SaveData = {
   totalCoins: number;
   selectedVehicleId: string;
   unlockedVehicleIds: string[];
+  /** Keyed by vehicleId. Missing entries default to `{ meters: 0, mainLevel: 0 }`. */
+  vehicleProgress: Record<string, VehicleProgress>;
   settings: {
     masterVolume: number;
     musicVolume: number;
@@ -25,6 +35,7 @@ export const DEFAULT_SAVE_DATA: SaveData = {
   totalCoins: 0,
   selectedVehicleId: "sports-car",
   unlockedVehicleIds: ["sports-car", "drift-coupe"],
+  vehicleProgress: {},
   settings: {
     masterVolume: 0.85,
     musicVolume: 0.55,
