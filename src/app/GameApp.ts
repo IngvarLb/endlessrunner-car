@@ -102,6 +102,13 @@ export class GameApp {
   private hudCoins?: HTMLElement;
   private hudCombo?: HTMLElement;
   private hudPressure?: HTMLElement;
+  private hudCharge?: HTMLElement;
+  private hudChargeRing?: HTMLElement;
+  private hudChargeKanji?: HTMLElement;
+  private hudChargeTag?: HTMLElement;
+  private hudToast?: HTMLElement;
+  private hudToastLvl?: HTMLElement;
+  private hudToastTimeout = 0;
   private goMeta?: HTMLElement;
   private goCoins?: HTMLElement;
   private goScore?: HTMLElement;
@@ -231,6 +238,7 @@ export class GameApp {
       mainLevel: progress.mainLevel,
       meters: progress.meters
     });
+    this.resetChargeHud(this.selectedVehicle);
     this.stateMachine.transition("countdown", reason);
     this.countdownTimeout = window.setTimeout(() => {
       if (this.stateMachine.getState() === "countdown" && this.stateMachine.canTransition("running")) {
@@ -549,6 +557,19 @@ export class GameApp {
             <button class="fr-hud-pause fr-hud-pause-action" type="button" aria-label="Pause" title="Pause">止</button>
           </div>
         </div>
+
+        <div class="fr-hud-toast" data-hud-toast aria-hidden="true">
+          <span class="fr-hud-toast-star">里</span>
+          <span class="fr-hud-toast-txt"><span class="fr-hud-toast-k">MEISTERSCHAFT</span><span class="fr-hud-toast-big">Stufe <b data-hud-toast-lvl>2</b></span></span>
+        </div>
+
+        <div class="fr-hud-bottom">
+          <button class="fr-charge fr-charge-action" type="button" data-hud-charge aria-label="Fähigkeit aktivieren">
+            <span class="fr-charge-ring" data-hud-charge-ring></span>
+            <span class="fr-charge-core"><span class="fr-charge-kanji" data-hud-charge-kanji>赤</span></span>
+            <span class="fr-charge-tag" data-hud-charge-tag>0%</span>
+          </button>
+        </div>
       </section>
       <div class="fr-countdown" data-fr-countdown aria-hidden="true">
         <span class="fr-countdown-jp">用意</span>
@@ -620,10 +641,17 @@ export class GameApp {
     this.hudCoins = ui.querySelector("[data-hud-coins]") ?? undefined;
     this.hudCombo = ui.querySelector("[data-hud-combo]") ?? undefined;
     this.hudPressure = ui.querySelector("[data-hud-pressure]") ?? undefined;
+    this.hudCharge = ui.querySelector("[data-hud-charge]") ?? undefined;
+    this.hudChargeRing = ui.querySelector("[data-hud-charge-ring]") ?? undefined;
+    this.hudChargeKanji = ui.querySelector("[data-hud-charge-kanji]") ?? undefined;
+    this.hudChargeTag = ui.querySelector("[data-hud-charge-tag]") ?? undefined;
+    this.hudToast = ui.querySelector("[data-hud-toast]") ?? undefined;
+    this.hudToastLvl = ui.querySelector("[data-hud-toast-lvl]") ?? undefined;
     this.goMeta = ui.querySelector("[data-go-meta]") ?? undefined;
     this.goCoins = ui.querySelector("[data-go-coins]") ?? undefined;
     this.goScore = ui.querySelector("[data-go-score]") ?? undefined;
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-hud-pause-action") ?? undefined, () => this.pause());
+    this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-charge-action") ?? undefined, () => this.handleActivateAbility());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-resume-action") ?? undefined, () => this.resume());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-pause-menu-action") ?? undefined, () => this.returnToMainMenu());
     this.bindButton(ui.querySelector<HTMLButtonElement>(".fr-restart-action") ?? undefined, () => this.start());
@@ -1452,6 +1480,7 @@ export class GameApp {
     const stats = this.runScene.getRunStats();
     // Accumulate mastery meters + distance charge (monotonic; resets safely between runs).
     this.runAbilities?.syncDistance(stats.distance);
+    this.updateChargeHud();
 
     // Print-language run HUD (.fr-hud)
     if (this.hudMeta) {
@@ -1466,6 +1495,67 @@ export class GameApp {
     if (this.hudPressure) {
       this.hudPressure.textContent = String(Math.round(stats.pressure));
     }
+  }
+
+  /** Configure the on-screen charge ring for the vehicle about to run. */
+  private resetChargeHud(vehicle: VehicleDefinition): void {
+    if (this.hudChargeKanji) {
+      this.hudChargeKanji.textContent = vehicle.kanji;
+    }
+    this.hudCharge?.style.setProperty("--cc", vehicle.paint);
+    this.hudChargeRing?.style.setProperty("--p", "0%");
+    this.hudCharge?.classList.remove("is-ready");
+    if (this.hudChargeTag) {
+      this.hudChargeTag.textContent = "0%";
+    }
+  }
+
+  /** Per-frame: charge-ring fill/ready state + mastery level-up toast. */
+  private updateChargeHud(): void {
+    const abilities = this.runAbilities;
+    if (!abilities) {
+      return;
+    }
+
+    const ratio = abilities.chargeRatio();
+    const ready = abilities.isReady();
+    this.hudChargeRing?.style.setProperty("--p", `${(ratio * 100).toFixed(1)}%`);
+    this.hudCharge?.classList.toggle("is-ready", ready);
+    if (this.hudChargeTag) {
+      this.hudChargeTag.textContent = ready ? "発動" : `${Math.round(ratio * 100)}%`;
+    }
+
+    const levelUps = abilities.consumeLevelUp();
+    if (levelUps > 0) {
+      this.showMasteryToast(abilities.masteryLevel());
+    }
+  }
+
+  /** Activate the Main ability (Phase 0: consumes the charge; the effect itself lands in Phase 1). */
+  private handleActivateAbility(): void {
+    if (this.stateMachine.getState() !== "running" || !this.runAbilities) {
+      return;
+    }
+    if (!this.runAbilities.tryActivate()) {
+      return; // not charged yet
+    }
+    this.unlockAudio();
+    this.audio?.playBoost();
+    this.hudCharge?.classList.remove("is-ready");
+    this.hudCharge?.classList.add("is-fired");
+    window.setTimeout(() => this.hudCharge?.classList.remove("is-fired"), 360);
+  }
+
+  private showMasteryToast(level: number): void {
+    if (!this.hudToast) {
+      return;
+    }
+    if (this.hudToastLvl) {
+      this.hudToastLvl.textContent = String(level);
+    }
+    this.hudToast.classList.add("is-show");
+    window.clearTimeout(this.hudToastTimeout);
+    this.hudToastTimeout = window.setTimeout(() => this.hudToast?.classList.remove("is-show"), 2600);
   }
 
   private formatCoinsShort(value: number): string {
