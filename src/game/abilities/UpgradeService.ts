@@ -22,8 +22,9 @@ export function mainUpgradeCost(currentLevel: number): number {
   if (nextLevel > MAIN_MAX_LEVEL) {
     return Number.POSITIVE_INFINITY;
   }
-  // Escalating curve: ~100 金 at Lv1 → ~5000 金 at Lv30 (≈45k 金 total per car).
-  return Math.round(100 * Math.pow(nextLevel, 1.6));
+  // Linear curve: 100 金 (Lv0→1) → 3000 金 (Lv29→30), ~46.5k 金 total per car.
+  // Matches UMSETZUNGSPLAN §7's headline "~45k sink"; tune during balancing.
+  return 100 * nextLevel;
 }
 
 /** Active duration (seconds) of a Main at a given purchased level. */

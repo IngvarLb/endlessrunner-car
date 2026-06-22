@@ -14,11 +14,14 @@ import { ResizeService } from "../engine/rendering/ResizeService";
 import { RunSceneFactory, type RunScene } from "../engine/rendering/RunSceneFactory";
 import {
   addRunCoins,
+  addVehicleMeters,
+  getVehicleProgress,
   loadSaveData,
   saveSaveData,
   saveSelectedVehicle,
   unlockVehicle
 } from "../game/progression/SaveDataStore";
+import { RunAbilityController } from "../game/abilities/RunAbilityController";
 import type { SaveData } from "../game/progression/SaveData";
 import type { RunStats } from "../game/progression/ScoreSystem";
 import { GameStateMachine } from "../game/state/GameStateMachine";
@@ -68,6 +71,7 @@ export class GameApp {
     this.saveData.unlockedVehicleIds
   );
   private lastRunStats?: RunStats;
+  private runAbilities?: RunAbilityController;
   private viewportWidth = 1;
   private viewportHeight = 1;
   private countdownTimeout = 0;
@@ -133,6 +137,7 @@ export class GameApp {
 
     this.setupUi();
     this.bindAudioEvents();
+    this.bindAbilityEvents();
     this.input.bind();
     this.bindState();
     this.resize.bind();
@@ -216,6 +221,11 @@ export class GameApp {
     this.runScene.resetRun();
     this.lastRunStats = undefined;
     this.runRewardsClaimed = false;
+    const progress = getVehicleProgress(this.selectedVehicle.id, this.saveData);
+    this.runAbilities = new RunAbilityController(this.selectedVehicle.id, {
+      mainLevel: progress.mainLevel,
+      meters: progress.meters
+    });
     this.stateMachine.transition("countdown", reason);
     this.countdownTimeout = window.setTimeout(() => {
       if (this.stateMachine.getState() === "countdown" && this.stateMachine.canTransition("running")) {
@@ -626,6 +636,12 @@ export class GameApp {
     });
   }
 
+  private bindAbilityEvents(): void {
+    // Coins feed the charge meter; fires once per pickup while a run is active.
+    // Distance is synced per frame in updateStats (no score:changed event exists).
+    this.events.on("coin:collected", ({ amount }) => this.runAbilities?.onCoinCollected(amount));
+  }
+
   private bindAudioEvents(): void {
     const audio = this.audio;
     if (!audio) {
@@ -949,6 +965,9 @@ export class GameApp {
     }
 
     this.saveData = addRunCoins(stats.coins, this.saveData);
+    if (this.runAbilities) {
+      this.saveData = addVehicleMeters(this.runAbilities.vehicleId, this.runAbilities.metersThisRun, this.saveData);
+    }
     this.syncVehicleStateFromSaveData();
     this.runRewardsClaimed = true;
   }
@@ -1338,6 +1357,8 @@ export class GameApp {
     }
 
     const stats = this.runScene.getRunStats();
+    // Accumulate mastery meters + distance charge (monotonic; resets safely between runs).
+    this.runAbilities?.syncDistance(stats.distance);
 
     // Print-language run HUD (.fr-hud)
     if (this.hudMeta) {
