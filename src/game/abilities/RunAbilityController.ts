@@ -3,6 +3,8 @@ import { chargesFromOwnCoins, getMainAbility, getPassiveAbility } from "./Abilit
 import { ChargeMeter } from "./ChargeMeter";
 import { masteryLevel } from "./MasteryService";
 import { mainDuration } from "./UpgradeService";
+import { createEffect, type RunEffect } from "./RunEffect";
+import type { RunEffectContext } from "./RunEffectContext";
 
 /**
  * Orchestrates the active vehicle's abilities for a single run. Phase 0b is the
@@ -17,15 +19,16 @@ const CHARGE_PER_COIN = 1;
 /** Small charge trickle per meter — the only source for loop-protected mains. */
 const CHARGE_PER_METER = 0.05;
 
-export type ActivationResult = {
-  effect: EffectKey;
-  durationSec: number;
-  level: number;
-};
-
 export type RunAbilityInit = {
   mainLevel: number;
   meters: number;
+};
+
+export type ActiveEffectState = {
+  effect: EffectKey;
+  name: string;
+  remaining: number;
+  durationSec: number;
 };
 
 export class RunAbilityController {
@@ -41,6 +44,10 @@ export class RunAbilityController {
   private runMeters = 0;
   private trackedLevel: number;
   private pendingLevelUps = 0;
+
+  private activeEffect?: RunEffect;
+  private effectRemaining = 0;
+  private effectDuration = 0;
 
   constructor(vehicleId: string, init: RunAbilityInit) {
     this.vehicleId = vehicleId;
@@ -109,16 +116,59 @@ export class RunAbilityController {
     return this.charge?.isReady() ?? false;
   }
 
-  /** Consume a full charge and resolve what to activate; undefined when not ready / no main. */
-  tryActivate(): ActivationResult | undefined {
-    if (!this.main || !this.charge || !this.charge.consume()) {
+  isEffectActive(): boolean {
+    return this.activeEffect !== undefined;
+  }
+
+  /** State of the running effect for the HUD chip (undefined when none). */
+  activeEffectState(): ActiveEffectState | undefined {
+    if (!this.activeEffect) {
       return undefined;
     }
     return {
-      effect: this.main.effect,
-      durationSec: mainDuration(this.main, this.mainLevel),
-      level: this.mainLevel
+      effect: this.activeEffect.key,
+      name: this.activeEffect.displayName,
+      remaining: this.effectRemaining,
+      durationSec: this.effectDuration
     };
+  }
+
+  /**
+   * Try to fire the Main: needs a charged meter, no effect already running, and
+   * an implemented effect. Consumes the charge and starts the effect. Returns
+   * true on activation. Charge is kept when the effect isn't implemented yet.
+   */
+  tryActivate(ctx: RunEffectContext): boolean {
+    if (!this.main || !this.charge || this.activeEffect || !this.charge.isReady()) {
+      return false;
+    }
+    const effect = createEffect(this.main.effect);
+    if (!effect) {
+      return false;
+    }
+    this.charge.consume();
+    const durationSec = mainDuration(this.main, this.mainLevel);
+    effect.start(ctx, { durationSec, level: this.mainLevel });
+    this.activeEffect = effect;
+    this.effectRemaining = durationSec;
+    this.effectDuration = durationSec;
+    return true;
+  }
+
+  /** Advance the active effect; ends it when its duration elapses. */
+  update(dt: number, ctx: RunEffectContext): void {
+    if (!this.activeEffect) {
+      return;
+    }
+    this.effectRemaining -= dt;
+    if (this.effectRemaining <= 0) {
+      this.activeEffect.end(ctx);
+      this.activeEffect = undefined;
+      this.effectRemaining = 0;
+      this.effectDuration = 0;
+      return;
+    }
+    this.activeEffect.update(dt, ctx);
   }
 
   /** Drain mastery level-ups gained this frame/run (for a one-shot HUD toast). */

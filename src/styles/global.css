@@ -2026,6 +2026,52 @@ button {
   color: var(--color-gold);
 }
 
+/* ===== Active-ability chip (shown while a Main effect runs) ===== */
+.fr-hud-active {
+  --cc: var(--color-accent);
+  position: absolute;
+  left: 50%;
+  top: clamp(70px, 11vh, 104px);
+  transform: translate(-50%, -6px);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 14px;
+  background: rgb(20 14 22 / 0.56);
+  border: 1px solid var(--cc);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--cc) 40%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.fr-hud-active.is-show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.fr-hud-active-k {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 1;
+  color: #ffd9b0;
+}
+.fr-hud-active-nm {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f4ede0;
+}
+.fr-hud-active-t {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: #ffd9b0;
+  min-width: 44px;
+  text-align: right;
+}
+
 /* countdown */
 .fr-countdown {
   position: absolute;

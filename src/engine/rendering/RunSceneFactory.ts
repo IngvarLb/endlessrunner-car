@@ -15,6 +15,7 @@ import { LaneSystem } from "../../game/world/LaneSystem";
 import { MaterialFactory } from "../assets/MaterialFactory";
 import { ModelFactory } from "../assets/ModelFactory";
 import type { AppScene } from "./AppScene";
+import type { RunEffectContext } from "../../game/abilities/RunEffectContext";
 import { CameraController } from "./CameraController";
 import { LightingRig } from "./LightingRig";
 
@@ -29,6 +30,8 @@ export type RunScene = AppScene & {
   activateBoost(): void;
   getRunStats(): RunStats;
   consumeGameOver(): GameOverInfo | undefined;
+  /** Capability bridge for ability effects (see RunAbilityController). */
+  getEffectContext(): RunEffectContext;
 };
 
 const baseSpeed = 9.5;
@@ -252,6 +255,13 @@ export class RunSceneFactory {
       cameraController.update(dt, elapsed, state);
     };
 
+    const effectContext: RunEffectContext = {
+      runner: {
+        boost: (durationSec: number) => runnerController.applyAbilityBoost(durationSec),
+        clearBoost: () => runnerController.clearBoost()
+      }
+    };
+
     const dispose = (): void => {
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
@@ -447,6 +457,7 @@ export class RunSceneFactory {
       activateBoost,
       getRunStats,
       consumeGameOver,
+      getEffectContext: () => effectContext,
       dispose
     };
   }

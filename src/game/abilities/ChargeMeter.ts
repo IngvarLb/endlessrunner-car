@@ -6,11 +6,11 @@ import type { ChargeTier } from "./AbilityTypes";
  * consumed on activation. Costs are relative starting values (tunable).
  */
 export const CHARGE_TIER_COST: Record<ChargeTier, number> = {
-  low: 150,
-  midLow: 220,
-  mid: 300,
-  midHigh: 400,
-  high: 550
+  low: 80,
+  midLow: 120,
+  mid: 170,
+  midHigh: 250,
+  high: 380
 };
 
 export class ChargeMeter {

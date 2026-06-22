@@ -109,6 +109,10 @@ export class GameApp {
   private hudToast?: HTMLElement;
   private hudToastLvl?: HTMLElement;
   private hudToastTimeout = 0;
+  private hudActive?: HTMLElement;
+  private hudActiveKanji?: HTMLElement;
+  private hudActiveName?: HTMLElement;
+  private hudActiveTime?: HTMLElement;
   private goMeta?: HTMLElement;
   private goCoins?: HTMLElement;
   private goScore?: HTMLElement;
@@ -336,6 +340,8 @@ export class GameApp {
     }
 
     if (this.activeScene === this.runScene && state === "running" && this.runScene) {
+      this.runAbilities?.update(dt, this.runScene.getEffectContext());
+
       const gameOver = this.runScene.consumeGameOver();
       if (gameOver && this.stateMachine.canTransition("gameOver")) {
         this.lastRunStats = this.runScene.getRunStats();
@@ -563,6 +569,12 @@ export class GameApp {
           <span class="fr-hud-toast-txt"><span class="fr-hud-toast-k">MEISTERSCHAFT</span><span class="fr-hud-toast-big">Stufe <b data-hud-toast-lvl>2</b></span></span>
         </div>
 
+        <div class="fr-hud-active" data-hud-active aria-hidden="true">
+          <span class="fr-hud-active-k" data-hud-active-k>赤</span>
+          <span class="fr-hud-active-nm" data-hud-active-nm>STRIKER BOOST</span>
+          <span class="fr-hud-active-t" data-hud-active-t>0,0 s</span>
+        </div>
+
         <div class="fr-hud-bottom">
           <button class="fr-charge fr-charge-action" type="button" data-hud-charge aria-label="Fähigkeit aktivieren">
             <span class="fr-charge-ring" data-hud-charge-ring></span>
@@ -647,6 +659,10 @@ export class GameApp {
     this.hudChargeTag = ui.querySelector("[data-hud-charge-tag]") ?? undefined;
     this.hudToast = ui.querySelector("[data-hud-toast]") ?? undefined;
     this.hudToastLvl = ui.querySelector("[data-hud-toast-lvl]") ?? undefined;
+    this.hudActive = ui.querySelector("[data-hud-active]") ?? undefined;
+    this.hudActiveKanji = ui.querySelector("[data-hud-active-k]") ?? undefined;
+    this.hudActiveName = ui.querySelector("[data-hud-active-nm]") ?? undefined;
+    this.hudActiveTime = ui.querySelector("[data-hud-active-t]") ?? undefined;
     this.goMeta = ui.querySelector("[data-go-meta]") ?? undefined;
     this.goCoins = ui.querySelector("[data-go-coins]") ?? undefined;
     this.goScore = ui.querySelector("[data-go-score]") ?? undefined;
@@ -1508,6 +1524,11 @@ export class GameApp {
     if (this.hudChargeTag) {
       this.hudChargeTag.textContent = "0%";
     }
+    if (this.hudActiveKanji) {
+      this.hudActiveKanji.textContent = vehicle.kanji;
+    }
+    this.hudActive?.style.setProperty("--cc", vehicle.paint);
+    this.hudActive?.classList.remove("is-show");
   }
 
   /** Per-frame: charge-ring fill/ready state + mastery level-up toast. */
@@ -1525,19 +1546,34 @@ export class GameApp {
       this.hudChargeTag.textContent = ready ? "発動" : `${Math.round(ratio * 100)}%`;
     }
 
+    const active = abilities.activeEffectState();
+    if (this.hudActive) {
+      if (active) {
+        this.hudActive.classList.add("is-show");
+        if (this.hudActiveName) {
+          this.hudActiveName.textContent = active.name;
+        }
+        if (this.hudActiveTime) {
+          this.hudActiveTime.textContent = this.formatDuration(active.remaining);
+        }
+      } else {
+        this.hudActive.classList.remove("is-show");
+      }
+    }
+
     const levelUps = abilities.consumeLevelUp();
     if (levelUps > 0) {
       this.showMasteryToast(abilities.masteryLevel());
     }
   }
 
-  /** Activate the Main ability (Phase 0: consumes the charge; the effect itself lands in Phase 1). */
+  /** Activate the Main ability — starts its run effect (no-op if not charged or not implemented). */
   private handleActivateAbility(): void {
-    if (this.stateMachine.getState() !== "running" || !this.runAbilities) {
+    if (this.stateMachine.getState() !== "running" || !this.runAbilities || !this.runScene) {
       return;
     }
-    if (!this.runAbilities.tryActivate()) {
-      return; // not charged yet
+    if (!this.runAbilities.tryActivate(this.runScene.getEffectContext())) {
+      return; // not charged, already active, or effect not implemented yet
     }
     this.unlockAudio();
     this.audio?.playBoost();

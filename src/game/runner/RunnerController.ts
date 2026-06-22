@@ -110,6 +110,18 @@ export class RunnerController implements Collidable {
     return true;
   }
 
+  /** Drive boost for an ability (custom duration); while boosting, traffic is rammed through. */
+  applyAbilityBoost(durationSec: number): void {
+    if (!Number.isFinite(durationSec) || durationSec <= 0) {
+      return;
+    }
+    this.boostTimer = Math.max(this.boostTimer, durationSec);
+  }
+
+  clearBoost(): void {
+    this.boostTimer = 0;
+  }
+
   applyStumble(direction: -1 | 1): void {
     this.stumbleLean = direction * -0.18;
   }
