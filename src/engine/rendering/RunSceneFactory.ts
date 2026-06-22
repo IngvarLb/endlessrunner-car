@@ -15,6 +15,7 @@ import { LaneSystem } from "../../game/world/LaneSystem";
 import { MaterialFactory } from "../assets/MaterialFactory";
 import { ModelFactory } from "../assets/ModelFactory";
 import type { AppScene } from "./AppScene";
+import { AbilitySignField, type AbilityHint } from "./AbilitySignField";
 import { CameraController } from "./CameraController";
 import { LightingRig } from "./LightingRig";
 
@@ -29,6 +30,8 @@ export type RunScene = AppScene & {
   activateBoost(): void;
   getRunStats(): RunStats;
   consumeGameOver(): GameOverInfo | undefined;
+  /** Update the roadside hint signs (ability kanji + readiness). */
+  setAbilityHint(hint: AbilityHint): void;
 };
 
 const baseSpeed = 9.5;
@@ -158,6 +161,14 @@ export class RunSceneFactory {
       addDecorative(decoration);
     }
 
+    // Roadside flyby hint signs — recycled like decorations, but kept dynamic
+    // (board texture + pulse animate), so they are NOT frozen.
+    const abilitySignField = new AbilitySignField();
+    abilitySignField.setHint({ kanji: vehicle.kanji, paint: vehicle.paint, ready: false });
+    for (const object of abilitySignField.objects) {
+      addDecorative(object);
+    }
+
     for (let index = 0; index < biome.coins.count; index += 1) {
       const coin = models.createKoban();
       const trackZ = biome.coins.startZ + index * biome.coins.spacing;
@@ -202,6 +213,7 @@ export class RunSceneFactory {
       chaser.visible = false;
       world.position.z = 0;
       resetWorldPieces();
+      abilitySignField.reset();
       runnerController.reset();
       collectibleSystem.reset();
       trafficSystem.reset();
@@ -242,6 +254,7 @@ export class RunSceneFactory {
       }
 
       runnerController.update(dt, elapsed, isRunning);
+      abilitySignField.update(elapsed);
       recycleWorldPieces();
       collectibleSystem.update(dt, elapsed, isRunning, contentLoopLength);
       trafficSystem.update(dt, isRunning, contentLoopLength);
@@ -253,6 +266,7 @@ export class RunSceneFactory {
     };
 
     const dispose = (): void => {
+      abilitySignField.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();
@@ -447,6 +461,7 @@ export class RunSceneFactory {
       activateBoost,
       getRunStats,
       consumeGameOver,
+      setAbilityHint: (hint: AbilityHint) => abilitySignField.setHint(hint),
       dispose
     };
   }

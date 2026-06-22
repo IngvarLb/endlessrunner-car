@@ -1525,6 +1525,9 @@ export class GameApp {
       this.hudChargeTag.textContent = ready ? "発動" : `${Math.round(ratio * 100)}%`;
     }
 
+    // Roadside hint signs mirror the readiness (kanji + paint fixed for the run).
+    this.runScene?.setAbilityHint({ kanji: this.selectedVehicle.kanji, paint: this.selectedVehicle.paint, ready });
+
     const levelUps = abilities.consumeLevelUp();
     if (levelUps > 0) {
       this.showMasteryToast(abilities.masteryLevel());
