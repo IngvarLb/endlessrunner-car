@@ -953,6 +953,230 @@ button {
   background: var(--color-border-ondark);
   margin: 18px 0 15px;
 }
+
+/* ===== Ability cards (Main / Passive) — replace the 速/握/操/力 stat bars ===== */
+.fr-gabilities {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fr-gab {
+  background: rgb(20 14 22 / 0.34);
+  border: 1px solid var(--color-border-ondark);
+  padding: 12px 13px 13px;
+}
+.fr-gab--main {
+  border-left: var(--border-bold) solid var(--color-accent);
+}
+.fr-gab--passive {
+  border-left: var(--border-bold) solid rgb(246 239 224 / 0.4);
+}
+.fr-gab-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.fr-gab-kanji {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 1;
+}
+.fr-gab-kanji--paint {
+  color: #fff;
+  text-shadow: none;
+}
+.fr-gab-kanji--line {
+  border: 1px solid var(--color-border-ondark);
+  color: #f4ede0;
+}
+.fr-gab-role {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: rgb(244 237 224 / 0.55);
+}
+.fr-gab-role b {
+  color: #f4ede0;
+  font-weight: 700;
+}
+.fr-gab-name {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: uppercase;
+  color: #f4ede0;
+}
+.fr-gab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border-ondark);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: rgb(244 237 224 / 0.7);
+  white-space: nowrap;
+}
+.fr-gab-badge-jp {
+  font-family: var(--font-jp);
+  font-weight: 700;
+  font-size: 10px;
+}
+.fr-gab-now {
+  margin-top: 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  color: rgb(244 237 224 / 0.62);
+}
+.fr-gab-val {
+  color: #f4ede0;
+  font-weight: 700;
+  font-size: 12px;
+}
+.fr-gab-lvl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.fr-gab-track {
+  flex: 1;
+  height: 5px;
+  background: rgb(0 0 0 / 0.42);
+}
+.fr-gab-track--m {
+  display: block;
+  height: 7px;
+  margin-top: 7px;
+}
+.fr-gab-fill {
+  display: block;
+  height: 100%;
+}
+.fr-gab-lvlval {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 11px;
+  color: #f4ede0;
+  min-width: 44px;
+  text-align: right;
+}
+.fr-gab-upgrade {
+  margin-top: 11px;
+  width: 100%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border: none;
+  background: var(--color-gold);
+  color: #1a130b;
+  box-shadow: 2px 3px 0 rgb(42 35 32 / 0.34);
+  text-shadow: none;
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.fr-gab-upgrade:hover {
+  background: var(--color-gold-hover);
+}
+.fr-gab-upgrade:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 2px 0 rgb(42 35 32 / 0.34);
+}
+.fr-gab-upgrade.is-disabled {
+  background: rgb(244 237 224 / 0.14);
+  color: rgb(244 237 224 / 0.5);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.fr-gab-up-lab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.fr-gab-up-jp {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 13px;
+}
+.fr-gab-up-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 13px;
+}
+.fr-gab-up-k {
+  font-family: var(--font-jp);
+  font-size: 11px;
+}
+.fr-gab-up-next {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.7;
+}
+.fr-gab-max {
+  margin-top: 11px;
+  padding: 9px 12px;
+  text-align: center;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #6cc69a;
+  border: 1px solid rgb(108 198 154 / 0.4);
+}
+.fr-gab-mhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 11px;
+}
+.fr-gab-mlab {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: rgb(244 237 224 / 0.5);
+}
+.fr-gab-mval {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 12px;
+  color: #f4ede0;
+}
+.fr-gab-slash {
+  color: var(--color-gold);
+}
+.fr-gab-togo {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgb(244 237 224 / 0.6);
+}
+.fr-gab-togo b {
+  color: #f4ede0;
+}
+
 .fr-owned-row {
   display: flex;
   align-items: center;

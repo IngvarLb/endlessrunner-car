@@ -40,6 +40,8 @@ export type MainAbilityDef = {
   /** Highest purchasable level (inclusive). */
   maxLevel: number;
   chargeCost: ChargeTier;
+  /** Short German effect description shown after the duration on the garage card. */
+  blurb?: string;
   /** Effect-specific tuning knobs (e.g. coinRain density, nightHunt ram coins). */
   params?: Record<string, number>;
 };
@@ -56,6 +58,8 @@ export type PassiveAbilityDef = {
   max: number;
   /** Display unit, e.g. "m", "金", "s". */
   unit?: string;
+  /** Short German descriptor shown before the current value on the garage card. */
+  blurb?: string;
   /** Passive-specific tuning knobs. */
   params?: Record<string, number>;
 };

@@ -17,11 +17,16 @@ import {
   addVehicleMeters,
   getVehicleProgress,
   loadSaveData,
+  purchaseMainUpgrade,
   saveSaveData,
   saveSelectedVehicle,
   unlockVehicle
 } from "../game/progression/SaveDataStore";
 import { RunAbilityController } from "../game/abilities/RunAbilityController";
+import { getMainAbility, getPassiveAbility } from "../game/abilities/AbilityCatalog";
+import { MAIN_MAX_LEVEL, mainDuration, mainUpgradeCost } from "../game/abilities/UpgradeService";
+import type { ChargeTier, PassiveAbilityDef } from "../game/abilities/AbilityTypes";
+import { masteryLevel, masteryProgressRatio, metersToNextLevel, passiveValue } from "../game/abilities/MasteryService";
 import type { SaveData } from "../game/progression/SaveData";
 import type { RunStats } from "../game/progression/ScoreSystem";
 import { GameStateMachine } from "../game/state/GameStateMachine";
@@ -456,8 +461,8 @@ export class GameApp {
             <span class="fr-gmeta-div"></span>
             <span class="fr-gmeta-tag" data-frg-mt></span>
           </div>
-          <div class="fr-gstats-label">性能 · STATS</div>
-          <div class="fr-gstats" data-frg-stats></div>
+          <div class="fr-gstats-label">能力 · FÄHIGKEITEN</div>
+          <div class="fr-gabilities" data-frg-abilities></div>
           <div class="fr-gpanel-div"></div>
           <div class="fr-gaction" data-frg-action></div>
         </aside>
@@ -1142,7 +1147,7 @@ export class GameApp {
       "mk",
       "mr",
       "mt",
-      "stats",
+      "abilities",
       "action",
       "roster"
     ];
@@ -1175,6 +1180,36 @@ export class GameApp {
       this.audio?.playGarageSwitch();
       this.handleGarageJump(card.dataset.rosterId ?? "");
     });
+
+    this.frgEls.abilities?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button.fr-gab-upgrade");
+      if (!button || button.disabled) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.handleMainUpgrade();
+    });
+  }
+
+  private handleMainUpgrade(): void {
+    if (this.stateMachine.getState() !== "garage" || !this.garageScene) {
+      return;
+    }
+
+    const vehicleId = this.garageScene.getPreview().vehicle.id;
+    const result = purchaseMainUpgrade(vehicleId, this.saveData);
+    if (!result.ok) {
+      this.updateGarageUi();
+      return;
+    }
+
+    this.saveData = result.saveData;
+    this.garageScene.refreshOwnership(this.unlockedVehicleIds, this.saveData.totalCoins);
+    this.unlockAudio();
+    this.audio?.playMenuClick();
+    this.lastFrGarageVehicleId = ""; // same vehicle, but level/coins changed → force re-render
+    this.updateGarageUi();
   }
 
   private handleGarageJump(vehicleId: string): void {
@@ -1241,8 +1276,8 @@ export class GameApp {
     if (els.mt) {
       els.mt.textContent = vehicle.tag;
     }
-    if (els.stats) {
-      els.stats.innerHTML = this.renderFrGarageStats(vehicle);
+    if (els.abilities) {
+      els.abilities.innerHTML = this.renderFrGarageAbilities(vehicle);
     }
     if (els.action) {
       els.action.innerHTML = this.renderFrGarageAction(preview);
@@ -1255,30 +1290,88 @@ export class GameApp {
     this.lastFrGarageVehicleId = vehicle.id;
   }
 
-  private renderFrGarageStats(vehicle: VehicleDefinition): string {
-    const rows: Array<{ jp: string; en: string; value: number }> = [
-      { jp: "速", en: "SPEED", value: vehicle.stats.speed },
-      { jp: "握", en: "GRIP", value: vehicle.stats.grip },
-      { jp: "操", en: "HANDLE", value: vehicle.stats.handle },
-      { jp: "力", en: "POWER", value: vehicle.stats.power }
-    ];
-    const off = "rgb(244 237 224 / 0.16)";
-    return rows
-      .map((row) => {
-        const value = Math.max(0, Math.min(10, Math.round(row.value)));
-        const segs = Array.from({ length: 10 }, (_, i) => {
-          const bg = i < value ? vehicle.paint : off;
-          return `<span class="fr-gseg" style="background:${bg}"></span>`;
-        }).join("");
-        return `
-          <div class="fr-gstat-row">
-            <span class="fr-gstat-k">${row.jp}</span>
-            <span class="fr-gstat-en">${row.en}</span>
-            <span class="fr-gstat-bar">${segs}</span>
-            <span class="fr-gstat-val">${value}</span>
-          </div>`;
-      })
-      .join("");
+  private renderFrGarageAbilities(vehicle: VehicleDefinition): string {
+    const main = getMainAbility(vehicle.id);
+    const passive = getPassiveAbility(vehicle.id);
+    if (!main || !passive) {
+      return "";
+    }
+
+    const progress = getVehicleProgress(vehicle.id, this.saveData);
+    const paint = vehicle.paint;
+
+    // Main — coin-bought, 30 upgrade levels
+    const duration = mainDuration(main, progress.mainLevel);
+    const levelPct = Math.round((progress.mainLevel / MAIN_MAX_LEVEL) * 100);
+    const maxed = progress.mainLevel >= MAIN_MAX_LEVEL;
+    const cost = mainUpgradeCost(progress.mainLevel);
+    const affordable = Number.isFinite(cost) && this.saveData.totalCoins >= cost;
+    const tier = this.chargeTierMeta(main.chargeCost);
+    const upgrade = maxed
+      ? `<div class="fr-gab-max">最大 · VOLL AUSGEBAUT</div>`
+      : `<button class="fr-gab-upgrade${affordable ? "" : " is-disabled"}" type="button"${affordable ? "" : " disabled"}>
+           <span class="fr-gab-up-lab"><span class="fr-gab-up-jp">強化</span>UPGRADE</span>
+           <span class="fr-gab-up-cost"><span class="fr-gab-up-k">金</span>${this.formatCoinsShort(cost)}<span class="fr-gab-up-next">→ ${this.formatDuration(mainDuration(main, progress.mainLevel + 1))}</span></span>
+         </button>`;
+
+    // Passive — meters-driven, 100 mastery levels
+    const level = masteryLevel(progress.meters);
+    const value = passiveValue(passive, level);
+    const masteryPct = Math.round(masteryProgressRatio(progress.meters) * 100);
+    const toGo = Math.ceil(metersToNextLevel(progress.meters));
+    const togo =
+      level >= 100
+        ? "完全習得 · voll gemeistert"
+        : `自動 · noch <b>${toGo.toLocaleString("en-US")} m</b> → Stufe ${level + 1}`;
+
+    return `
+      <div class="fr-gab fr-gab--main">
+        <div class="fr-gab-head">
+          <span class="fr-gab-kanji fr-gab-kanji--paint" style="background:${paint}">${vehicle.kanji}</span>
+          <span class="fr-gab-role">主 · <b>MAIN</b><span class="fr-gab-name">${main.name}</span></span>
+          <span class="fr-gab-badge"><span class="fr-gab-badge-jp">${tier.jp}</span>${tier.en}</span>
+        </div>
+        <div class="fr-gab-now"><span class="fr-gab-val">${this.formatDuration(duration)}</span> · ${main.blurb ?? ""}</div>
+        <div class="fr-gab-lvl">
+          <span class="fr-gab-track"><span class="fr-gab-fill" style="width:${levelPct}%;background:${paint}"></span></span>
+          <span class="fr-gab-lvlval">${progress.mainLevel} / ${MAIN_MAX_LEVEL}</span>
+        </div>
+        ${upgrade}
+      </div>
+      <div class="fr-gab fr-gab--passive">
+        <div class="fr-gab-head">
+          <span class="fr-gab-kanji fr-gab-kanji--line">${vehicle.kanji}</span>
+          <span class="fr-gab-role">匠 · <b>PASSIVE</b><span class="fr-gab-name">${passive.name}</span></span>
+          <span class="fr-gab-badge"><span class="fr-gab-badge-jp">里</span>MASTERY</span>
+        </div>
+        <div class="fr-gab-now"><span class="fr-gab-val">${this.formatPassiveValue(passive, value)}</span></div>
+        <div class="fr-gab-mhead"><span class="fr-gab-mlab">MEISTERSTUFE</span><span class="fr-gab-mval">${level} <span class="fr-gab-slash">/ 100</span></span></div>
+        <div class="fr-gab-track fr-gab-track--m"><span class="fr-gab-fill" style="width:${masteryPct}%;background:${paint}"></span></div>
+        <div class="fr-gab-togo">${togo}</div>
+      </div>`;
+  }
+
+  private chargeTierMeta(tier: ChargeTier): { jp: string; en: string } {
+    const meta: Record<ChargeTier, { jp: string; en: string }> = {
+      low: { jp: "低", en: "LOW" },
+      midLow: { jp: "中低", en: "MID·LO" },
+      mid: { jp: "中", en: "MID" },
+      midHigh: { jp: "中高", en: "MID·HI" },
+      high: { jp: "高", en: "HIGH" }
+    };
+    return meta[tier];
+  }
+
+  private formatDuration(seconds: number): string {
+    const rounded = Math.round(seconds * 10) / 10;
+    const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace(".", ",");
+    return `${text} s`;
+  }
+
+  private formatPassiveValue(passive: PassiveAbilityDef, value: number): string {
+    const amount = Math.round(value).toLocaleString("en-US");
+    const unit = passive.unit ? ` ${passive.unit}` : "";
+    return `${passive.blurb ? `${passive.blurb} ` : ""}${amount}${unit}`;
   }
 
   private renderFrGarageAction(preview: GarageVehiclePreview): string {
