@@ -1,17 +1,16 @@
 import type { ChargeTier } from "./AbilityTypes";
 
 /**
- * Charge meter for the Main ability, denominated in **metres-equivalent** so the
- * roadside distance sign can read straight off it ("noch NNN m"). Distance adds
- * 1:1; collected coins add a fixed metres-bonus (see RunAbilityController), so
- * coins make the sign count down faster. Ready when full. Values are tunable.
+ * Temple-Run-style charge meter for the Main ability. Fills primarily from
+ * collected coins (+ a small distance trickle), is "ready" when full, and is
+ * consumed on activation. Costs are relative starting values (tunable).
  */
 export const CHARGE_TIER_COST: Record<ChargeTier, number> = {
-  low: 400,
-  midLow: 550,
-  mid: 700,
-  midHigh: 950,
-  high: 1300
+  low: 150,
+  midLow: 220,
+  mid: 300,
+  midHigh: 400,
+  high: 550
 };
 
 export class ChargeMeter {
@@ -33,11 +32,6 @@ export class ChargeMeter {
   /** Fill ratio [0,1] for the HUD bar. */
   ratio(): number {
     return Math.min(1, this.charge / this.capacity);
-  }
-
-  /** Metres-equivalent still needed until ready (0 when full). */
-  remaining(): number {
-    return Math.max(0, this.capacity - this.charge);
   }
 
   isReady(): boolean {

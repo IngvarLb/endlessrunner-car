@@ -132,7 +132,9 @@ function createFeudalJapanDecorations(): DecorationPlacement[] {
   const rightHouseX = 6.95;
   const houseKinds: DecorationKind[] = ["machiyaHouse", "nagayaRowHouse", "minkaHouse", "kuraStorehouse"];
 
-  for (let z = 8; z < loopLength; z += 16) {
+  // Torii as occasional landmarks (every 60 m, evenly across the loop) rather
+  // than a continuous tunnel of arches.
+  for (let z = 8; z < loopLength; z += 60) {
     decorations.push({
       kind: "torii",
       x: 0,
