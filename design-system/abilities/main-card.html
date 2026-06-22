@@ -1,0 +1,134 @@
+<!-- @dsCard group="Abilities · Garage" name="Main-Karte (Coins · 30 Stufen)" -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Main-Karte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;800;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #f4ede0;
+    --paint: #e23b2e;        /* active vehicle paint (赤 Crimson Bolt) */
+    --gold: #c79a3e;
+    --gold-press: #a9842f;
+    --border-ondark: rgb(246 239 224 / 0.22);
+    --font-display: "Anton", system-ui, sans-serif;
+    --font-body: "Archivo", system-ui, sans-serif;
+    --font-jp: "Noto Sans JP", system-ui, sans-serif;
+    --font-mono: "Space Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    /* dark garage room — warm spotlight on sumi */
+    background:
+      radial-gradient(120% 90% at 30% 20%, #38302a 0%, #241f1b 55%, #19150f 100%);
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 40px;
+    font-family: var(--font-body);
+    color: var(--ink);
+  }
+
+  .card {
+    width: 430px;
+    max-width: 100%;
+    background: rgb(20 14 22 / 0.34);
+    border: 1px solid var(--border-ondark);
+    border-left: 3px solid var(--paint);
+    padding: 16px 18px 18px;
+    text-shadow: 0 1px 5px rgb(0 0 0 / 0.6);
+  }
+
+  .head { display: flex; align-items: center; gap: 11px; }
+  .kanji {
+    width: 38px; height: 38px;
+    display: grid; place-items: center;
+    background: var(--paint);
+    font-family: var(--font-jp); font-weight: 900; font-size: 22px;
+    color: #fff; text-shadow: none;
+  }
+  .head-labels { flex: 1; min-width: 0; }
+  .role {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.26em;
+    color: rgb(244 237 224 / 0.55);
+  }
+  .role b { color: var(--ink); font-weight: 700; }
+  .tier-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-ondark);
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+    color: rgb(244 237 224 / 0.72);
+  }
+  .tier-badge .jp { font-family: var(--font-jp); font-weight: 700; font-size: 12px; }
+
+  .name {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: 30px; line-height: 0.95; text-transform: uppercase;
+    margin: 13px 0 0;
+  }
+
+  .now {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-top: 9px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: rgb(244 237 224 / 0.66);
+  }
+  .now .val { color: var(--ink); font-weight: 700; font-size: 14px; }
+
+  .lvl-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .lvl-label {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em;
+    color: rgb(244 237 224 / 0.5); width: 54px;
+  }
+  .lvl-track { flex: 1; height: 6px; background: rgb(0 0 0 / 0.42); }
+  .lvl-fill { height: 100%; width: 20%; background: var(--paint); }
+  .lvl-val { font-family: var(--font-body); font-weight: 900; font-size: 12px; width: 42px; text-align: right; }
+
+  .upgrade {
+    margin-top: 15px; width: 100%;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 11px 14px; cursor: pointer;
+    background: var(--gold); border: none; color: #1a130b;
+    box-shadow: 3px 3px 0 rgb(42 35 32 / 0.34);
+    text-shadow: none;
+  }
+  .upgrade:active { transform: translate(1px, 1px); box-shadow: 2px 2px 0 rgb(42 35 32 / 0.34); }
+  .upgrade .lab { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-body); font-weight: 900; font-size: 13px; letter-spacing: 0.1em; }
+  .upgrade .lab .jp { font-family: var(--font-jp); font-weight: 900; font-size: 15px; }
+  .upgrade .cost { display: inline-flex; align-items: center; gap: 9px; font-family: var(--font-body); font-weight: 900; font-size: 14px; }
+  .upgrade .cost .k { font-family: var(--font-jp); font-size: 12px; }
+  .upgrade .cost .next { font-family: var(--font-mono); font-size: 11px; opacity: 0.7; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <div class="kanji">赤</div>
+      <div class="head-labels">
+        <div class="role">主 · <b>MAIN</b></div>
+      </div>
+      <div class="tier-badge"><span class="jp">低</span>LOW</div>
+    </div>
+
+    <h2 class="name">Striker Boost</h2>
+
+    <div class="now"><span>現在</span><span class="val">BOOST 4,2 s</span><span>· Boost zerstört NPCs in der Spur</span></div>
+
+    <div class="lvl-row">
+      <span class="lvl-label">AUSBAU</span>
+      <span class="lvl-track"><span class="lvl-fill"></span></span>
+      <span class="lvl-val">6 / 30</span>
+    </div>
+
+    <button class="upgrade" type="button">
+      <span class="lab"><span class="jp">強化</span>UPGRADE</span>
+      <span class="cost"><span class="k">金</span>700<span class="next">→ 4,4 s</span></span>
+    </button>
+  </div>
+</body>
+</html>

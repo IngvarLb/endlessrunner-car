@@ -1,0 +1,121 @@
+<!-- @dsCard group="Abilities · Garage" name="Fähigkeits-Panel (ersetzt 速/握/操/力)" -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fähigkeits-Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;800;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #f4ede0;
+    --paint: #e23b2e;
+    --gold: #c79a3e;
+    --border-ondark: rgb(246 239 224 / 0.22);
+    --font-display: "Anton", system-ui, sans-serif;
+    --font-body: "Archivo", system-ui, sans-serif;
+    --font-jp: "Noto Sans JP", system-ui, sans-serif;
+    --font-mono: "Space Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(130% 100% at 20% 12%, #3a322b 0%, #241f1b 55%, #16120d 100%);
+    min-height: 100vh; display: grid; place-items: center; padding: 44px 40px;
+    font-family: var(--font-body); color: var(--ink);
+  }
+  .panel { width: 430px; max-width: 100%; text-shadow: 0 1px 5px rgb(0 0 0 / 0.6); }
+
+  .section-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3em; color: rgb(244 237 224 / 0.5); margin-bottom: 12px; }
+
+  .card { background: rgb(20 14 22 / 0.34); border: 1px solid var(--border-ondark); padding: 14px 16px 16px; }
+  .card + .card { margin-top: 12px; }
+  .card.main { border-left: 3px solid var(--paint); }
+  .card.passive { border-left: 3px solid rgb(246 239 224 / 0.4); }
+
+  .head { display: flex; align-items: center; gap: 10px; }
+  .kanji { width: 34px; height: 34px; display: grid; place-items: center; font-family: var(--font-jp); font-weight: 900; font-size: 20px; }
+  .kanji.paint { background: var(--paint); color: #fff; text-shadow: none; }
+  .kanji.line { border: 1px solid var(--border-ondark); color: var(--ink); }
+  .head-labels { flex: 1; }
+  .role { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; color: rgb(244 237 224 / 0.55); }
+  .role b { color: var(--ink); font-weight: 700; }
+  .name-inline { font-family: var(--font-display); font-weight: 400; font-size: 19px; line-height: 1; text-transform: uppercase; margin-top: 3px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid var(--border-ondark); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; color: rgb(244 237 224 / 0.72); }
+  .badge .jp { font-family: var(--font-jp); font-weight: 700; font-size: 11px; }
+
+  .now { margin-top: 10px; font-family: var(--font-mono); font-size: 11px; color: rgb(244 237 224 / 0.66); }
+  .now .val { color: var(--ink); font-weight: 700; font-size: 13px; }
+
+  /* main level + upgrade */
+  .lvl-row { display: flex; align-items: center; gap: 9px; margin-top: 11px; }
+  .lvl-track { flex: 1; height: 5px; background: rgb(0 0 0 / 0.42); }
+  .lvl-fill { height: 100%; width: 20%; background: var(--paint); }
+  .lvl-val { font-family: var(--font-body); font-weight: 900; font-size: 11px; width: 40px; text-align: right; }
+  .upgrade {
+    margin-top: 12px; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 13px; cursor: pointer; background: var(--gold); border: none; color: #1a130b;
+    box-shadow: 3px 3px 0 rgb(42 35 32 / 0.34); text-shadow: none;
+  }
+  .upgrade .lab { display: inline-flex; align-items: center; gap: 7px; font-weight: 900; font-size: 12px; letter-spacing: 0.1em; }
+  .upgrade .lab .jp { font-family: var(--font-jp); font-size: 14px; }
+  .upgrade .cost { display: inline-flex; align-items: center; gap: 8px; font-weight: 900; font-size: 13px; }
+  .upgrade .cost .k { font-family: var(--font-jp); font-size: 11px; }
+  .upgrade .cost .next { font-family: var(--font-mono); font-size: 10px; opacity: 0.7; }
+
+  /* passive mastery */
+  .mastery-head { display: flex; align-items: baseline; justify-content: space-between; margin-top: 12px; }
+  .mastery-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; color: rgb(244 237 224 / 0.5); }
+  .mastery-val { font-family: var(--font-body); font-weight: 900; font-size: 12px; }
+  .mastery-val .slash { color: var(--gold); }
+  .track { height: 7px; background: rgb(0 0 0 / 0.42); margin-top: 7px; }
+  .fill { height: 100%; width: 46%; background: linear-gradient(90deg, var(--paint), #f06b5e); }
+  .togo { margin-top: 6px; font-family: var(--font-mono); font-size: 10px; color: rgb(244 237 224 / 0.62); }
+  .togo b { color: var(--ink); }
+</style>
+</head>
+<body>
+  <div class="panel">
+    <div class="section-label">能力 · FÄHIGKEITEN</div>
+
+    <div class="card main">
+      <div class="head">
+        <div class="kanji paint">赤</div>
+        <div class="head-labels">
+          <div class="role">主 · <b>MAIN</b></div>
+          <div class="name-inline">Striker Boost</div>
+        </div>
+        <div class="badge"><span class="jp">低</span>LOW</div>
+      </div>
+      <div class="now"><span class="val">BOOST 4,2 s</span> · zerstört NPCs in der Spur</div>
+      <div class="lvl-row">
+        <span class="lvl-track"><span class="lvl-fill"></span></span>
+        <span class="lvl-val">6 / 30</span>
+      </div>
+      <button class="upgrade" type="button">
+        <span class="lab"><span class="jp">強化</span>UPGRADE</span>
+        <span class="cost"><span class="k">金</span>700<span class="next">→ 4,4 s</span></span>
+      </button>
+    </div>
+
+    <div class="card passive">
+      <div class="head">
+        <div class="kanji line">赤</div>
+        <div class="head-labels">
+          <div class="role">匠 · <b>PASSIVE</b></div>
+          <div class="name-inline">Knautschzone</div>
+        </div>
+        <div class="badge"><span class="jp">里</span>MASTERY</div>
+      </div>
+      <div class="now"><span class="val">+1 Extra-Fail</span> · Nachladen alle 540 m</div>
+      <div class="mastery-head">
+        <span class="mastery-label">MEISTERSTUFE</span>
+        <span class="mastery-val">12 <span class="slash">/ 100</span></span>
+      </div>
+      <div class="track"><div class="fill"></div></div>
+      <div class="togo">自動 · noch <b>8.240 m</b> → Stufe 13</div>
+    </div>
+  </div>
+</body>
+</html>

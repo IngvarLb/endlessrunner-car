@@ -1,0 +1,86 @@
+<!-- @dsCard group="Abilities · Run-HUD" name="Indikatoren: Extra-Fail · Aktiv-Chip · Level-Up-Toast" -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Run-Indikatoren</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;800;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #f4ede0;
+    --paint: #e23b2e;
+    --gold: #c79a3e;
+    --owned: #6cc69a;
+    --border-ondark: rgb(246 239 224 / 0.22);
+    --font-display: "Anton", system-ui, sans-serif;
+    --font-body: "Archivo", system-ui, sans-serif;
+    --font-jp: "Noto Sans JP", system-ui, sans-serif;
+    --font-mono: "Space Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(180deg, #b8744f 0%, #caa15f 26%, #9aa07a 50%, #5d6b58 70%, #3c4740 100%);
+    min-height: 100vh; display: flex; flex-direction: column; gap: 30px;
+    justify-content: center; align-items: center; padding: 44px;
+    font-family: var(--font-body); color: var(--ink);
+  }
+  .row { width: 460px; max-width: 100%; }
+  .row-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; color: rgb(255 255 255 / 0.85); text-shadow: 0 1px 3px rgb(0 0 0 / 0.5); margin-bottom: 10px; }
+
+  /* Extra-Fail indicator (赤 Knautschzone): pips that deplete + recharge */
+  .extrafail { display: inline-flex; align-items: center; gap: 9px; padding: 7px 12px; background: rgb(20 14 22 / 0.5); border: 1px solid var(--border-ondark); }
+  .extrafail .jp { font-family: var(--font-jp); font-weight: 700; font-size: 13px; color: rgb(244 237 224 / 0.85); }
+  .pips { display: inline-flex; gap: 5px; }
+  .pip { width: 14px; height: 14px; border: 1px solid var(--paint); }
+  .pip.full { background: var(--paint); box-shadow: 0 0 8px rgb(226 59 46 / 0.6); }
+  .pip.charging { background: linear-gradient(90deg, var(--paint) 60%, transparent 60%); }
+  .extrafail .recharge { font-family: var(--font-mono); font-size: 10px; color: rgb(244 237 224 / 0.6); }
+
+  /* Active-ability chip: icon + remaining seconds (counts down) */
+  .chip { display: inline-flex; align-items: center; gap: 9px; padding: 7px 13px; background: rgb(20 14 22 / 0.5); border: 1px solid var(--paint); box-shadow: 0 0 18px rgb(226 59 46 / 0.35); }
+  .chip .kanji { font-family: var(--font-jp); font-weight: 900; font-size: 18px; color: #ffd9b0; }
+  .chip .nm { font-family: var(--font-body); font-weight: 900; font-size: 12px; letter-spacing: 0.08em; }
+  .chip .time { font-family: var(--font-mono); font-weight: 700; font-size: 14px; color: #ffd9b0; }
+  .chip .ring { width: 26px; height: 26px; border-radius: 50%; background: conic-gradient(var(--paint) 0% 64%, rgb(0 0 0 / 0.4) 64% 100%); display: grid; place-items: center; }
+  .chip .ring i { width: 18px; height: 18px; border-radius: 50%; background: rgb(20 14 22 / 0.9); }
+
+  /* Level-up toast: celebrates the mastery step */
+  .toast { display: inline-flex; align-items: center; gap: 12px; padding: 11px 18px; background: rgb(20 14 22 / 0.62); border: 1px solid var(--gold); box-shadow: 0 0 26px rgb(199 154 62 / 0.45); }
+  .toast .star { font-family: var(--font-jp); font-weight: 900; font-size: 26px; color: var(--gold); }
+  .toast .txt .k { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; color: rgb(244 237 224 / 0.66); }
+  .toast .txt .big { font-family: var(--font-display); font-weight: 400; font-size: 22px; line-height: 1; text-transform: uppercase; margin-top: 2px; }
+  .toast .txt .big b { color: var(--gold); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="row-label">EXTRA-FAIL · 赤 KNAUTSCHZONE (1 Puffer bereit, lädt nach)</div>
+    <div class="extrafail">
+      <span class="jp">耐</span>
+      <span class="pips"><span class="pip full"></span><span class="pip charging"></span></span>
+      <span class="recharge">+1 in 210 m</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="row-label">AKTIVE FÄHIGKEIT · Restzeit</div>
+    <div class="chip">
+      <span class="ring"><i></i></span>
+      <span class="kanji">赤</span>
+      <span class="nm">STRIKER BOOST</span>
+      <span class="time">2,7 s</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="row-label">LEVEL-UP · Meisterstufe erreicht</div>
+    <div class="toast">
+      <span class="star">里</span>
+      <span class="txt"><span class="k">MEISTERSCHAFT · CRIMSON BOLT</span><span class="big">Stufe <b>13</b></span></span>
+    </div>
+  </div>
+</body>
+</html>
