@@ -12,10 +12,8 @@ import { mainDuration } from "./UpgradeService";
  * effect + duration so the HUD/activation wiring (0d) can build on it.
  */
 
-/** Charge gained per collected coin (1:1 with the coin-cost charge tiers). */
-const CHARGE_PER_COIN = 1;
-/** Small charge trickle per meter — the only source for loop-protected mains. */
-const CHARGE_PER_METER = 0.05;
+/** Metres-equivalent of progress granted per collected coin (coins shortcut the sign). */
+const COIN_METRES = 6;
 
 export type ActivationResult = {
   effect: EffectKey;
@@ -81,7 +79,7 @@ export class RunAbilityController {
     if (!this.charge || !this.coinCharges || !Number.isFinite(amount) || amount <= 0) {
       return;
     }
-    this.charge.add(amount * CHARGE_PER_COIN);
+    this.charge.add(amount * COIN_METRES);
   }
 
   /** Sync to the run's cumulative distance (monotonic). Drives meters + distance charge + level-ups. */
@@ -91,7 +89,7 @@ export class RunAbilityController {
     }
     const delta = cumulativeMeters - this.runMeters;
     this.runMeters = cumulativeMeters;
-    this.charge?.add(delta * CHARGE_PER_METER);
+    this.charge?.add(delta); // distance charges 1:1 (metres-equivalent)
 
     const level = this.masteryLevel();
     if (level > this.trackedLevel) {
@@ -107,6 +105,11 @@ export class RunAbilityController {
 
   isReady(): boolean {
     return this.charge?.isReady() ?? false;
+  }
+
+  /** Estimated metres until the Main is charged (0 when ready) — drives the roadside sign. */
+  metersUntilReady(): number {
+    return Math.ceil(this.charge?.remaining() ?? 0);
   }
 
   /** Consume a full charge and resolve what to activate; undefined when not ready / no main. */

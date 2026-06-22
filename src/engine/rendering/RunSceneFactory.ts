@@ -164,7 +164,7 @@ export class RunSceneFactory {
     // Roadside flyby hint signs — recycled like decorations, but kept dynamic
     // (board texture + pulse animate), so they are NOT frozen.
     const abilitySignField = new AbilitySignField();
-    abilitySignField.setHint({ kanji: vehicle.kanji, paint: vehicle.paint, ready: false });
+    abilitySignField.setHint({ kanji: vehicle.kanji, paint: vehicle.paint, ready: false, meters: 0 });
     for (const object of abilitySignField.objects) {
       addDecorative(object);
     }

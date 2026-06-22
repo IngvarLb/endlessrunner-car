@@ -1525,8 +1525,13 @@ export class GameApp {
       this.hudChargeTag.textContent = ready ? "発動" : `${Math.round(ratio * 100)}%`;
     }
 
-    // Roadside hint signs mirror the readiness (kanji + paint fixed for the run).
-    this.runScene?.setAbilityHint({ kanji: this.selectedVehicle.kanji, paint: this.selectedVehicle.paint, ready });
+    // Roadside distance signs: ability kanji + metres until charged (counts down).
+    this.runScene?.setAbilityHint({
+      kanji: this.selectedVehicle.kanji,
+      paint: this.selectedVehicle.paint,
+      ready,
+      meters: abilities.metersUntilReady()
+    });
 
     const levelUps = abilities.consumeLevelUp();
     if (levelUps > 0) {

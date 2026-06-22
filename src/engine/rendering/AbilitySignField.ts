@@ -8,13 +8,13 @@ import * as THREE from "three";
  * readout. See memory: charge-indicator-decision.
  */
 
-export type AbilityHint = { kanji: string; paint: string; ready: boolean };
+export type AbilityHint = { kanji: string; paint: string; ready: boolean; meters: number };
 
 const SIGN_COUNT = 2;
 const SIGN_SPACING = 60; // metres between signs (contentLoopLength / SIGN_COUNT)
 const SIGN_START_Z = 96; // first sign ahead of the player
 // Camera looks toward +z, so world +x is screen-left; negative x = screen-right shoulder.
-const SIGN_X = -2.8; // right shoulder edge, in front of the roadside decorations
+const SIGN_X = -2.9; // right shoulder; thin post keeps it from blocking the road
 
 type SignRecord = {
   group: THREE.Group;
@@ -29,7 +29,8 @@ export class AbilitySignField {
   readonly objects: THREE.Object3D[] = [];
 
   private readonly signs: SignRecord[] = [];
-  private hint: AbilityHint = { kanji: "赤", paint: "#e23b2e", ready: false };
+  private hint: AbilityHint = { kanji: "赤", paint: "#e23b2e", ready: false, meters: 0 };
+  private lastDrawKey = "";
 
   constructor() {
     for (let i = 0; i < SIGN_COUNT; i += 1) {
@@ -45,10 +46,11 @@ export class AbilitySignField {
   }
 
   setHint(hint: AbilityHint): void {
-    const changed =
-      hint.kanji !== this.hint.kanji || hint.paint !== this.hint.paint || hint.ready !== this.hint.ready;
-    this.hint = { kanji: hint.kanji, paint: hint.paint, ready: hint.ready };
-    if (changed) {
+    this.hint = { kanji: hint.kanji, paint: hint.paint, ready: hint.ready, meters: hint.meters };
+    // Redraw only when the displayed state changes (ready, or the metres bucket).
+    const key = `${hint.kanji}|${hint.ready ? "go" : `m${Math.round(hint.meters / 5)}`}`;
+    if (key !== this.lastDrawKey) {
+      this.lastDrawKey = key;
       this.redraw();
     }
   }
@@ -79,10 +81,10 @@ export class AbilitySignField {
     group.name = "ability_sign";
 
     const post = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 3.2, 0.18),
+      new THREE.BoxGeometry(0.1, 3.0, 0.1),
       new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.9, metalness: 0 })
     );
-    post.position.y = 1.6;
+    post.position.y = 1.5;
     group.add(post);
 
     const canvas = document.createElement("canvas");
@@ -93,13 +95,13 @@ export class AbilitySignField {
       throw new Error("AbilitySignField: 2D canvas context unavailable");
     }
 
+    // DoubleSide + the group's Y-180 rotation makes the camera see the front face,
+    // so the texture reads correctly with no manual flip.
     const texture = new THREE.CanvasTexture(canvas);
     texture.anisotropy = 4;
-    texture.center.set(0.5, 0.5);
-    texture.repeat.x = -1; // compensate for the Y-180 board flip so text reads correctly
 
     const board = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.0, 2.3),
+      new THREE.PlaneGeometry(2.2, 2.5),
       new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide })
     );
     board.position.y = 2.95;
@@ -121,40 +123,40 @@ export class AbilitySignField {
     const ready = this.hint.ready;
     ctx.clearRect(0, 0, w, h);
 
-    const pad = 16;
-    // Outer sumi border for hard edge definition against any background.
-    drawRoundRect(ctx, pad, pad, w - pad * 2, h - pad * 2, 20);
+    const pad = 14;
+    // Outer sumi border for a hard edge against any background.
+    drawRoundRect(ctx, pad, pad, w - pad * 2, h - pad * 2, 22);
     ctx.fillStyle = "#1a130b";
     ctx.fill();
-    // Inner board face.
-    const ip = pad + 9;
+    // Inner board face: warm washi while charging, vehicle paint when ready.
+    const ip = pad + 11;
     drawRoundRect(ctx, ip, ip, w - ip * 2, h - ip * 2, 14);
-    ctx.fillStyle = ready ? this.hint.paint : "#efe6d4"; // warm washi when idle
+    ctx.fillStyle = ready ? this.hint.paint : "#efe6d4";
     ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = ready ? "#fff2e0" : this.hint.paint;
-    ctx.stroke();
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     if (ready) {
-      ctx.shadowColor = "rgba(255,228,196,0.95)";
-      ctx.shadowBlur = 26;
+      // Charged: bold "発動 / GO!" board in the vehicle paint.
       ctx.fillStyle = "#fff7ee";
-      ctx.font = '900 118px "Noto Sans JP", sans-serif';
-      ctx.fillText("発動", w / 2, h * 0.42);
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "#fff7ee";
-      ctx.font = '700 40px "Space Mono", monospace';
-      ctx.fillText("GO!", w / 2, h * 0.78);
+      ctx.font = '900 96px "Noto Sans JP", sans-serif';
+      ctx.fillText(this.hint.kanji, w / 2, h * 0.34);
+      ctx.font = '900 66px "Noto Sans JP", sans-serif';
+      ctx.fillText("発動", w / 2, h * 0.64);
+      ctx.font = '400 40px "Anton", system-ui, sans-serif';
+      ctx.fillText("GO!", w / 2, h * 0.85);
     } else {
-      ctx.fillStyle = "rgba(40,30,20,0.55)";
-      ctx.font = '700 30px "Noto Sans JP", sans-serif';
-      ctx.fillText("能力", w / 2, h * 0.23);
+      // Distance sign: ability kanji over the metres remaining ("NNN  M").
       ctx.fillStyle = this.hint.paint;
-      ctx.font = '900 150px "Noto Sans JP", sans-serif';
-      ctx.fillText(this.hint.kanji, w / 2, h * 0.57);
+      ctx.font = '900 96px "Noto Sans JP", sans-serif';
+      ctx.fillText(this.hint.kanji, w / 2, h * 0.31);
+      const metres = Math.max(0, Math.round(this.hint.meters));
+      ctx.fillStyle = "#1a130b";
+      ctx.font = `400 ${metres >= 1000 ? 84 : 104}px "Anton", system-ui, sans-serif`;
+      ctx.fillText(String(metres), w / 2, h * 0.63);
+      ctx.font = '400 42px "Anton", system-ui, sans-serif';
+      ctx.fillText("M", w / 2, h * 0.85);
     }
 
     texture.needsUpdate = true;
