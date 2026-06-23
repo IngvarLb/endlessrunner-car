@@ -4,11 +4,23 @@
  * RunScene decides how each capability is fulfilled. Grown per ability as new
  * effects land (traffic clear, coin rain, player scale, camera/scene VFX, …).
  */
+import type { LaneIndex } from "../../app/GameConfig";
+
 export type RunEffectContext = {
   runner: {
     /** Boost for `durationSec`; while boosting, traffic in the path is rammed through. */
     boost(durationSec: number): void;
     /** End the boost immediately. */
     clearBoost(): void;
+  };
+  traffic: {
+    /** Swerve cars out of `lane` once they are at least `minAheadZ` ahead. */
+    swerveOutOfLane(lane: LaneIndex, minAheadZ: number): void;
+    /** Cars in `lane` are knocked aside instead of failing (undefined to clear). */
+    setLaneShield(lane: LaneIndex | undefined): void;
+  };
+  coins: {
+    /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */
+    biasLane(lane: LaneIndex | undefined): void;
   };
 };

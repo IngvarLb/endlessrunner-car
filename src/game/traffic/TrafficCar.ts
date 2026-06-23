@@ -23,9 +23,11 @@ export class TrafficCar implements Collidable {
   readonly speed: number;
   readonly colliderShape: TrafficColliderShape;
   readonly patternId: string;
+  readonly initialLane: LaneIndex;
   lane: LaneIndex;
   trackZ: number;
   hit = false;
+  private visualX = 0;
 
   constructor(
     definition: TrafficCarDefinition,
@@ -36,6 +38,7 @@ export class TrafficCar implements Collidable {
     this.kind = definition.kind;
     this.mesh = definition.mesh;
     this.lane = definition.lane;
+    this.initialLane = definition.lane;
     this.trackZ = definition.trackZ;
     this.initialTrackZ = definition.trackZ;
     this.speed = definition.speed;
@@ -47,8 +50,12 @@ export class TrafficCar implements Collidable {
   update(dt: number, isRunning: boolean): void {
     if (isRunning) {
       this.trackZ += this.speed * dt;
-      this.syncMeshPosition();
     }
+    // Ease the mesh toward the lane x so swerves (e.g. 藍 Freie Bahn) glide instead
+    // of snapping. The collider already tracks the target lane, so safety is instant.
+    const targetX = this.laneSystem.getLaneX(this.lane);
+    this.visualX += (targetX - this.visualX) * Math.min(1, dt * 7);
+    this.mesh.position.set(this.visualX, 0, this.trackZ);
   }
 
   getCollider(): Collider {
@@ -79,12 +86,14 @@ export class TrafficCar implements Collidable {
 
   reset(): void {
     this.trackZ = this.initialTrackZ;
+    this.lane = this.initialLane;
     this.hit = false;
     this.mesh.visible = true;
     this.syncMeshPosition();
   }
 
   private syncMeshPosition(): void {
+    this.visualX = this.laneSystem.getLaneX(this.lane);
     this.mesh.position.set(this.laneSystem.getLaneX(this.lane), 0, this.trackZ);
   }
 }

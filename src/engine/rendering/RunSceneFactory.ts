@@ -259,6 +259,13 @@ export class RunSceneFactory {
       runner: {
         boost: (durationSec: number) => runnerController.applyAbilityBoost(durationSec),
         clearBoost: () => runnerController.clearBoost()
+      },
+      traffic: {
+        swerveOutOfLane: (lane, minAheadZ) => trafficSystem.swerveOutOfLane(lane, minAheadZ),
+        setLaneShield: (lane) => trafficSystem.setLaneShield(lane)
+      },
+      coins: {
+        biasLane: (lane) => collectibleSystem.setLaneBias(lane)
       }
     };
 

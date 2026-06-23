@@ -1,3 +1,4 @@
+import type { LaneIndex } from "../../app/GameConfig";
 import { CollisionSystem } from "../../engine/physics/CollisionSystem";
 import { RunnerController } from "../runner/RunnerController";
 import { LaneSystem } from "../world/LaneSystem";
@@ -10,6 +11,8 @@ export type CollectibleCollected = {
 
 export class CollectibleSystem {
   private readonly collectibles: Collectible[] = [];
+  /** When set, recycled coins are funnelled into this lane (e.g. 藍 Freie Bahn). */
+  private laneBias?: LaneIndex;
 
   constructor(
     private readonly runner: RunnerController,
@@ -44,16 +47,24 @@ export class CollectibleSystem {
   }
 
   reset(): void {
+    this.laneBias = undefined;
     for (const collectible of this.collectibles) {
       collectible.reset();
     }
+  }
+
+  setLaneBias(lane: LaneIndex | undefined): void {
+    this.laneBias = lane;
   }
 
   getActiveCount(): number {
     return this.collectibles.length;
   }
 
-  private getNextLane(trackZ: number) {
+  private getNextLane(trackZ: number): LaneIndex {
+    if (this.laneBias !== undefined) {
+      return this.laneBias;
+    }
     const lanes = this.laneSystem.lanes;
     return lanes[Math.abs(Math.floor(trackZ / 9)) % lanes.length];
   }
