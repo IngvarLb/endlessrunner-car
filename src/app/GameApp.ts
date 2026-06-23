@@ -1105,10 +1105,9 @@ export class GameApp {
       this.runScene.moveLane(-1);
     }
 
-    if (this.input.consumeAction("boost")) {
-      this.unlockAudio();
-      this.runScene.activateBoost();
-    }
+    // The free tap-to-boost is gone: boost now only comes from 赤's charged Main.
+    // Drain the buffered boost action so it doesn't queue up.
+    this.input.consumeAction("boost");
   }
 
   private updateUi(state: GameState): void {

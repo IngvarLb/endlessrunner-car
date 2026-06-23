@@ -79,6 +79,7 @@ export class TrafficCar implements Collidable {
 
   recycle(worldLength: number): void {
     this.trackZ += worldLength;
+    this.lane = this.initialLane; // restore normal lane spread (e.g. after 藍 swerved it aside)
     this.hit = false;
     this.mesh.visible = true;
     this.syncMeshPosition();

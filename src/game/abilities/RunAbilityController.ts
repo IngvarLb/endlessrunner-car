@@ -85,7 +85,8 @@ export class RunAbilityController {
 
   /** Feed collected coins into the charge meter (loop-protected mains ignore their own coins). */
   onCoinCollected(amount: number): void {
-    if (!this.charge || !this.coinCharges || !Number.isFinite(amount) || amount <= 0) {
+    // No recharge while a Main is running — it only refills after the effect ends.
+    if (this.activeEffect || !this.charge || !this.coinCharges || !Number.isFinite(amount) || amount <= 0) {
       return;
     }
     this.charge.add(amount * CHARGE_PER_COIN);
@@ -98,7 +99,9 @@ export class RunAbilityController {
     }
     const delta = cumulativeMeters - this.runMeters;
     this.runMeters = cumulativeMeters;
-    this.charge?.add(delta * CHARGE_PER_METER);
+    if (!this.activeEffect) {
+      this.charge?.add(delta * CHARGE_PER_METER); // no recharge while an effect runs
+    }
 
     const level = this.masteryLevel();
     if (level > this.trackedLevel) {
