@@ -38,7 +38,7 @@ export class TrafficSystem {
       car.update(dt, isRunning);
 
       if (!car.hit && isRunning && this.collisionSystem.queryPair(this.runner, car)) {
-        if (this.runner.isBoosting() || car.lane === this.shieldedLane) {
+        if (this.runner.isBoosting() || this.runner.isInvincible() || car.lane === this.shieldedLane) {
           car.hit = true;
           car.mesh.visible = false;
           this.onDestroyed?.({ car });

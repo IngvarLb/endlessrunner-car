@@ -37,6 +37,8 @@ export class RunnerController implements Collidable {
   private recoilZ = 0;
   private recoilPitch = 0;
   private boostTimer = 0;
+  private titanActive = false;
+  private invincible = false;
   private readonly options: RunnerControllerOptions;
 
   constructor(
@@ -57,6 +59,8 @@ export class RunnerController implements Collidable {
     this.recoilZ = 0;
     this.recoilPitch = 0;
     this.boostTimer = 0;
+    this.titanActive = false;
+    this.invincible = false;
     this.object.position.set(this.targetX, 0, 0);
     this.object.rotation.set(0, this.options.forwardRotationY, 0);
     this.object.scale.setScalar(this.options.baseScale);
@@ -81,7 +85,8 @@ export class RunnerController implements Collidable {
     this.object.position.x = THREE.MathUtils.lerp(this.object.position.x, this.targetX, Math.min(1, dt * 12));
     this.object.position.y = isRunning ? Math.abs(Math.sin(elapsed * 12)) * 0.025 : 0;
     this.object.position.z = this.recoilZ;
-    const targetScale = this.options.baseScale + (this.isBoosting() ? 0.04 : 0);
+    const liveScale = this.options.baseScale + (this.isBoosting() ? 0.04 : 0);
+    const targetScale = this.titanActive ? liveScale * 2.6 : liveScale;
     this.object.scale.x = THREE.MathUtils.lerp(this.object.scale.x, targetScale, Math.min(1, dt * 12));
     this.object.scale.y = THREE.MathUtils.lerp(this.object.scale.y, targetScale, Math.min(1, dt * 12));
     this.object.scale.z = THREE.MathUtils.lerp(this.object.scale.z, targetScale, Math.min(1, dt * 12));
@@ -153,9 +158,10 @@ export class RunnerController implements Collidable {
         z: this.object.position.z
       },
       size: {
-        x: this.options.bounds.x,
+        // 狐 Titan spans all three lanes — wide collider rams + collects everywhere.
+        x: this.titanActive ? 5.6 : this.options.bounds.x,
         y: this.options.bounds.y,
-        z: this.options.bounds.z
+        z: this.titanActive ? this.options.bounds.z * 1.3 : this.options.bounds.z
       },
       enabled: true
     };
@@ -167,6 +173,16 @@ export class RunnerController implements Collidable {
 
   isBoosting(): boolean {
     return this.boostTimer > 0;
+  }
+
+  /** 狐 Titan: grow over 3 lanes + become indestructible (collisions ram/collect, not fail). */
+  setTitan(on: boolean): void {
+    this.titanActive = on;
+    this.invincible = on;
+  }
+
+  isInvincible(): boolean {
+    return this.invincible;
   }
 
   getSpeedMultiplier(): number {

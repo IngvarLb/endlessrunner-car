@@ -304,6 +304,9 @@ export class RunSceneFactory {
         boost: (durationSec: number) => runnerController.applyAbilityBoost(durationSec),
         clearBoost: () => runnerController.clearBoost()
       },
+      player: {
+        setTitan: (on: boolean) => runnerController.setTitan(on)
+      },
       traffic: {
         swerveOutOfLane: (lane, minAheadZ) => trafficSystem.swerveOutOfLane(lane, minAheadZ),
         setLaneShield: (lane) => trafficSystem.setLaneShield(lane)

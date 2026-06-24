@@ -13,6 +13,10 @@ export type RunEffectContext = {
     /** End the boost immediately. */
     clearBoost(): void;
   };
+  player: {
+    /** 狐 Titan: grow over 3 lanes, become indestructible, collect every lane. */
+    setTitan(on: boolean): void;
+  };
   traffic: {
     /** Swerve cars out of `lane` once they are at least `minAheadZ` ahead. */
     swerveOutOfLane(lane: LaneIndex, minAheadZ: number): void;
