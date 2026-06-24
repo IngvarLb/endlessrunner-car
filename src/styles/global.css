@@ -1881,9 +1881,8 @@ button {
   background: rgb(20 14 22 / 0.46);
   border: 1px solid var(--color-border-ondark);
   color: #f4ede0;
-  font-family: var(--font-jp);
-  font-weight: 700;
-  font-size: 16px;
+  display: grid;
+  place-items: center;
 }
 .fr-hud-pause:hover {
   border-color: var(--color-accent);

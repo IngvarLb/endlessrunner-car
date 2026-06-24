@@ -49,6 +49,9 @@ const garageFrameInterval = 1 / 40;
 // edges. Drawn with an opaque colour so overlapping strokes don't double up.
 const LOCK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V6h10v5"/></svg>';
+// Universal pause glyph (two bars) — controls should read for everyone, not rely on kanji.
+const PAUSE_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>';
 // Same padlock with the shackle swung open (right leg lifted clear of the body) — owned marker.
 const LOCK_OPEN_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
@@ -103,8 +106,6 @@ export class GameApp {
   private setSfxInput?: HTMLInputElement;
   private hudMeta?: HTMLElement;
   private hudCoins?: HTMLElement;
-  private hudCombo?: HTMLElement;
-  private hudPressure?: HTMLElement;
   private hudCharge?: HTMLElement;
   private hudChargeRing?: HTMLElement;
   private hudChargeKanji?: HTMLElement;
@@ -556,9 +557,7 @@ export class GameApp {
           </div>
           <div class="fr-hud-chips">
             <div class="fr-hud-chip fr-hud-chip--coin"><span class="fr-hud-chip-k">金</span><span data-hud-coins>0</span></div>
-            <div class="fr-hud-chip"><span class="fr-hud-chip-k">×</span><span data-hud-combo>0</span></div>
-            <div class="fr-hud-chip"><span class="fr-hud-chip-k">圧</span><span data-hud-pressure>0</span></div>
-            <button class="fr-hud-pause fr-hud-pause-action" type="button" aria-label="Pause" title="Pause">止</button>
+            <button class="fr-hud-pause fr-hud-pause-action" type="button" aria-label="Pause" title="Pause">${PAUSE_ICON}</button>
           </div>
         </div>
 
@@ -649,8 +648,6 @@ export class GameApp {
     this.cacheAndBindFrSettings(ui);
     this.hudMeta = ui.querySelector("[data-hud-meta]") ?? undefined;
     this.hudCoins = ui.querySelector("[data-hud-coins]") ?? undefined;
-    this.hudCombo = ui.querySelector("[data-hud-combo]") ?? undefined;
-    this.hudPressure = ui.querySelector("[data-hud-pressure]") ?? undefined;
     this.hudCharge = ui.querySelector("[data-hud-charge]") ?? undefined;
     this.hudChargeRing = ui.querySelector("[data-hud-charge-ring]") ?? undefined;
     this.hudChargeKanji = ui.querySelector("[data-hud-charge-kanji]") ?? undefined;
@@ -1493,12 +1490,6 @@ export class GameApp {
     }
     if (this.hudCoins) {
       this.hudCoins.textContent = stats.coins.toLocaleString("en-US");
-    }
-    if (this.hudCombo) {
-      this.hudCombo.textContent = String(stats.combo);
-    }
-    if (this.hudPressure) {
-      this.hudPressure.textContent = String(Math.round(stats.pressure));
     }
   }
 
