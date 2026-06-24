@@ -49,6 +49,15 @@ export class Collectible implements Collidable {
     this.syncMeshPosition();
   }
 
+  /** Move to an absolute lane + trackZ and make it collectible again (used by 桜 coin rain). */
+  placeAt(lane: LaneIndex, trackZ: number): void {
+    this.lane = lane;
+    this.trackZ = trackZ;
+    this.collected = false;
+    this.mesh.visible = true;
+    this.syncMeshPosition();
+  }
+
   reset(): void {
     this.trackZ = this.initialTrackZ;
     this.collected = false;

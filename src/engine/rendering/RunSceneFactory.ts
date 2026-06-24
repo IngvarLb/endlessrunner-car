@@ -4,6 +4,7 @@ import type { GameConfig, LaneIndex } from "../../app/GameConfig";
 import type { GameState } from "../../game/state/GameStateTypes";
 import { CollisionSystem } from "../physics/CollisionSystem";
 import { CollectibleSystem } from "../../game/collectibles/CollectibleSystem";
+import { CoinRainSystem } from "../../game/collectibles/CoinRainSystem";
 import { ScoreSystem, type RunStats } from "../../game/progression/ScoreSystem";
 import { RunnerController } from "../../game/runner/RunnerController";
 import { validateTrafficRows } from "../../game/traffic/TrafficFairness";
@@ -128,6 +129,47 @@ export class RunSceneFactory {
       }
     );
 
+    const makePinkCoin = (): THREE.Object3D => {
+      const coin = models.createKoban();
+      coin.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh) {
+          return;
+        }
+        const tint = (material: THREE.Material): THREE.Material => {
+          const cloned = material.clone() as THREE.MeshStandardMaterial;
+          if (cloned.color) {
+            cloned.color.set(0xe0738d);
+          }
+          if (cloned.emissive) {
+            cloned.emissive.set(0x3a1620);
+          }
+          return cloned;
+        };
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(tint) : tint(mesh.material);
+      });
+      return coin;
+    };
+    const coinRain = new CoinRainSystem(
+      48,
+      makePinkCoin,
+      laneSystem,
+      collisionSystem,
+      runnerController,
+      () => distance,
+      (amount) => {
+        scoreSystem.addCoin(amount);
+        events?.emit("coin:collected", {
+          amount,
+          combo: scoreSystem.getStats(pressure, weakFails).combo,
+          worldPosition: { x: runnerController.getPosition().x, y: 0.9, z: 0 }
+        });
+      }
+    );
+    for (const mesh of coinRain.meshes) {
+      world.add(mesh);
+    }
+
     world.name = "playable_feudal_japan_world";
     scene.add(world, runner, chaser);
     runner.add(boostAura);
@@ -207,6 +249,7 @@ export class RunSceneFactory {
       resetWorldPieces();
       runnerController.reset();
       collectibleSystem.reset();
+      coinRain.reset();
       trafficSystem.reset();
     };
 
@@ -247,6 +290,7 @@ export class RunSceneFactory {
       runnerController.update(dt, elapsed, isRunning);
       recycleWorldPieces();
       collectibleSystem.update(dt, elapsed, isRunning, contentLoopLength);
+      coinRain.update(dt, elapsed, isRunning);
       trafficSystem.update(dt, isRunning, contentLoopLength);
       updateBoostAura(dt, elapsed);
       updateChaser(dt, elapsed, isRunning);
@@ -265,11 +309,13 @@ export class RunSceneFactory {
         setLaneShield: (lane) => trafficSystem.setLaneShield(lane)
       },
       coins: {
-        biasLane: (lane) => collectibleSystem.setLaneBias(lane)
+        biasLane: (lane) => collectibleSystem.setLaneBias(lane),
+        rain: (on, level) => coinRain.setActive(on, level)
       }
     };
 
     const dispose = (): void => {
+      coinRain.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();

@@ -2,6 +2,7 @@ import type { EffectKey } from "./AbilityTypes";
 import type { RunEffectContext } from "./RunEffectContext";
 import { BoostRamEffect } from "./effects/BoostRamEffect";
 import { HornClearEffect } from "./effects/HornClearEffect";
+import { CoinRainEffect } from "./effects/CoinRainEffect";
 
 /** A run-time ability effect. One instance per activation; start → update* → end. */
 export interface RunEffect {
@@ -24,6 +25,7 @@ export function createEffect(key: EffectKey): RunEffect | undefined {
     case "hornClear":
       return new HornClearEffect();
     case "coinRain":
+      return new CoinRainEffect();
     case "titan":
     case "nightHunt":
     case "blackHole":
