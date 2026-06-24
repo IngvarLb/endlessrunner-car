@@ -45,8 +45,11 @@ const introChaserDuration = 4.8;
 const lightMistakeCatchWindow = 10;
 const introChaserZ = -3.15;
 const catchWindowChaserZ = -3.65;
-const chaserSpawnZ = -15; // far behind the camera — the police drive up from here / fall back to here
-const chaserHideZ = -12.5; // once it has receded past this, hide it
+const chaserSpawnZ = -10.5; // just behind the camera — the police appear quickly from here
+const chaserRecedeZ = -17; // they fall back slowly toward here when shaken off
+const chaserHideZ = -13.5; // once it has receded past this, hide it
+const chaserApproachLerp = 5.2; // fast to appear
+const chaserRecedeLerp = 1.35; // slow to fall back
 const introChaserSideOffset = 1.05;
 
 type TrackPiece = {
@@ -381,9 +384,10 @@ export class RunSceneFactory {
         ? isCatchWindowActive
           ? catchWindowChaserZ + pressureOffset * 0.85
           : introChaserZ
-        : chaserSpawnZ; // receding
+        : chaserRecedeZ; // receding (slow fall-back)
       const sideOffset = isIntroActive ? introChaserSideOffset : 0;
-      chaser.position.z = THREE.MathUtils.lerp(chaser.position.z, targetZ, Math.min(1, dt * 3.2));
+      const lerpRate = wantChaser ? chaserApproachLerp : chaserRecedeLerp;
+      chaser.position.z = THREE.MathUtils.lerp(chaser.position.z, targetZ, Math.min(1, dt * lerpRate));
       chaser.position.x = THREE.MathUtils.lerp(
         chaser.position.x,
         runnerController.getPosition().x * 0.35 + sideOffset,
