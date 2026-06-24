@@ -8,7 +8,7 @@ import type { ChargeTier } from "./AbilityTypes";
 export const CHARGE_TIER_COST: Record<ChargeTier, number> = {
   low: 80,
   midLow: 120,
-  mid: 170,
+  mid: 85, // halved — only 桜 (distance-charged, loop-protected) uses "mid"; it was reaching too slowly
   midHigh: 250,
   high: 380
 };
