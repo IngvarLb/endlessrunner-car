@@ -86,6 +86,34 @@ export class TrafficSystem {
     return best;
   }
 
+  /** Nearest live car directly ahead in `lane`, within `maxAheadZ` (藍 Lichthupe trigger). */
+  frontCarInLane(lane: LaneIndex, maxAheadZ: number): TrafficCar | undefined {
+    const distance = this.getDistance();
+    let best: TrafficCar | undefined;
+    let bestRel = Infinity;
+    for (const car of this.cars) {
+      if (car.hit || !car.mesh.visible || car.lane !== lane) {
+        continue;
+      }
+      const rel = car.trackZ - distance;
+      if (rel < 0.5 || rel > maxAheadZ) {
+        continue;
+      }
+      if (rel < bestRel) {
+        bestRel = rel;
+        best = car;
+      }
+    }
+    return best;
+  }
+
+  /** Make a specific car pull aside into an adjacent lane (藍 Lichthupe: it gives way). */
+  swerveCar(car: TrafficCar): void {
+    if (!car.hit) {
+      car.lane = this.adjacentLane(car);
+    }
+  }
+
   /** Destroy a specific car (turret hit). */
   destroyCar(car: TrafficCar): void {
     if (car.hit) {

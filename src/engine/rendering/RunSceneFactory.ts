@@ -314,6 +314,9 @@ export class RunSceneFactory {
       }
 
       runnerController.update(dt, elapsed, isRunning);
+      if (isRunning) {
+        updateHighBeam();
+      }
       recycleWorldPieces();
       collectibleSystem.update(dt, elapsed, isRunning, contentLoopLength);
       coinRain.update(dt, elapsed, isRunning);
@@ -356,6 +359,17 @@ export class RunSceneFactory {
         }
       });
     };
+
+    function updateHighBeam(): void {
+      // 藍 Lichthupe: when closing on a car directly ahead, it pulls aside (cooldown-gated).
+      if (!passiveHooks) {
+        return;
+      }
+      const front = trafficSystem.frontCarInLane(runnerController.getLane(), 7);
+      if (front && passiveHooks.onApproachCar()) {
+        trafficSystem.swerveCar(front);
+      }
+    }
 
     function updateBoostAura(dt: number, elapsed: number): void {
       boostAura.visible = runnerController.isBoosting();
