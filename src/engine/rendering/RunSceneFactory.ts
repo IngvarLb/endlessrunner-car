@@ -151,7 +151,7 @@ export class RunSceneFactory {
       return coin;
     };
     const coinRain = new CoinRainSystem(
-      48,
+      64,
       makePinkCoin,
       laneSystem,
       collisionSystem,
