@@ -46,10 +46,9 @@ const lightMistakeCatchWindow = 10;
 const introChaserZ = -3.15;
 const catchWindowChaserZ = -3.65;
 const chaserSpawnZ = -10.5; // just behind the camera — the police appear quickly from here
-const chaserRecedeZ = -17; // they fall back slowly toward here when shaken off
-const chaserHideZ = -13.5; // once it has receded past this, hide it
+const chaserHideZ = -9.5; // hide once it has slid off the bottom (just behind the camera)
 const chaserApproachLerp = 5.2; // fast to appear
-const chaserRecedeLerp = 1.35; // slow to fall back
+const chaserRecedeSpeed = 0.9; // metres/second — slow, steady fall-back (takes several seconds)
 const introChaserSideOffset = 1.05;
 
 type TrackPiece = {
@@ -380,14 +379,13 @@ export class RunSceneFactory {
       }
 
       const pressureOffset = THREE.MathUtils.clamp(pressure / 100, 0, 1);
-      const targetZ = wantChaser
-        ? isCatchWindowActive
-          ? catchWindowChaserZ + pressureOffset * 0.85
-          : introChaserZ
-        : chaserRecedeZ; // receding (slow fall-back)
       const sideOffset = isIntroActive ? introChaserSideOffset : 0;
-      const lerpRate = wantChaser ? chaserApproachLerp : chaserRecedeLerp;
-      chaser.position.z = THREE.MathUtils.lerp(chaser.position.z, targetZ, Math.min(1, dt * lerpRate));
+      if (wantChaser) {
+        const targetZ = isCatchWindowActive ? catchWindowChaserZ + pressureOffset * 0.85 : introChaserZ;
+        chaser.position.z = THREE.MathUtils.lerp(chaser.position.z, targetZ, Math.min(1, dt * chaserApproachLerp));
+      } else {
+        chaser.position.z -= chaserRecedeSpeed * dt; // constant slow fall-back, no easing
+      }
       chaser.position.x = THREE.MathUtils.lerp(
         chaser.position.x,
         runnerController.getPosition().x * 0.35 + sideOffset,
