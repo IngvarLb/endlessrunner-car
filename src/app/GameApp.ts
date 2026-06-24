@@ -112,7 +112,9 @@ export class GameApp {
   private hudChargeKanji?: HTMLElement;
   private hudChargeTag?: HTMLElement;
   private hudToast?: HTMLElement;
-  private hudToastLvl?: HTMLElement;
+  private hudToastStar?: HTMLElement;
+  private hudToastK?: HTMLElement;
+  private hudToastBig?: HTMLElement;
   private hudToastTimeout = 0;
   private hudActive?: HTMLElement;
   private hudActiveKanji?: HTMLElement;
@@ -382,9 +384,15 @@ export class GameApp {
       this.runAbilities?.update(dt, this.runScene.getEffectContext());
 
       const gameOver = this.runScene.consumeGameOver();
-      if (gameOver && this.stateMachine.canTransition("gameOver")) {
-        this.lastRunStats = this.runScene.getRunStats();
-        this.stateMachine.transition("gameOver", gameOver.reason);
+      if (gameOver) {
+        // 狐 Zweites Leben: an extra life saves a fatal collision instead of ending the run.
+        if (gameOver.reason === "obstacle" && this.runAbilities?.onFatalHit()) {
+          this.audio?.playBoost();
+          this.showHudToast("狐", "ZWEITES LEBEN", "GERETTET");
+        } else if (this.stateMachine.canTransition("gameOver")) {
+          this.lastRunStats = this.runScene.getRunStats();
+          this.stateMachine.transition("gameOver", gameOver.reason);
+        }
       }
     }
 
@@ -597,8 +605,8 @@ export class GameApp {
         </div>
 
         <div class="fr-hud-toast" data-hud-toast aria-hidden="true">
-          <span class="fr-hud-toast-star">里</span>
-          <span class="fr-hud-toast-txt"><span class="fr-hud-toast-k">MEISTERSCHAFT</span><span class="fr-hud-toast-big">Stufe <b data-hud-toast-lvl>2</b></span></span>
+          <span class="fr-hud-toast-star" data-hud-toast-star>里</span>
+          <span class="fr-hud-toast-txt"><span class="fr-hud-toast-k" data-hud-toast-k>MEISTERSCHAFT</span><span class="fr-hud-toast-big" data-hud-toast-big>Stufe 2</span></span>
         </div>
 
         <div class="fr-hud-active" data-hud-active aria-hidden="true">
@@ -687,7 +695,9 @@ export class GameApp {
     this.hudChargeKanji = ui.querySelector("[data-hud-charge-kanji]") ?? undefined;
     this.hudChargeTag = ui.querySelector("[data-hud-charge-tag]") ?? undefined;
     this.hudToast = ui.querySelector("[data-hud-toast]") ?? undefined;
-    this.hudToastLvl = ui.querySelector("[data-hud-toast-lvl]") ?? undefined;
+    this.hudToastStar = ui.querySelector("[data-hud-toast-star]") ?? undefined;
+    this.hudToastK = ui.querySelector("[data-hud-toast-k]") ?? undefined;
+    this.hudToastBig = ui.querySelector("[data-hud-toast-big]") ?? undefined;
     this.hudActive = ui.querySelector("[data-hud-active]") ?? undefined;
     this.hudActiveKanji = ui.querySelector("[data-hud-active-k]") ?? undefined;
     this.hudActiveName = ui.querySelector("[data-hud-active-nm]") ?? undefined;
@@ -1630,11 +1640,21 @@ export class GameApp {
   }
 
   private showMasteryToast(level: number): void {
+    this.showHudToast("里", "MEISTERSCHAFT", `Stufe ${level}`);
+  }
+
+  private showHudToast(star: string, label: string, big: string): void {
     if (!this.hudToast) {
       return;
     }
-    if (this.hudToastLvl) {
-      this.hudToastLvl.textContent = String(level);
+    if (this.hudToastStar) {
+      this.hudToastStar.textContent = star;
+    }
+    if (this.hudToastK) {
+      this.hudToastK.textContent = label;
+    }
+    if (this.hudToastBig) {
+      this.hudToastBig.textContent = big;
     }
     this.hudToast.classList.add("is-show");
     window.clearTimeout(this.hudToastTimeout);

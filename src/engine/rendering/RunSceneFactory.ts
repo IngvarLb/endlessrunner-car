@@ -45,7 +45,8 @@ const introChaserDuration = 4.8;
 const lightMistakeCatchWindow = 10;
 const introChaserZ = -3.15;
 const catchWindowChaserZ = -3.65;
-const hiddenChaserZ = -7.2;
+const chaserSpawnZ = -15; // far behind the camera — the police drive up from here / fall back to here
+const chaserHideZ = -12.5; // once it has receded past this, hide it
 const introChaserSideOffset = 1.05;
 
 type TrackPiece = {
@@ -95,6 +96,8 @@ export class RunSceneFactory {
     let cleanRunTimer = 0;
     let introChaserTimer = introChaserDuration;
     let lightMistakeWindowTimer = 0;
+    let chaserWanted = false;
+    let chaserReceding = false;
 
     validateTrafficRows(biome.trafficRows, contentLoopLength);
 
@@ -251,8 +254,10 @@ export class RunSceneFactory {
       cleanRunTimer = 0;
       introChaserTimer = introChaserDuration;
       lightMistakeWindowTimer = 0;
-      chaser.position.set(introChaserSideOffset, 0, introChaserZ);
+      chaser.position.set(introChaserSideOffset, 0, chaserSpawnZ);
       chaser.visible = false;
+      chaserWanted = false;
+      chaserReceding = false;
       world.position.z = 0;
       resetWorldPieces();
       runnerController.reset();
@@ -350,13 +355,35 @@ export class RunSceneFactory {
     function updateChaser(dt: number, elapsed: number, isRunning: boolean): void {
       const isCatchWindowActive = lightMistakeWindowTimer > 0;
       const isIntroActive = introChaserTimer > 0;
-      const shouldShowChaser = isRunning && (isIntroActive || isCatchWindowActive);
-      chaser.visible = shouldShowChaser;
+      const wantChaser = isRunning && (isIntroActive || isCatchWindowActive);
+
+      if (wantChaser && !chaserWanted) {
+        // Police drives up from far behind (off-screen) — never pops in close.
+        if (!chaser.visible) {
+          chaser.position.z = chaserSpawnZ;
+          chaser.position.x = runnerController.getPosition().x * 0.35 + (isIntroActive ? introChaserSideOffset : 0);
+        }
+        chaser.visible = true;
+        chaserReceding = false;
+      } else if (!wantChaser && chaserWanted) {
+        // Shaken off → fall back into the distance (Temple Run / Subway Surfers style).
+        chaserReceding = true;
+      }
+      chaserWanted = wantChaser;
+
+      if (!wantChaser && !chaserReceding) {
+        chaser.visible = false;
+        return;
+      }
 
       const pressureOffset = THREE.MathUtils.clamp(pressure / 100, 0, 1);
-      const targetZ = isCatchWindowActive ? catchWindowChaserZ + pressureOffset * 0.85 : isIntroActive ? introChaserZ : hiddenChaserZ;
+      const targetZ = wantChaser
+        ? isCatchWindowActive
+          ? catchWindowChaserZ + pressureOffset * 0.85
+          : introChaserZ
+        : chaserSpawnZ; // receding
       const sideOffset = isIntroActive ? introChaserSideOffset : 0;
-      chaser.position.z = THREE.MathUtils.lerp(chaser.position.z, targetZ, Math.min(1, dt * 4));
+      chaser.position.z = THREE.MathUtils.lerp(chaser.position.z, targetZ, Math.min(1, dt * 3.2));
       chaser.position.x = THREE.MathUtils.lerp(
         chaser.position.x,
         runnerController.getPosition().x * 0.35 + sideOffset,
@@ -364,6 +391,11 @@ export class RunSceneFactory {
       );
       chaser.position.y = Math.abs(Math.sin(elapsed * 7.2)) * 0.06;
       chaser.rotation.z = -0.08 + Math.sin(elapsed * 2.4) * 0.035;
+
+      if (chaserReceding && chaser.position.z <= chaserHideZ) {
+        chaser.visible = false;
+        chaserReceding = false;
+      }
     }
 
     function getRunSpeed(): number {

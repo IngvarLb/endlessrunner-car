@@ -1,7 +1,7 @@
 import type { EffectKey, MainAbilityDef, PassiveAbilityDef } from "./AbilityTypes";
 import { chargesFromOwnCoins, getMainAbility, getPassiveAbility } from "./AbilityCatalog";
 import { ChargeMeter } from "./ChargeMeter";
-import { masteryLevel } from "./MasteryService";
+import { masteryLevel, passiveValue } from "./MasteryService";
 import { mainDuration } from "./UpgradeService";
 import { createEffect, type RunEffect } from "./RunEffect";
 import type { RunEffectContext } from "./RunEffectContext";
@@ -49,6 +49,12 @@ export class RunAbilityController {
   private effectRemaining = 0;
   private effectDuration = 0;
 
+  // 狐 Zweites Leben (secondLife passive): an extra life that auto-saves a fatal
+  // hit and recharges over distance.
+  private readonly hasSecondLife: boolean;
+  private extraLives = 0;
+  private metersSinceLife = 0;
+
   constructor(vehicleId: string, init: RunAbilityInit) {
     this.vehicleId = vehicleId;
     this.main = getMainAbility(vehicleId);
@@ -58,6 +64,8 @@ export class RunAbilityController {
     this.coinCharges = chargesFromOwnCoins(vehicleId);
     this.charge = this.main ? new ChargeMeter(this.main.chargeCost) : undefined;
     this.trackedLevel = masteryLevel(this.baseMeters);
+    this.hasSecondLife = this.passive?.effect === "secondLife";
+    this.extraLives = this.hasSecondLife ? 1 : 0; // start each run with the extra life ready
   }
 
   get mainAbility(): MainAbilityDef | undefined {
@@ -101,6 +109,15 @@ export class RunAbilityController {
     this.runMeters = cumulativeMeters;
     if (!this.activeEffect) {
       this.charge?.add(delta * CHARGE_PER_METER); // no recharge while an effect runs
+    }
+
+    // 狐 extra life recharges over distance (2000 m → 1000 m by mastery level).
+    if (this.hasSecondLife && this.passive && this.extraLives < 1) {
+      this.metersSinceLife += delta;
+      if (this.metersSinceLife >= passiveValue(this.passive, this.masteryLevel())) {
+        this.extraLives = 1;
+        this.metersSinceLife = 0;
+      }
     }
 
     const level = this.masteryLevel();
@@ -172,6 +189,24 @@ export class RunAbilityController {
       return;
     }
     this.activeEffect.update(dt, ctx);
+  }
+
+  /** Whether a 狐 extra life is currently available. */
+  hasExtraLife(): boolean {
+    return this.extraLives > 0;
+  }
+
+  /**
+   * A fatal hit happened. If an extra life is available, consume it and return
+   * true (the player survives); otherwise false (game over).
+   */
+  onFatalHit(): boolean {
+    if (this.extraLives > 0) {
+      this.extraLives -= 1;
+      this.metersSinceLife = 0;
+      return true;
+    }
+    return false;
   }
 
   /** Drain mastery level-ups gained this frame/run (for a one-shot HUD toast). */
