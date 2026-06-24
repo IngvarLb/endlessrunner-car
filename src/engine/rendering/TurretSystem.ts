@@ -13,7 +13,7 @@ const ROOF_Y = 0.82; // world height the turret sits at on the car roof
 const RISE_HIDE = 0.85; // how far below the roof it starts (tucked inside the car)
 const RISE_TIME = 0.45; // seconds to deploy / retract
 const TURRET_SCALE = 1.3; // overall turret size
-const RANGE = 40; // metres ahead it will engage cars
+const RANGE = 24; // metres ahead it will engage cars
 const FIRE_INTERVAL = 0.11; // seconds between tracer rounds (rapid stream)
 const PROJECTILE_SPEED = 72; // metres/second (slow enough to read the shots)
 const COINS_PER_KILL = 10;
@@ -181,11 +181,9 @@ export class TurretSystem {
     band.position.set(0, 0.34, 0.2);
     this.body.add(band);
 
-    for (const side of [-1, 1]) {
-      const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.54), dark);
-      barrel.position.set(side * 0.09, 0.28, 0.36);
-      this.body.add(barrel);
-    }
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.58), dark);
+    barrel.position.set(0, 0.28, 0.36);
+    this.body.add(barrel);
 
     this.muzzle.position.set(0, 0.28, 0.66);
     this.body.add(this.muzzle);

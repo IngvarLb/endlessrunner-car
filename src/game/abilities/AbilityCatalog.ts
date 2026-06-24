@@ -59,8 +59,8 @@ const mains: Record<string, MainAbilityDef> = {
     kanji: "狐",
     effect: "turret",
     blurb: "schießt nahe Autos ab · +10 je Treffer",
-    durationBase: 3,
-    durationStep: 0.2,
+    durationBase: 6,
+    durationStep: 0.3,
     maxLevel: MAIN_MAX_LEVEL,
     chargeCost: "midHigh"
   },
