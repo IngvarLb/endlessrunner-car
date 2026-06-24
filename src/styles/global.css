@@ -965,12 +965,6 @@ button {
   border: 1px solid var(--color-border-ondark);
   padding: 12px 13px 13px;
 }
-.fr-gab--main {
-  border-left: var(--border-bold) solid var(--color-accent);
-}
-.fr-gab--passive {
-  border-left: var(--border-bold) solid rgb(246 239 224 / 0.4);
-}
 .fr-gab-head {
   display: flex;
   align-items: flex-start;
@@ -1340,6 +1334,21 @@ button {
   display: inline-flex;
   /* opaque so the lock's overlapping strokes don't double up / darken */
   color: #cdbfa6;
+}
+/* owned cars: green open padlock */
+.fr-rcard-lock--open {
+  color: #4cc38a;
+}
+.fr-rcard-tier {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 2px 6px;
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 1;
+  color: #fff;
 }
 .fr-rcard.is-locked .fr-rcard-k,
 .fr-rcard.is-locked .fr-rcard-name {

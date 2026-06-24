@@ -49,6 +49,9 @@ const garageFrameInterval = 1 / 40;
 // edges. Drawn with an opaque colour so overlapping strokes don't double up.
 const LOCK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V6h10v5"/></svg>';
+// Same angular padlock, shackle swung open (right leg lifted out of the body) — owned marker.
+const LOCK_OPEN_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V6h10V8"/></svg>';
 
 export function createGameApp(root: HTMLElement, config: Partial<GameConfig> = {}): GameApp {
   return new GameApp(root, mergeConfig(config));
@@ -464,17 +467,13 @@ export class GameApp {
         </div>
 
         <aside class="fr-gpanel">
-          <div class="fr-gpanel-head">
-            <span class="fr-tierbadge" data-frg-tier><span class="fr-tierbadge-jp">常</span><span class="fr-tierbadge-en">COMMON</span></span>
-            <span class="fr-gpanel-no" data-frg-no2>N°.01 · 蔵</span>
-          </div>
-          <div class="fr-gname" data-frg-name>CRIMSON BOLT</div>
           <div class="fr-gmeta">
             <span class="fr-gmeta-k" data-frg-mk>赤</span>
             <span class="fr-gmeta-romaji" data-frg-mr>AKA</span>
             <span class="fr-gmeta-div"></span>
             <span class="fr-gmeta-tag" data-frg-mt></span>
           </div>
+          <div class="fr-gname" data-frg-name>CRIMSON BOLT</div>
           <div class="fr-gstats-label">能力 · FÄHIGKEITEN</div>
           <div class="fr-gabilities" data-frg-abilities></div>
           <div class="fr-gpanel-div"></div>
@@ -1184,8 +1183,6 @@ export class GameApp {
       "kanji",
       "romaji",
       "tag",
-      "tier",
-      "no2",
       "name",
       "mk",
       "mr",
@@ -1272,7 +1269,6 @@ export class GameApp {
 
     const preview = garageScene.getPreview();
     const vehicle = preview.vehicle;
-    const tier = TIER_META[vehicle.tier];
     const index = Math.max(0, getAllVehicles().findIndex((entry) => entry.id === vehicle.id));
     const carNo = `N°.0${index + 1}`;
     const word = vehicle.displayName.split(" ")[0].toUpperCase();
@@ -1298,13 +1294,6 @@ export class GameApp {
     }
     if (els.tag) {
       els.tag.textContent = vehicle.tag;
-    }
-    if (els.tier) {
-      els.tier.style.background = tier.color;
-      els.tier.innerHTML = `<span class="fr-tierbadge-jp">${tier.jp}</span><span class="fr-tierbadge-en">${tier.en}</span>`;
-    }
-    if (els.no2) {
-      els.no2.textContent = `${carNo} · 蔵`;
     }
     if (els.name) {
       els.name.textContent = vehicle.displayName;
@@ -1420,9 +1409,7 @@ export class GameApp {
   private renderFrGarageAction(preview: GarageVehiclePreview): string {
     const cost = this.formatCoinsShort(preview.price);
     if (preview.owned) {
-      return `
-        <div class="fr-owned-row"><span class="fr-owned-dot"></span><span class="fr-owned-txt">所有済 · OWNED</span></div>
-        <button class="fr-gbtn fr-gbtn--drive" type="button"><span class="fr-gbtn-jp">走</span>DRIVE</button>`;
+      return `<button class="fr-gbtn fr-gbtn--drive" type="button"><span class="fr-gbtn-jp">走</span>DRIVE</button>`;
     }
 
     const costRow = `
@@ -1448,9 +1435,13 @@ export class GameApp {
         if (!owned) {
           classes.push("is-locked");
         }
-        const lock = owned ? "" : `<span class="fr-rcard-lock">${LOCK_ICON}</span>`;
+        const tier = TIER_META[vehicle.tier];
+        const lock = owned
+          ? `<span class="fr-rcard-lock fr-rcard-lock--open">${LOCK_OPEN_ICON}</span>`
+          : `<span class="fr-rcard-lock">${LOCK_ICON}</span>`;
         return `
           <button class="${classes.join(" ")}" type="button" data-roster-id="${vehicle.id}">
+            <span class="fr-rcard-tier" style="background:${tier.color}">${tier.jp}</span>
             <span class="fr-rcard-k" style="color:${vehicle.paint}">${vehicle.kanji}</span>
             <span class="fr-rcard-name">${vehicle.displayName}</span>
             ${lock}
