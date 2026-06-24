@@ -122,6 +122,8 @@ export class GameApp {
   private hudActiveTime?: HTMLElement;
   private countdownBox?: HTMLElement;
   private countdownNum?: HTMLElement;
+  private hudBuffer?: HTMLElement;
+  private hudBufferPip?: HTMLElement;
   private goMeta?: HTMLElement;
   private goCoins?: HTMLElement;
   private goScore?: HTMLElement;
@@ -252,6 +254,10 @@ export class GameApp {
       meters: progress.meters
     });
     this.resetChargeHud(this.selectedVehicle);
+    this.runScene.setPassiveHooks({
+      onWeakFail: () => this.runAbilities?.onWeakFail() ?? { type: "normal" },
+      onApproachCar: () => this.runAbilities?.onApproachCar() ?? false
+    });
     this.stateMachine.transition("countdown", reason);
     this.runNumericCountdown();
   }
@@ -622,6 +628,11 @@ export class GameApp {
             <span class="fr-charge-tag" data-hud-charge-tag>0%</span>
           </button>
         </div>
+
+        <div class="fr-hud-buffer" data-hud-buffer aria-hidden="true">
+          <span class="fr-hud-buffer-k">耐</span>
+          <span class="fr-hud-buffer-pip" data-hud-buffer-pip></span>
+        </div>
       </section>
       <div class="fr-countdown" data-fr-countdown aria-hidden="true">
         <span class="fr-countdown-num" data-fr-countdown-num>3</span>
@@ -704,6 +715,8 @@ export class GameApp {
     this.hudActiveTime = ui.querySelector("[data-hud-active-t]") ?? undefined;
     this.countdownBox = ui.querySelector("[data-fr-countdown]") ?? undefined;
     this.countdownNum = ui.querySelector("[data-fr-countdown-num]") ?? undefined;
+    this.hudBuffer = ui.querySelector("[data-hud-buffer]") ?? undefined;
+    this.hudBufferPip = ui.querySelector("[data-hud-buffer-pip]") ?? undefined;
     this.goMeta = ui.querySelector("[data-go-meta]") ?? undefined;
     this.goCoins = ui.querySelector("[data-go-coins]") ?? undefined;
     this.goScore = ui.querySelector("[data-go-score]") ?? undefined;
@@ -1615,6 +1628,18 @@ export class GameApp {
         }
       } else {
         this.hudActive.classList.remove("is-show");
+      }
+    }
+
+    // 赤 extra-fail buffer indicator (only for vehicles with the crumple-zone passive).
+    const crumple = abilities.crumpleState();
+    if (this.hudBuffer) {
+      if (crumple) {
+        this.hudBuffer.classList.add("is-show");
+        this.hudBuffer.classList.toggle("is-ready", crumple.ready);
+        this.hudBufferPip?.style.setProperty("--p", `${Math.round(crumple.rechargeRatio * 100)}%`);
+      } else {
+        this.hudBuffer.classList.remove("is-show");
       }
     }
 

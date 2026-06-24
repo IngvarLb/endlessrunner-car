@@ -31,6 +31,11 @@ export type ActiveEffectState = {
   durationSec: number;
 };
 
+/** What a weak fail (lane-edge mistake) does, decided by the vehicle's passive. */
+export type WeakFailOutcome = { type: "absorbed" } | { type: "coins"; amount: number } | { type: "normal" };
+
+export type CrumpleState = { ready: boolean; rechargeRatio: number };
+
 export class RunAbilityController {
   readonly vehicleId: string;
 
@@ -55,6 +60,16 @@ export class RunAbilityController {
   private extraLives = 0;
   private metersSinceLife = 0;
 
+  // 赤 Knautschzone (crumpleZone): +1 weak-fail buffer that recharges over distance.
+  private readonly hasCrumple: boolean;
+  private crumpleBuffer = 0;
+  private crumpleMeters = 0;
+
+  // 藍 Lichthupe (highBeam): makes the front car give way; recharges over distance.
+  private readonly hasHighBeam: boolean;
+  private highBeamReady = false;
+  private highBeamMeters = 0;
+
   constructor(vehicleId: string, init: RunAbilityInit) {
     this.vehicleId = vehicleId;
     this.main = getMainAbility(vehicleId);
@@ -66,6 +81,10 @@ export class RunAbilityController {
     this.trackedLevel = masteryLevel(this.baseMeters);
     this.hasSecondLife = this.passive?.effect === "secondLife";
     this.extraLives = this.hasSecondLife ? 1 : 0; // start each run with the extra life ready
+    this.hasCrumple = this.passive?.effect === "crumpleZone";
+    this.crumpleBuffer = this.hasCrumple ? 1 : 0;
+    this.hasHighBeam = this.passive?.effect === "highBeam";
+    this.highBeamReady = this.hasHighBeam;
   }
 
   get mainAbility(): MainAbilityDef | undefined {
@@ -117,6 +136,22 @@ export class RunAbilityController {
       if (this.metersSinceLife >= passiveValue(this.passive, this.masteryLevel())) {
         this.extraLives = 1;
         this.metersSinceLife = 0;
+      }
+    }
+    // 赤 crumple-zone buffer recharges over distance (600 m → 300 m).
+    if (this.hasCrumple && this.passive && this.crumpleBuffer < 1) {
+      this.crumpleMeters += delta;
+      if (this.crumpleMeters >= passiveValue(this.passive, this.masteryLevel())) {
+        this.crumpleBuffer = 1;
+        this.crumpleMeters = 0;
+      }
+    }
+    // 藍 high-beam recharges over distance (1200 m → 600 m).
+    if (this.hasHighBeam && this.passive && !this.highBeamReady) {
+      this.highBeamMeters += delta;
+      if (this.highBeamMeters >= passiveValue(this.passive, this.masteryLevel())) {
+        this.highBeamReady = true;
+        this.highBeamMeters = 0;
       }
     }
 
@@ -194,6 +229,44 @@ export class RunAbilityController {
   /** Whether a 狐 extra life is currently available. */
   hasExtraLife(): boolean {
     return this.extraLives > 0;
+  }
+
+  /**
+   * A weak fail (lane-edge mistake) happened. The passive decides: 赤 absorbs it
+   * with a buffer, 桜 turns it into a coin penalty (no police), else it's normal.
+   */
+  onWeakFail(): WeakFailOutcome {
+    if (this.hasCrumple && this.crumpleBuffer > 0) {
+      this.crumpleBuffer -= 1;
+      this.crumpleMeters = 0;
+      return { type: "absorbed" };
+    }
+    if (this.passive?.effect === "piggyBank") {
+      return { type: "coins", amount: Math.max(0, Math.round(passiveValue(this.passive, this.masteryLevel()))) };
+    }
+    return { type: "normal" };
+  }
+
+  /** 藍 Lichthupe: when closing on a car, returns true (and starts the cooldown) if it should give way. */
+  onApproachCar(): boolean {
+    if (!this.hasHighBeam || !this.highBeamReady) {
+      return false;
+    }
+    this.highBeamReady = false;
+    this.highBeamMeters = 0;
+    return true;
+  }
+
+  /** 赤 extra-fail buffer state for the HUD (undefined when the vehicle isn't 赤). */
+  crumpleState(): CrumpleState | undefined {
+    if (!this.hasCrumple || !this.passive) {
+      return undefined;
+    }
+    if (this.crumpleBuffer > 0) {
+      return { ready: true, rechargeRatio: 1 };
+    }
+    const need = passiveValue(this.passive, this.masteryLevel());
+    return { ready: false, rechargeRatio: need > 0 ? Math.min(1, this.crumpleMeters / need) : 0 };
   }
 
   /**

@@ -17,6 +17,13 @@ import { MaterialFactory } from "../assets/MaterialFactory";
 import { ModelFactory } from "../assets/ModelFactory";
 import type { AppScene } from "./AppScene";
 import type { RunEffectContext } from "../../game/abilities/RunEffectContext";
+import type { WeakFailOutcome } from "../../game/abilities/RunAbilityController";
+
+/** Scene-side hooks the ability controller provides for fail/avoidance passives. */
+export type PassiveHooks = {
+  onWeakFail(): WeakFailOutcome;
+  onApproachCar(): boolean;
+};
 import { CameraController } from "./CameraController";
 import { LightingRig } from "./LightingRig";
 import { TurretSystem } from "./TurretSystem";
@@ -34,6 +41,8 @@ export type RunScene = AppScene & {
   consumeGameOver(): GameOverInfo | undefined;
   /** Capability bridge for ability effects (see RunAbilityController). */
   getEffectContext(): RunEffectContext;
+  /** Wire the per-run passive hooks (weak-fail / approach decisions). */
+  setPassiveHooks(hooks: PassiveHooks): void;
 };
 
 const baseSpeed = 9.5;
@@ -100,6 +109,7 @@ export class RunSceneFactory {
     let lightMistakeWindowTimer = 0;
     let chaserWanted = false;
     let chaserReceding = false;
+    let passiveHooks: PassiveHooks | undefined;
 
     validateTrafficRows(biome.trafficRows, contentLoopLength);
 
@@ -477,6 +487,27 @@ export class RunSceneFactory {
         return;
       }
 
+      const outcome = passiveHooks?.onWeakFail() ?? { type: "normal" };
+      if (outcome.type === "absorbed") {
+        // 赤 Knautschzone: buffer eats the mistake — small stumble, no police window.
+        runnerController.applyStumble(direction);
+        cameraController.shake(0.18, 0.1);
+        cleanRunTimer = 0;
+        events?.emit("runner:hit", {
+          hit: {
+            source: "chaser",
+            severity: "minor",
+            worldPosition: { x: runnerController.getPosition().x, y: 0.45, z: runnerController.getPosition().z }
+          },
+          shieldConsumed: true,
+          pressureAfter: pressure
+        });
+        return;
+      }
+      if (outcome.type === "coins" && outcome.amount > 0) {
+        scoreSystem.spendCoins(outcome.amount); // 桜 Sparbüchse: the mistake costs coins (then proceeds normally)
+      }
+
       if (lightMistakeWindowTimer > 0) {
         weakFails = 2;
         registerStrongFail("weak-fails");
@@ -562,6 +593,9 @@ export class RunSceneFactory {
       getRunStats,
       consumeGameOver,
       getEffectContext: () => effectContext,
+      setPassiveHooks: (hooks: PassiveHooks) => {
+        passiveHooks = hooks;
+      },
       dispose
     };
   }

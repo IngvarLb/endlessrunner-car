@@ -31,6 +31,14 @@ export class ScoreSystem {
     this.recalculate();
   }
 
+  /** Deduct collected coins (e.g. 桜 Sparbüchse penalty). Clamped at zero; returns the amount actually spent. */
+  spendCoins(amount: number): number {
+    const spent = Math.min(this.coins, Math.max(0, Math.floor(amount)));
+    this.coins -= spent;
+    this.recalculate();
+    return spent;
+  }
+
   resetCombo(): void {
     this.combo = 0;
     this.recalculate();
