@@ -61,7 +61,9 @@ class GarageCameraController {
     // Portrait: stats panel sits in the upper-left (2/3 width) with the big kanji
     // top-right, so frame the car centred and low — in the lower third / golden
     // section — by dropping the camera and looking up.
-    this.pullback = portrait ? 0.7 : snug ? 1.1 : 0;
+    // Extra pullback on portrait so the car stays inside the narrow frame even when
+    // rotated side-on (its length ~2.2 m would otherwise clip left/right on mobile).
+    this.pullback = portrait ? 1.7 : snug ? 1.3 : 0;
     this.sideOffset = portrait ? -0.15 : snug ? -0.7 : 0;
     this.heightOffset = portrait ? -0.1 : 0;
     this.targetLift = portrait ? 0.62 : snug ? 0.1 : 0;

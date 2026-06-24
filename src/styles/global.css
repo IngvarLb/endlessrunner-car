@@ -432,9 +432,8 @@ button {
   border: 1px solid var(--color-border);
   background: var(--color-chip);
   color: var(--color-ink);
-  font-family: var(--font-jp);
-  font-weight: 700;
-  font-size: 17px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
 }
 .fr-iconbtn:hover {
@@ -1289,10 +1288,16 @@ button {
 .fr-roster-cards {
   display: flex;
   gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
 }
 .fr-rcard {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 clamp(104px, 13vw, 150px);
+  scroll-snap-align: center;
   height: clamp(78px, 12vh, 106px);
   position: relative;
   cursor: pointer;
@@ -1333,10 +1338,6 @@ button {
   display: inline-flex;
   /* opaque so the lock's overlapping strokes don't double up / darken */
   color: #cdbfa6;
-}
-/* owned cars: green open padlock */
-.fr-rcard-lock--open {
-  color: #4cc38a;
 }
 .fr-rcard-tier {
   position: absolute;

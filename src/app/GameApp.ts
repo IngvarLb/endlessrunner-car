@@ -52,9 +52,9 @@ const LOCK_ICON =
 // Universal pause glyph (two bars) — controls should read for everyone, not rely on kanji.
 const PAUSE_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>';
-// Same padlock with the shackle swung open (right leg lifted clear of the body) — owned marker.
-const LOCK_OPEN_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+// Angular gear (square hub + 8 straight teeth) for the settings button — matches the cut-paper edges.
+const SETTINGS_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="9" y="9" width="6" height="6"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19"/></svg>';
 
 export function createGameApp(root: HTMLElement, config: Partial<GameConfig> = {}): GameApp {
   return new GameApp(root, mergeConfig(config));
@@ -399,7 +399,7 @@ export class GameApp {
               <div class="fr-lvl-row"><span class="fr-lvl-num">LV.<span data-fr-level>1</span></span><span class="fr-lvl-pct" data-fr-xptext>0%</span></div>
               <div class="fr-lvl-bar"><div class="fr-lvl-fill" data-fr-xpfill></div></div>
             </div>
-            <button class="fr-iconbtn fr-settings-open" type="button" aria-label="Settings" title="Settings">設</button>
+            <button class="fr-iconbtn fr-settings-open" type="button" aria-label="Settings" title="Settings">${SETTINGS_ICON}</button>
           </div>
         </header>
 
@@ -457,7 +457,7 @@ export class GameApp {
               <div class="fr-lvl-row"><span class="fr-lvl-num">LV.<span data-frg-level>1</span></span><span class="fr-lvl-pct" data-frg-xptext>0%</span></div>
               <div class="fr-lvl-bar"><div class="fr-lvl-fill" data-frg-xpfill></div></div>
             </div>
-            <button class="fr-iconbtn fr-garage-settings" type="button" aria-label="Settings" title="Settings">設</button>
+            <button class="fr-iconbtn fr-garage-settings" type="button" aria-label="Settings" title="Settings">${SETTINGS_ICON}</button>
           </div>
         </header>
 
@@ -1312,6 +1312,8 @@ export class GameApp {
     }
     if (els.roster) {
       els.roster.innerHTML = this.renderFrGarageRoster(vehicle.id);
+      // Keep the selected car in view in the scrollable roster.
+      els.roster.querySelector(".is-selected")?.scrollIntoView({ inline: "center", block: "nearest" });
     }
 
     this.updateFrGarageProfile(preview.totalCoins);
@@ -1432,9 +1434,8 @@ export class GameApp {
           classes.push("is-locked");
         }
         const tier = TIER_META[vehicle.tier];
-        const lock = owned
-          ? `<span class="fr-rcard-lock fr-rcard-lock--open">${LOCK_OPEN_ICON}</span>`
-          : `<span class="fr-rcard-lock">${LOCK_ICON}</span>`;
+        // No icon on owned cars — the absence of a lock already means unlocked.
+        const lock = owned ? "" : `<span class="fr-rcard-lock">${LOCK_ICON}</span>`;
         return `
           <button class="${classes.join(" ")}" type="button" data-roster-id="${vehicle.id}">
             <span class="fr-rcard-tier" style="background:${tier.color}">${tier.en}</span>
