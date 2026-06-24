@@ -10,6 +10,7 @@ type TouchPoint = {
 export class InputManager {
   private readonly bufferedActions: InputActionEvent[] = [];
   private touchStart?: TouchPoint;
+  private lastTapAt = 0;
   private enabled = true;
 
   constructor(
@@ -107,6 +108,14 @@ export class InputManager {
     const threshold = this.config.swipeThresholdPx;
 
     if (absX < threshold && absY < threshold) {
+      // A tap: a quick second tap activates the Main ability (double-tap to activate).
+      const now = performance.now();
+      if (now - this.lastTapAt < 360) {
+        this.bufferAction("activate", "touch");
+        this.lastTapAt = 0;
+      } else {
+        this.lastTapAt = now;
+      }
       this.touchStart = undefined;
       return;
     }
@@ -134,7 +143,11 @@ export class InputManager {
       return "moveRight";
     }
 
-    if (key === "ArrowUp" || lower === "w" || key === " ") {
+    if (key === " ") {
+      return "activate";
+    }
+
+    if (key === "ArrowUp" || lower === "w") {
       return "boost";
     }
 

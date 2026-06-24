@@ -1290,14 +1290,15 @@ button {
   gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;
-  scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
+  scroll-behavior: smooth;
   padding-bottom: 4px;
 }
 .fr-rcard {
-  flex: 0 0 clamp(104px, 13vw, 150px);
-  scroll-snap-align: center;
+  /* grow to fill the bar when there's room (desktop), but never squeeze below the
+     basis — overflow scrolls instead (mobile). */
+  flex: 1 0 clamp(104px, 13vw, 160px);
   height: clamp(78px, 12vh, 106px);
   position: relative;
   cursor: pointer;

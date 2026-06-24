@@ -100,6 +100,7 @@ export class GameApp {
   private frGarage?: HTMLElement;
   private frgEls: Record<string, HTMLElement | undefined> = {};
   private lastFrGarageVehicleId = "";
+  private rosterSignature = "";
   private frSettings?: HTMLElement;
   private setMasterInput?: HTMLInputElement;
   private setMusicInput?: HTMLInputElement;
@@ -1100,8 +1101,11 @@ export class GameApp {
       this.runScene.moveLane(-1);
     }
 
-    // The free tap-to-boost is gone: boost now only comes from 赤's charged Main.
-    // Drain the buffered boost action so it doesn't queue up.
+    // Activate the Main via Space or a double-tap (the HUD ring also works).
+    if (this.input.consumeAction("activate")) {
+      this.handleActivateAbility();
+    }
+    // The free tap-to-boost is gone; drain any buffered boost so it doesn't queue.
     this.input.consumeAction("boost");
   }
 
@@ -1311,9 +1315,15 @@ export class GameApp {
       els.action.innerHTML = this.renderFrGarageAction(preview);
     }
     if (els.roster) {
-      els.roster.innerHTML = this.renderFrGarageRoster(vehicle.id);
-      // Keep the selected car in view in the scrollable roster.
-      els.roster.querySelector(".is-selected")?.scrollIntoView({ inline: "center", block: "nearest" });
+      // Rebuild the roster only when ownership changes — rebuilding on every car
+      // switch would reset the scroll position and make the bar jump. Otherwise
+      // just move the selection highlight and glide the card into view.
+      const signature = [...this.unlockedVehicleIds].sort().join(",");
+      if (signature !== this.rosterSignature) {
+        els.roster.innerHTML = this.renderFrGarageRoster(vehicle.id);
+        this.rosterSignature = signature;
+      }
+      this.updateRosterSelection(els.roster, vehicle.id);
     }
 
     this.updateFrGarageProfile(preview.totalCoins);
@@ -1445,6 +1455,27 @@ export class GameApp {
           </button>`;
       })
       .join("");
+  }
+
+  /** Move the selection highlight + glide the chosen card into view, without rebuilding the roster. */
+  private updateRosterSelection(roster: HTMLElement, selectedId: string): void {
+    let selected: HTMLElement | undefined;
+    for (const card of roster.querySelectorAll<HTMLElement>("[data-roster-id]")) {
+      const isSelected = card.dataset.rosterId === selectedId;
+      card.classList.toggle("is-selected", isSelected);
+      if (isSelected) {
+        selected = card;
+      }
+    }
+    if (!selected || roster.scrollWidth <= roster.clientWidth) {
+      return; // nothing to scroll (cards fill the bar)
+    }
+    const cardRect = selected.getBoundingClientRect();
+    const rosterRect = roster.getBoundingClientRect();
+    const delta = cardRect.left + cardRect.width / 2 - (rosterRect.left + rosterRect.width / 2);
+    if (Math.abs(delta) > 1) {
+      roster.scrollBy({ left: delta, behavior: "smooth" });
+    }
   }
 
   private updateFrGarageProfile(totalCoins: number): void {

@@ -2,6 +2,7 @@ export type InputAction =
   | "moveLeft"
   | "moveRight"
   | "boost"
+  | "activate"
   | "turnLeft"
   | "turnRight"
   | "pause"
