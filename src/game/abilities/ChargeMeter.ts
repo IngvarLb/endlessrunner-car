@@ -9,7 +9,7 @@ export const CHARGE_TIER_COST: Record<ChargeTier, number> = {
   low: 80,
   midLow: 120,
   mid: 42, // 桜 (distance-charged, loop-protected) — halved twice so it reaches quickly
-  midHigh: 250,
+  midHigh: 125, // halved for 狐 Kitsune; currently only 狐 uses midHigh (鬼 is Phase 2, retune then)
   high: 380
 };
 
