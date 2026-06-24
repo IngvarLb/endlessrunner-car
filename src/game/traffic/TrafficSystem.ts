@@ -65,6 +65,37 @@ export class TrafficSystem {
     this.shieldedLane = lane;
   }
 
+  /** Nearest live car ahead within `maxAheadZ` metres (for 狐's turret targeting). */
+  nearestCarAhead(maxAheadZ: number): TrafficCar | undefined {
+    const distance = this.getDistance();
+    let best: TrafficCar | undefined;
+    let bestRel = Infinity;
+    for (const car of this.cars) {
+      if (car.hit || !car.mesh.visible) {
+        continue;
+      }
+      const rel = car.trackZ - distance;
+      if (rel < -2 || rel > maxAheadZ) {
+        continue;
+      }
+      if (rel < bestRel) {
+        bestRel = rel;
+        best = car;
+      }
+    }
+    return best;
+  }
+
+  /** Destroy a specific car (turret hit). */
+  destroyCar(car: TrafficCar): void {
+    if (car.hit) {
+      return;
+    }
+    car.hit = true;
+    car.mesh.visible = false;
+    this.onDestroyed?.({ car });
+  }
+
   /**
    * Swerve cars out of `lane` once they're far enough ahead (so the move happens
    * off in the distance, not in the player's face). Used by 藍 Freie Bahn to keep

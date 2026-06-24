@@ -17,6 +17,10 @@ export type RunEffectContext = {
     /** 狐 Titan: grow over 3 lanes, become indestructible, collect every lane. */
     setTitan(on: boolean): void;
   };
+  turret: {
+    /** 狐 Geschützturm: deploy/retract the roof turret that shoots nearby cars. */
+    setActive(on: boolean): void;
+  };
   traffic: {
     /** Swerve cars out of `lane` once they are at least `minAheadZ` ahead. */
     swerveOutOfLane(lane: LaneIndex, minAheadZ: number): void;

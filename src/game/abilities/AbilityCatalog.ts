@@ -52,13 +52,13 @@ const mains: Record<string, MainAbilityDef> = {
     // density multiplier = densityBase + densityStep * mainLevel (drizzle → downpour).
     params: { densityBase: 1, densityStep: 0.1 }
   },
-  // 狐 Titan — car grows over 3 lanes, indestructible, vacuums all-lane coins. 3s → 9s.
+  // 狐 Geschützturm — roof turret rises, swivels to the nearest car and shoots it. 3s → 9s.
   "kitsune-rally": {
-    id: "titan",
-    name: "Titan",
+    id: "turret",
+    name: "Geschützturm",
     kanji: "狐",
-    effect: "titan",
-    blurb: "unzerstörbar, füllt 3 Spuren",
+    effect: "turret",
+    blurb: "schießt nahe Autos ab · +10 je Treffer",
     durationBase: 3,
     durationStep: 0.2,
     maxLevel: MAIN_MAX_LEVEL,

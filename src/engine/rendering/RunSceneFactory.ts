@@ -19,6 +19,7 @@ import type { AppScene } from "./AppScene";
 import type { RunEffectContext } from "../../game/abilities/RunEffectContext";
 import { CameraController } from "./CameraController";
 import { LightingRig } from "./LightingRig";
+import { TurretSystem } from "./TurretSystem";
 
 export type GameOverInfo = {
   reason: "obstacle" | "weak-fails";
@@ -168,6 +169,15 @@ export class RunSceneFactory {
       world.add(mesh);
     }
 
+    const turret = new TurretSystem(scene, runnerController, trafficSystem, (coins) => {
+      scoreSystem.addCoin(coins);
+      events?.emit("coin:collected", {
+        amount: coins,
+        combo: scoreSystem.getStats(pressure, weakFails).combo,
+        worldPosition: { x: runnerController.getPosition().x, y: 0.9, z: 0 }
+      });
+    });
+
     world.name = "playable_feudal_japan_world";
     scene.add(world, runner, chaser);
     runner.add(boostAura);
@@ -249,6 +259,7 @@ export class RunSceneFactory {
       collectibleSystem.reset();
       coinRain.reset();
       trafficSystem.reset();
+      turret.reset();
     };
 
     const moveLane = (direction: -1 | 1): void => {
@@ -290,6 +301,7 @@ export class RunSceneFactory {
       collectibleSystem.update(dt, elapsed, isRunning, contentLoopLength);
       coinRain.update(dt, elapsed, isRunning);
       trafficSystem.update(dt, isRunning, contentLoopLength);
+      turret.update(dt, isRunning);
       updateBoostAura(dt, elapsed);
       updateChaser(dt, elapsed, isRunning);
 
@@ -305,6 +317,9 @@ export class RunSceneFactory {
       player: {
         setTitan: (on: boolean) => runnerController.setTitan(on)
       },
+      turret: {
+        setActive: (on: boolean) => turret.setActive(on)
+      },
       traffic: {
         swerveOutOfLane: (lane, minAheadZ) => trafficSystem.swerveOutOfLane(lane, minAheadZ),
         setLaneShield: (lane) => trafficSystem.setLaneShield(lane)
@@ -317,6 +332,7 @@ export class RunSceneFactory {
 
     const dispose = (): void => {
       coinRain.dispose();
+      turret.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();

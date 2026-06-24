@@ -9,7 +9,8 @@ export type EffectKey =
   | "boostRam" // 赤 Striker Boost
   | "hornClear" // 藍 Hupe / Freie Bahn
   | "coinRain" // 桜 Blütenregen
-  | "titan" // 狐 Titan
+  | "titan" // (legacy 狐 — replaced by turret)
+  | "turret" // 狐 Geschützturm
   | "nightHunt" // 将 Nachtjagd
   | "blackHole" // 鬼 Schwarzes Loch
   | "hyperspeed"; // 龍 Überschall
