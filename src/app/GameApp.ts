@@ -118,6 +118,8 @@ export class GameApp {
   private hudActiveKanji?: HTMLElement;
   private hudActiveName?: HTMLElement;
   private hudActiveTime?: HTMLElement;
+  private countdownBox?: HTMLElement;
+  private countdownNum?: HTMLElement;
   private goMeta?: HTMLElement;
   private goCoins?: HTMLElement;
   private goScore?: HTMLElement;
@@ -249,11 +251,37 @@ export class GameApp {
     });
     this.resetChargeHud(this.selectedVehicle);
     this.stateMachine.transition("countdown", reason);
-    this.countdownTimeout = window.setTimeout(() => {
-      if (this.stateMachine.getState() === "countdown" && this.stateMachine.canTransition("running")) {
-        this.stateMachine.transition("running", "countdown-complete");
+    this.runNumericCountdown();
+  }
+
+  /** 3 · 2 · 1 countdown (each a touch faster than a second), then start running. Does not reset the run. */
+  private runNumericCountdown(): void {
+    window.clearTimeout(this.countdownTimeout);
+    let n = 3;
+    const tick = (): void => {
+      if (this.stateMachine.getState() !== "countdown") {
+        return; // aborted (e.g. returned to menu)
       }
-    }, countdownDurationMs);
+      if (n <= 0) {
+        if (this.stateMachine.canTransition("running")) {
+          this.stateMachine.transition("running", "countdown-complete");
+        }
+        return;
+      }
+      if (this.countdownNum) {
+        this.countdownNum.textContent = String(n);
+      }
+      // Re-trigger the pop animation each number.
+      if (this.countdownBox) {
+        this.countdownBox.classList.remove("is-pop");
+        void this.countdownBox.offsetWidth;
+        this.countdownBox.classList.add("is-pop");
+      }
+      this.audio?.playMenuClick();
+      n -= 1;
+      this.countdownTimeout = window.setTimeout(tick, countdownDurationMs);
+    };
+    tick();
   }
 
   start(): void {
@@ -284,7 +312,13 @@ export class GameApp {
       return;
     }
 
-    this.stateMachine.transition("running", "user");
+    // Resume through a 3·2·1 countdown (does not reset the run).
+    if (this.stateMachine.canTransition("countdown")) {
+      this.stateMachine.transition("countdown", "resume");
+      this.runNumericCountdown();
+    } else {
+      this.stateMachine.transition("running", "user");
+    }
   }
 
   restart(): void {
@@ -582,8 +616,7 @@ export class GameApp {
         </div>
       </section>
       <div class="fr-countdown" data-fr-countdown aria-hidden="true">
-        <span class="fr-countdown-jp">用意</span>
-        <span class="fr-countdown-en">READY</span>
+        <span class="fr-countdown-num" data-fr-countdown-num>3</span>
       </div>
       <section class="fr-pause" data-fr-pause aria-hidden="true">
         <div class="fr-bg fr-bg--scrim"></div>
@@ -659,6 +692,8 @@ export class GameApp {
     this.hudActiveKanji = ui.querySelector("[data-hud-active-k]") ?? undefined;
     this.hudActiveName = ui.querySelector("[data-hud-active-nm]") ?? undefined;
     this.hudActiveTime = ui.querySelector("[data-hud-active-t]") ?? undefined;
+    this.countdownBox = ui.querySelector("[data-fr-countdown]") ?? undefined;
+    this.countdownNum = ui.querySelector("[data-fr-countdown-num]") ?? undefined;
     this.goMeta = ui.querySelector("[data-go-meta]") ?? undefined;
     this.goCoins = ui.querySelector("[data-go-coins]") ?? undefined;
     this.goScore = ui.querySelector("[data-go-score]") ?? undefined;

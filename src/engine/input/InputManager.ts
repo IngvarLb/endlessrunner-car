@@ -143,15 +143,11 @@ export class InputManager {
       return "moveRight";
     }
 
-    if (key === " ") {
+    if (key === "ArrowUp" || lower === "w") {
       return "activate";
     }
 
-    if (key === "ArrowUp" || lower === "w") {
-      return "boost";
-    }
-
-    if (key === "Escape") {
+    if (key === " " || key === "Escape") {
       return "pause";
     }
 

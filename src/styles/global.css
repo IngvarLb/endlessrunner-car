@@ -2093,21 +2093,30 @@ button {
   gap: 4px;
   pointer-events: none;
 }
-.fr-countdown-jp {
-  font-family: var(--font-mincho);
-  font-weight: 800;
-  font-size: clamp(80px, 16vw, 200px);
+.fr-countdown-num {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(110px, 24vw, 260px);
   line-height: 0.9;
   color: var(--color-accent);
   text-shadow: 0 0 36px rgb(244 237 224 / 0.7), 0 10px 30px rgb(226 59 46 / 0.3);
 }
-.fr-countdown-en {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.5em;
-  color: var(--color-ink);
-  padding-left: 0.5em;
+.fr-countdown.is-pop .fr-countdown-num {
+  animation: fr-countdown-pop 0.72s var(--ease-out);
+}
+@keyframes fr-countdown-pop {
+  0% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  18% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.86);
+    opacity: 0.35;
+  }
 }
 
 /* shared dark scrim for pause + game-over */

@@ -8,7 +8,7 @@ const allowedTransitions: Record<GameState, GameState[]> = {
   garage: ["menu", "countdown"],
   countdown: ["running", "menu"],
   running: ["paused", "gameOver", "reviving"],
-  paused: ["running", "menu", "gameOver"],
+  paused: ["running", "countdown", "menu", "gameOver"],
   reviving: ["running", "gameOver"],
   gameOver: ["menu", "countdown"]
 };
