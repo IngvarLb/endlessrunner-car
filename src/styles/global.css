@@ -948,10 +948,9 @@ button {
   text-align: right;
   color: #f4ede0;
 }
-.fr-gpanel-div {
-  height: 1px;
-  background: var(--color-border-ondark);
-  margin: 18px 0 15px;
+/* spacing where the abilities/action divider used to be (desktop) */
+.fr-gaction {
+  margin-top: 16px;
 }
 
 /* ===== Ability cards (Main / Passive) — replace the 速/握/操/力 stat bars ===== */
@@ -1343,10 +1342,11 @@ button {
   position: absolute;
   left: 0;
   top: 0;
-  padding: 2px 6px;
-  font-family: var(--font-jp);
-  font-weight: 900;
-  font-size: 11px;
+  padding: 3px 7px;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 9px;
+  letter-spacing: 0.1em;
   line-height: 1;
   color: #fff;
 }

@@ -49,9 +49,9 @@ const garageFrameInterval = 1 / 40;
 // edges. Drawn with an opaque colour so overlapping strokes don't double up.
 const LOCK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V6h10v5"/></svg>';
-// Same angular padlock, shackle swung open (right leg lifted out of the body) — owned marker.
+// Same padlock with the shackle swung open (right leg lifted clear of the body) — owned marker.
 const LOCK_OPEN_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V6h10V8"/></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
 
 export function createGameApp(root: HTMLElement, config: Partial<GameConfig> = {}): GameApp {
   return new GameApp(root, mergeConfig(config));
@@ -476,7 +476,6 @@ export class GameApp {
           <div class="fr-gname" data-frg-name>CRIMSON BOLT</div>
           <div class="fr-gstats-label">能力 · FÄHIGKEITEN</div>
           <div class="fr-gabilities" data-frg-abilities></div>
-          <div class="fr-gpanel-div"></div>
           <div class="fr-gaction" data-frg-action></div>
         </aside>
 
@@ -1441,7 +1440,7 @@ export class GameApp {
           : `<span class="fr-rcard-lock">${LOCK_ICON}</span>`;
         return `
           <button class="${classes.join(" ")}" type="button" data-roster-id="${vehicle.id}">
-            <span class="fr-rcard-tier" style="background:${tier.color}">${tier.jp}</span>
+            <span class="fr-rcard-tier" style="background:${tier.color}">${tier.en}</span>
             <span class="fr-rcard-k" style="color:${vehicle.paint}">${vehicle.kanji}</span>
             <span class="fr-rcard-name">${vehicle.displayName}</span>
             ${lock}
