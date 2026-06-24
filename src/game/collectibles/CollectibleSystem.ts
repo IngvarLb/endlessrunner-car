@@ -57,6 +57,16 @@ export class CollectibleSystem {
     this.laneBias = lane;
   }
 
+  /** Immediately move the coins ahead into `lane` (e.g. 藍 Freie Bahn coin row), no recycle wait. */
+  pullToLane(lane: LaneIndex): void {
+    const distance = this.getDistance();
+    for (const collectible of this.collectibles) {
+      if (!collectible.collected && collectible.trackZ - distance > 2) {
+        collectible.placeAt(lane, collectible.trackZ);
+      }
+    }
+  }
+
   getActiveCount(): number {
     return this.collectibles.length;
   }

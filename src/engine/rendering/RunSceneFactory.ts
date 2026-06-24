@@ -346,6 +346,7 @@ export class RunSceneFactory {
       },
       coins: {
         biasLane: (lane) => collectibleSystem.setLaneBias(lane),
+        pullToLane: (lane) => collectibleSystem.pullToLane(lane),
         rain: (on, level) => coinRain.setActive(on, level)
       }
     };

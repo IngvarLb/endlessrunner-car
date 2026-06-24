@@ -54,7 +54,7 @@ export class TrafficCar implements Collidable {
     // Ease the mesh toward the lane x so swerves (e.g. 藍 Freie Bahn) glide instead
     // of snapping. The collider already tracks the target lane, so safety is instant.
     const targetX = this.laneSystem.getLaneX(this.lane);
-    this.visualX += (targetX - this.visualX) * Math.min(1, dt * 7);
+    this.visualX += (targetX - this.visualX) * Math.min(1, dt * 12);
     this.mesh.position.set(this.visualX, 0, this.trackZ);
   }
 

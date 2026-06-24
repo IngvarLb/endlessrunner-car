@@ -4,7 +4,7 @@ import type { RunEffect } from "../RunEffect";
 import type { RunEffectContext } from "../RunEffectContext";
 
 const MIDDLE_LANE: LaneIndex = 0;
-const SWERVE_AHEAD = 14; // metres ahead: cars visibly pull aside well before the player
+const SWERVE_AHEAD = 2; // swerve almost every middle-lane car ahead (close ones too — fast lerp clears them)
 
 /**
  * 藍 Freie Bahn — NPCs pull out of the middle lane (and any straggler is knocked
@@ -18,6 +18,7 @@ export class HornClearEffect implements RunEffect {
   start(ctx: RunEffectContext): void {
     ctx.traffic.setLaneShield(MIDDLE_LANE);
     ctx.coins.biasLane(MIDDLE_LANE);
+    ctx.coins.pullToLane(MIDDLE_LANE); // coin row appears at once, synced with the cars parting
   }
 
   update(_dt: number, ctx: RunEffectContext): void {

@@ -30,6 +30,8 @@ export type RunEffectContext = {
   coins: {
     /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */
     biasLane(lane: LaneIndex | undefined): void;
+    /** Immediately move the coins ahead into `lane` (no recycle wait). */
+    pullToLane(lane: LaneIndex): void;
     /** Toggle the 桜 coin-rain field; density scales with mastery `level` (0–100). */
     rain(on: boolean, level: number): void;
   };
