@@ -342,11 +342,18 @@ export class RunSceneFactory {
       },
       traffic: {
         swerveOutOfLane: (lane, minAheadZ) => trafficSystem.swerveOutOfLane(lane, minAheadZ),
-        setLaneShield: (lane) => trafficSystem.setLaneShield(lane)
+        setLaneShield: (lane) => trafficSystem.setLaneShield(lane),
+        restoreLanes: (minReactionSec) => {
+          // Convert reaction time to a distance via the current closing speed
+          // (player speed minus traffic's ~5 m/s) so the safe band is fair at any speed.
+          const closing = Math.max(2, getRunSpeed() * runnerController.getSpeedMultiplier() - 5);
+          trafficSystem.restoreLanes(minReactionSec * closing);
+        }
       },
       coins: {
         biasLane: (lane) => collectibleSystem.setLaneBias(lane),
         pullToLane: (lane) => collectibleSystem.pullToLane(lane),
+        redistribute: () => collectibleSystem.redistribute(),
         rain: (on, level) => coinRain.setActive(on, level)
       }
     };

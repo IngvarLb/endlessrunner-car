@@ -67,6 +67,16 @@ export class CollectibleSystem {
     }
   }
 
+  /** Re-spread the coins ahead back to the normal lane pattern (e.g. when 藍 ends). */
+  redistribute(): void {
+    const distance = this.getDistance();
+    for (const collectible of this.collectibles) {
+      if (!collectible.collected && collectible.trackZ - distance > 2) {
+        collectible.placeAt(this.getNextLane(collectible.trackZ), collectible.trackZ);
+      }
+    }
+  }
+
   getActiveCount(): number {
     return this.collectibles.length;
   }

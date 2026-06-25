@@ -26,12 +26,20 @@ export type RunEffectContext = {
     swerveOutOfLane(lane: LaneIndex, minAheadZ: number): void;
     /** Cars in `lane` are knocked aside instead of failing (undefined to clear). */
     setLaneShield(lane: LaneIndex | undefined): void;
+    /**
+     * Restore cars to their normal lanes, keeping only those closer than
+     * `minReactionSec` of reaction time on the sides (so traffic returns to normal
+     * promptly without snapping a car unfairly into the player's path).
+     */
+    restoreLanes(minReactionSec: number): void;
   };
   coins: {
     /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */
     biasLane(lane: LaneIndex | undefined): void;
     /** Immediately move the coins ahead into `lane` (no recycle wait). */
     pullToLane(lane: LaneIndex): void;
+    /** Re-spread the coins ahead back to the normal lane pattern. */
+    redistribute(): void;
     /** Toggle the 桜 coin-rain field; density scales with mastery `level` (0–100). */
     rain(on: boolean, level: number): void;
   };

@@ -107,6 +107,24 @@ export class TrafficSystem {
     return best;
   }
 
+  /**
+   * Restore cars to their normal lanes (e.g. when 藍 ends), except those in the
+   * close band ahead — snapping a car back into the middle right in front of the
+   * player would be an unfair hit, so leave those until they pass / recycle.
+   */
+  restoreLanes(minSafeAheadZ: number): void {
+    const distance = this.getDistance();
+    for (const car of this.cars) {
+      if (car.hit) {
+        continue;
+      }
+      const rel = car.trackZ - distance;
+      if (rel < 0 || rel > minSafeAheadZ) {
+        car.lane = car.initialLane;
+      }
+    }
+  }
+
   /** Make a specific car pull aside into an adjacent lane (藍 Lichthupe: it gives way). */
   swerveCar(car: TrafficCar): void {
     if (!car.hit) {

@@ -5,6 +5,7 @@ import type { RunEffectContext } from "../RunEffectContext";
 
 const MIDDLE_LANE: LaneIndex = 0;
 const SWERVE_AHEAD = 2; // swerve almost every middle-lane car ahead (close ones too — fast lerp clears them)
+const RESTORE_REACTION_SEC = 1.3; // on end, snap traffic back to normal beyond ~1.3 s of reaction time
 
 /**
  * 藍 Freie Bahn — NPCs pull out of the middle lane (and any straggler is knocked
@@ -29,5 +30,9 @@ export class HornClearEffect implements RunEffect {
   end(ctx: RunEffectContext): void {
     ctx.traffic.setLaneShield(undefined);
     ctx.coins.biasLane(undefined);
+    // Don't wait for the recycle loop — normalise traffic and coins right away so
+    // the effect actually stops when the timer does (close cars stay safe).
+    ctx.traffic.restoreLanes(RESTORE_REACTION_SEC);
+    ctx.coins.redistribute();
   }
 }
