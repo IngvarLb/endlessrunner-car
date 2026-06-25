@@ -5,10 +5,27 @@ import { LaneSystem } from "../world/LaneSystem";
 import type { TrafficCarKind, TrafficColliderShape } from "./TrafficTypes";
 
 // Lateral lane-change tuning (average sideways speed in m/s over the merge).
-const POLITE_MERGE_SPEED = 1.5; // casual highway lane change — slow + angled (藍 Freie Bahn, future auto)
+const POLITE_MERGE_SPEED = 1.5; // casual highway lane change — slow + angled (overtake, 藍 Freie Bahn)
 const URGENT_MERGE_SPEED = 10; // emergency give-way (藍 Lichthupe): a quick veer out of the way
 const MAX_YAW = 0.42; // rad (~24°): cap the body angle so it never looks like driving sideways
 const BLINK_INTERVAL = 0.22; // seconds per on/off phase of the turn signal
+
+// Longitudinal tuning: cars cruise at varied speeds and ease toward a target.
+const ACCEL = 6; // m/s² when speeding up to cruise / overtaking
+const BRAKE = 18; // m/s² when slowing to follow / avoid a rear-end
+const LANE_COOLDOWN = 1.7; // seconds between a car's own lane changes (no oscillation)
+// Per-car cruise speed = base × this range, keyed off the id so it's stable across recycles.
+const CRUISE_MIN_FACTOR = 0.9;
+const CRUISE_MAX_FACTOR = 1.2;
+
+function hashTo01(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) % 100000) / 100000;
+}
 
 export type TrafficCarDefinition = {
   id: string;
@@ -26,12 +43,14 @@ export class TrafficCar implements Collidable {
   readonly kind: TrafficCarKind;
   readonly mesh: THREE.Object3D;
   readonly initialTrackZ: number;
-  readonly speed: number;
+  /** Preferred free-flow speed; the live `speed` eases toward this (or slower when following). */
+  readonly cruiseSpeed: number;
   readonly colliderShape: TrafficColliderShape;
   readonly patternId: string;
   readonly initialLane: LaneIndex;
   lane: LaneIndex;
   trackZ: number;
+  speed: number;
   hit = false;
 
   // Lane-change animation: glide visualX from fromX to toX with a smoothstep so the
@@ -47,6 +66,8 @@ export class TrafficCar implements Collidable {
   // player while veering off (cleared once the merge finishes).
   private yielding = false;
   private blinkTime = 0;
+  private laneCooldown = 0;
+  private brakeTimer = 0; // while > 0 the scheduler wants this car to slow (wall relief)
   private readonly blinkerPosX?: THREE.Object3D;
   private readonly blinkerNegX?: THREE.Object3D;
 
@@ -62,7 +83,9 @@ export class TrafficCar implements Collidable {
     this.initialLane = definition.lane;
     this.trackZ = definition.trackZ;
     this.initialTrackZ = definition.trackZ;
-    this.speed = definition.speed;
+    this.cruiseSpeed =
+      definition.speed * (CRUISE_MIN_FACTOR + (CRUISE_MAX_FACTOR - CRUISE_MIN_FACTOR) * hashTo01(definition.id));
+    this.speed = this.cruiseSpeed;
     this.colliderShape = definition.collider;
     this.patternId = definition.patternId;
     this.blinkerPosX = this.mesh.getObjectByName("blinker_px") ?? undefined;
@@ -73,6 +96,12 @@ export class TrafficCar implements Collidable {
   update(dt: number, isRunning: boolean): void {
     if (isRunning) {
       this.trackZ += this.speed * dt;
+      if (this.laneCooldown > 0) {
+        this.laneCooldown -= dt;
+      }
+      if (this.brakeTimer > 0) {
+        this.brakeTimer -= dt;
+      }
     }
 
     // A new target lane (set via mergeToLane/yieldToLane) kicks off an angled merge
@@ -112,6 +141,19 @@ export class TrafficCar implements Collidable {
     this.mesh.rotation.y = yaw;
   }
 
+  /** Ease the live speed toward `target` (separate accel/brake rates), respecting any brake request. */
+  driveToward(target: number, dt: number): void {
+    const goal = this.brakeTimer > 0 ? Math.min(target, this.cruiseSpeed * 0.45) : target;
+    const delta = goal - this.speed;
+    const step = delta >= 0 ? Math.min(delta, ACCEL * dt) : Math.max(delta, -BRAKE * dt);
+    this.speed = Math.max(0, this.speed + step);
+  }
+
+  /** Ask the scheduler-driven car to ease off for `seconds` (used to open a lane for the player). */
+  requestBrake(seconds: number): void {
+    this.brakeTimer = Math.max(this.brakeTimer, seconds);
+  }
+
   getCollider(): Collider {
     return {
       id: `${this.id}-collider`,
@@ -133,13 +175,14 @@ export class TrafficCar implements Collidable {
     };
   }
 
-  /** Casual lane change toward `lane`: slow, angled, signalled (藍 Freie Bahn, restore, future auto). */
+  /** Casual lane change toward `lane`: slow, angled, signalled (overtaking, 藍 Freie Bahn, restore). */
   mergeToLane(lane: LaneIndex): void {
     if (this.hit || this.lane === lane) {
       return;
     }
     this.lane = lane;
     this.mergeSpeed = POLITE_MERGE_SPEED;
+    this.laneCooldown = LANE_COOLDOWN;
   }
 
   /** Emergency give-way toward `lane` (藍 Lichthupe): a quick veer that yields to the player. */
@@ -150,6 +193,7 @@ export class TrafficCar implements Collidable {
     this.lane = lane;
     this.mergeSpeed = URGENT_MERGE_SPEED;
     this.yielding = true;
+    this.laneCooldown = LANE_COOLDOWN;
   }
 
   /** True while the car is actively giving way (so it shouldn't fatally hit the player). */
@@ -157,10 +201,21 @@ export class TrafficCar implements Collidable {
     return this.yielding;
   }
 
+  /** True while a lane change is animating (don't start another). */
+  isMerging(): boolean {
+    return this.mergeDuration > 0;
+  }
+
+  /** Ready to start a new lane change (off cooldown and not mid-merge). */
+  canChangeLane(): boolean {
+    return !this.hit && this.laneCooldown <= 0 && this.mergeDuration === 0;
+  }
+
   recycle(worldLength: number): void {
     this.trackZ += worldLength;
     this.lane = this.initialLane; // restore normal lane spread (e.g. after 藍 moved it aside)
     this.hit = false;
+    this.speed = this.cruiseSpeed;
     this.mesh.visible = true;
     this.syncMeshPosition();
   }
@@ -169,6 +224,7 @@ export class TrafficCar implements Collidable {
     this.trackZ = this.initialTrackZ;
     this.lane = this.initialLane;
     this.hit = false;
+    this.speed = this.cruiseSpeed;
     this.mesh.visible = true;
     this.syncMeshPosition();
   }
@@ -200,6 +256,8 @@ export class TrafficCar implements Collidable {
     this.mergeDir = 0;
     this.yielding = false;
     this.blinkTime = 0;
+    this.laneCooldown = 0;
+    this.brakeTimer = 0;
     this.setBlinkers(false, false);
     this.mesh.position.set(x, 0, this.trackZ);
     this.mesh.rotation.y = 0;

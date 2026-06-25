@@ -388,7 +388,7 @@ export class RunSceneFactory {
       boostAura.position.y = -0.14 + Math.sin(elapsed * 14) * 0.02;
     }
 
-    function updateChaser(dt: number, elapsed: number, isRunning: boolean): void {
+    function updateChaser(dt: number, _elapsed: number, isRunning: boolean): void {
       const isCatchWindowActive = lightMistakeWindowTimer > 0;
       const isIntroActive = introChaserTimer > 0;
       const wantChaser = isRunning && (isIntroActive || isCatchWindowActive);
@@ -397,7 +397,7 @@ export class RunSceneFactory {
         // Police drives up from far behind (off-screen) — never pops in close.
         if (!chaser.visible) {
           chaser.position.z = chaserSpawnZ;
-          chaser.position.x = runnerController.getPosition().x * 0.35 + (isIntroActive ? introChaserSideOffset : 0);
+          chaser.position.x = runnerController.getPosition().x + (isIntroActive ? introChaserSideOffset : 0);
         }
         chaser.visible = true;
         chaserReceding = false;
@@ -420,13 +420,15 @@ export class RunSceneFactory {
       } else {
         chaser.position.z -= chaserRecedeSpeed * dt; // constant slow fall-back, no easing
       }
-      chaser.position.x = THREE.MathUtils.lerp(
-        chaser.position.x,
-        runnerController.getPosition().x * 0.35 + sideOffset,
-        Math.min(1, dt * 3)
-      );
-      chaser.position.y = Math.abs(Math.sin(elapsed * 7.2)) * 0.06;
-      chaser.rotation.z = -0.08 + Math.sin(elapsed * 2.4) * 0.035;
+      // Sit in the player's lane like a real car and change lanes when the player
+      // does (full x-tracking, not a floaty partial follow), leaning into the move.
+      const prevX = chaser.position.x;
+      const targetX = runnerController.getPosition().x + sideOffset;
+      chaser.position.x = THREE.MathUtils.lerp(prevX, targetX, Math.min(1, dt * 3.5));
+      const lateralVel = (chaser.position.x - prevX) / Math.max(dt, 1e-3);
+      chaser.position.y = 0; // grounded — no hover
+      chaser.rotation.y = THREE.MathUtils.clamp(Math.atan2(lateralVel, 9), -0.4, 0.4);
+      chaser.rotation.z = 0;
 
       if (chaserReceding && chaser.position.z <= chaserHideZ) {
         chaser.visible = false;
