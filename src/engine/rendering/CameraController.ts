@@ -1,10 +1,19 @@
 import * as THREE from "three";
 import type { GameState } from "../../game/state/GameStateTypes";
 
+// Lane-change camera sway (Subway-Surfers feel): the camera lags the player's lateral
+// move, which produces a little swing, plus a subtle bank into the turn.
+const FOLLOW_LERP = 6; // how fast the camera anchor chases the player's x (lower = more swing)
+const CAM_FOLLOW = 0.62; // how far the camera body shifts toward the player's lane
+const TARGET_FOLLOW = 0.82; // how far the look-at point shifts (keeps the player framed)
+const BANK = 0.16; // roll per metre the player leads the lagging camera
+const MAX_BANK = 0.09; // rad (~5°) cap on the bank
+
 export class CameraController {
   readonly camera = new THREE.PerspectiveCamera(58, 1, 0.1, 120);
   private readonly target = new THREE.Vector3(0, 1.25, 8);
   private readonly desiredPosition = new THREE.Vector3(0, 4.7, -8.4);
+  private followX = 0;
   private shakeTimer = 0;
   private shakeDuration = 0;
   private shakeIntensity = 0;
@@ -25,19 +34,24 @@ export class CameraController {
     this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
   }
 
-  update(dt: number, elapsed: number, state: GameState): void {
+  update(dt: number, elapsed: number, state: GameState, lateral = 0): void {
     const speedFov = state === "running" ? 4 : 0;
     this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, 58 + speedFov, dt * 3);
     this.camera.updateProjectionMatrix();
 
+    // Chase the player's lateral position with a lag — the lag is the swing.
+    this.followX += (lateral - this.followX) * Math.min(1, dt * FOLLOW_LERP);
+    const swing = lateral - this.followX; // how far the player currently leads the camera
+
     const idleSway = Math.sin(elapsed * 0.75) * 0.12;
-    this.desiredPosition.set(idleSway, 4.7, -8.4);
-    this.target.set(idleSway * 0.35, 1.25, 8);
+    this.desiredPosition.set(idleSway + this.followX * CAM_FOLLOW, 4.7, -8.4);
+    this.target.set(this.followX * TARGET_FOLLOW, 1.25, 8);
 
     this.camera.position.lerp(this.desiredPosition, Math.min(1, dt * 4));
     const shakeOffset = this.getShakeOffset(dt, elapsed);
     this.camera.position.add(shakeOffset);
     this.camera.lookAt(this.target.clone().add(shakeOffset.multiplyScalar(0.25)));
+    this.camera.rotateZ(THREE.MathUtils.clamp(swing * BANK, -MAX_BANK, MAX_BANK)); // bank into the turn
   }
 
   private getShakeOffset(dt: number, elapsed: number): THREE.Vector3 {

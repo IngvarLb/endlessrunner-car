@@ -326,7 +326,7 @@ export class RunSceneFactory {
       updateChaser(dt, elapsed, isRunning);
 
       world.position.z = -distance;
-      cameraController.update(dt, elapsed, state);
+      cameraController.update(dt, elapsed, state, isRunning ? runnerController.getPosition().x : 0);
     };
 
     const effectContext: RunEffectContext = {
