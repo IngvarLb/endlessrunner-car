@@ -958,6 +958,45 @@ button {
   flex-direction: column;
   gap: 10px;
 }
+/* Main/Passive tab toggle — shows one ability at a time so the panel stays short
+   and the Drive button never gets pushed under the roster. */
+.fr-gab-tabbar {
+  display: flex;
+  gap: 6px;
+}
+.fr-gab-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgb(20 14 22 / 0.3);
+  border: 1px solid var(--color-border-ondark);
+  color: rgb(244 237 224 / 0.55);
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: color var(--dur-fast), background var(--dur-fast), border-color var(--dur-fast);
+}
+.fr-gab-tab-jp {
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 13px;
+}
+.fr-gab-tab.is-active {
+  color: #f4ede0;
+  background: rgb(20 14 22 / 0.6);
+  border-color: rgb(244 237 224 / 0.45);
+}
+.fr-gab[data-gab-panel] {
+  display: none;
+}
+.fr-gab[data-gab-panel].is-active {
+  display: block;
+}
 .fr-gab {
   background: rgb(20 14 22 / 0.34);
   border: 1px solid var(--color-border-ondark);

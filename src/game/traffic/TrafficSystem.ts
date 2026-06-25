@@ -64,17 +64,18 @@ export class TrafficSystem {
       car.update(dt, isRunning);
 
       if (!car.hit && isRunning && this.collisionSystem.queryPair(this.runner, car)) {
-        if (car.isYielding()) {
-          // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
-        } else if (
+        if (
           this.runner.isBoosting() ||
           this.runner.isInvincible() ||
           (this.shieldedLane !== undefined && this.runner.getLane() === this.shieldedLane)
         ) {
-          // 藍 Freie Bahn knocks any car aside while the player commits to the shielded lane.
+          // 赤 Boost / 狐 Titan / 藍 Freie Bahn knock any car aside — even one that's
+          // mid-give-way (this check wins over isYielding, so you never phase through).
           car.hit = true;
           car.mesh.visible = false;
           this.onDestroyed?.({ car });
+        } else if (car.isYielding()) {
+          // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
         } else {
           car.hit = true;
           this.onHit({ car });

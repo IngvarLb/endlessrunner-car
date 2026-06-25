@@ -1288,13 +1288,36 @@ export class GameApp {
     });
 
     this.frgEls.abilities?.addEventListener("click", (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button.fr-gab-upgrade");
+      const target = event.target as HTMLElement;
+      const tab = target.closest<HTMLButtonElement>("button.fr-gab-tab");
+      if (tab) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.audio?.playGarageSwitch();
+        this.setGabTab(tab.dataset.gabTab === "passive" ? "passive" : "main");
+        return;
+      }
+      const button = target.closest<HTMLButtonElement>("button.fr-gab-upgrade");
       if (!button || button.disabled) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
       this.handleMainUpgrade();
+    });
+  }
+
+  /** Toggle the garage Main/Passive ability tab (defaults back to Main on every re-render). */
+  private setGabTab(which: "main" | "passive"): void {
+    const root = this.frgEls.abilities;
+    if (!root) {
+      return;
+    }
+    root.querySelectorAll<HTMLElement>("[data-gab-tab]").forEach((el) => {
+      el.classList.toggle("is-active", el.dataset.gabTab === which);
+    });
+    root.querySelectorAll<HTMLElement>("[data-gab-panel]").forEach((el) => {
+      el.classList.toggle("is-active", el.dataset.gabPanel === which);
     });
   }
 
@@ -1431,7 +1454,11 @@ export class GameApp {
         : `自動 · noch <b>${toGo.toLocaleString("en-US")} m</b> → Stufe ${level + 1}`;
 
     return `
-      <div class="fr-gab fr-gab--main">
+      <div class="fr-gab-tabbar" role="tablist">
+        <button class="fr-gab-tab is-active" type="button" data-gab-tab="main"><span class="fr-gab-tab-jp">主</span>MAIN</button>
+        <button class="fr-gab-tab" type="button" data-gab-tab="passive"><span class="fr-gab-tab-jp">匠</span>PASSIV</button>
+      </div>
+      <div class="fr-gab fr-gab--main is-active" data-gab-panel="main">
         <div class="fr-gab-head">
           <span class="fr-gab-kanji fr-gab-kanji--paint" style="background:${paint}">${vehicle.kanji}</span>
           <span class="fr-gab-role">主 · <b>MAIN</b><span class="fr-gab-name">${main.name}</span></span>
@@ -1444,7 +1471,7 @@ export class GameApp {
         </div>
         ${upgrade}
       </div>
-      <div class="fr-gab fr-gab--passive">
+      <div class="fr-gab fr-gab--passive" data-gab-panel="passive">
         <div class="fr-gab-head">
           <span class="fr-gab-kanji fr-gab-kanji--line">${vehicle.kanji}</span>
           <span class="fr-gab-role">匠 · <b>PASSIVE</b><span class="fr-gab-name">${passive.name}</span></span>
