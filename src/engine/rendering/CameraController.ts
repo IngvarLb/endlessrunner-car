@@ -1,13 +1,11 @@
 import * as THREE from "three";
 import type { GameState } from "../../game/state/GameStateTypes";
 
-// Lane-change camera sway (Subway-Surfers feel): the camera lags the player's lateral
-// move, which produces a little swing, plus a subtle bank into the turn.
+// Lane-change camera follow: the camera eases toward the player's lateral position
+// with a lag, so it swings along a bit on a lane change — no tilt/roll.
 const FOLLOW_LERP = 6; // how fast the camera anchor chases the player's x (lower = more swing)
 const CAM_FOLLOW = 0.62; // how far the camera body shifts toward the player's lane
 const TARGET_FOLLOW = 0.82; // how far the look-at point shifts (keeps the player framed)
-const BANK = 0.16; // roll per metre the player leads the lagging camera
-const MAX_BANK = 0.09; // rad (~5°) cap on the bank
 
 export class CameraController {
   readonly camera = new THREE.PerspectiveCamera(58, 1, 0.1, 120);
@@ -41,7 +39,6 @@ export class CameraController {
 
     // Chase the player's lateral position with a lag — the lag is the swing.
     this.followX += (lateral - this.followX) * Math.min(1, dt * FOLLOW_LERP);
-    const swing = lateral - this.followX; // how far the player currently leads the camera
 
     const idleSway = Math.sin(elapsed * 0.75) * 0.12;
     this.desiredPosition.set(idleSway + this.followX * CAM_FOLLOW, 4.7, -8.4);
@@ -51,7 +48,6 @@ export class CameraController {
     const shakeOffset = this.getShakeOffset(dt, elapsed);
     this.camera.position.add(shakeOffset);
     this.camera.lookAt(this.target.clone().add(shakeOffset.multiplyScalar(0.25)));
-    this.camera.rotateZ(THREE.MathUtils.clamp(swing * BANK, -MAX_BANK, MAX_BANK)); // bank into the turn
   }
 
   private getShakeOffset(dt: number, elapsed: number): THREE.Vector3 {
