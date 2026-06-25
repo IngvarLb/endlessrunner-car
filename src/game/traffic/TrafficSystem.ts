@@ -14,9 +14,9 @@ export type TrafficCarDestroyed = {
 
 // Car-following (longitudinal) — centre-to-centre gaps in metres.
 const LEAD_LOOKAHEAD = 30;
-const FOLLOW_SLOW_GAP = 9; // start easing off the throttle below this gap
-const FOLLOW_STOP_GAP = 3.4; // match the leader's speed at this gap
-const FOLLOW_OVERLAP_GAP = 1.6; // ~touching — brake to a crawl to avoid overlapping
+const FOLLOW_SLOW_GAP = 12; // start easing off the throttle below this gap (early + smooth)
+const FOLLOW_STOP_GAP = 4.6; // hold this much space from the leader (no bumper-to-bumper stacking)
+const FOLLOW_OVERLAP_GAP = 2.2; // ~touching — brake to a crawl to avoid overlapping
 
 // Overtaking (lateral).
 const OVERTAKE_LEAD_GAP = 17; // start the pass while still well back, so it never bunches up first
@@ -148,7 +148,11 @@ export class TrafficSystem {
     return Math.min(car.cruiseSpeed, lead.speed + t * (car.cruiseSpeed - lead.speed));
   }
 
-  /** A held-up car changes into a clear adjacent lane to overtake (no glitching in). */
+  /**
+   * Resolve a slow car ahead: the held-up car pulls into a clear lane to go around;
+   * if it can't, it nudges the slow leader to pull aside (if the leader has room) —
+   * so a faster car never just stacks up behind a slower one.
+   */
   private considerOvertake(car: TrafficCar): void {
     if (!car.canChangeLane()) {
       return;
@@ -158,14 +162,24 @@ export class TrafficSystem {
       return;
     }
     const gap = lead.trackZ - car.trackZ;
-    if (gap > OVERTAKE_LEAD_GAP || car.cruiseSpeed - lead.cruiseSpeed < OVERTAKE_SPEED_MARGIN) {
+    // Compare against the leader's CURRENT speed, not its cruise: a fast car stuck
+    // behind a slow one is itself crawling, and the car behind it must still pass.
+    if (gap > OVERTAKE_LEAD_GAP || car.cruiseSpeed - lead.speed < OVERTAKE_SPEED_MARGIN) {
       return;
     }
+    // 1) Go around — pull into a clear adjacent lane.
     const to = this.clearAdjacentLane(car, OVERTAKE_CLEAR_AHEAD, OVERTAKE_CLEAR_BEHIND);
-    if (to === undefined || this.wouldCreateWall(car, to)) {
+    if (to !== undefined && !this.wouldCreateWall(car, to)) {
+      car.signalToLane(to, OVERTAKE_SIGNAL_SECONDS); // blink first, then merge
       return;
     }
-    car.signalToLane(to, OVERTAKE_SIGNAL_SECONDS); // blink first, then merge
+    // 2) Boxed in — ask the slow leader to make way, if it has a clear lane of its own.
+    if (lead.canChangeLane()) {
+      const leadTo = this.clearAdjacentLane(lead, OVERTAKE_CLEAR_AHEAD, OVERTAKE_CLEAR_BEHIND);
+      if (leadTo !== undefined && !this.wouldCreateWall(lead, leadTo)) {
+        lead.signalToLane(leadTo, OVERTAKE_SIGNAL_SECONDS);
+      }
+    }
   }
 
   /**
