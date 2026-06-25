@@ -122,8 +122,10 @@ export class GameApp {
   private hudActiveTime?: HTMLElement;
   private countdownBox?: HTMLElement;
   private countdownNum?: HTMLElement;
-  private hudBuffer?: HTMLElement;
-  private hudBufferPip?: HTMLElement;
+  private hudPassive?: HTMLElement;
+  private hudPassiveKanji?: HTMLElement;
+  private hudPassiveName?: HTMLElement;
+  private hudPassiveFill?: HTMLElement;
   private goMeta?: HTMLElement;
   private goCoins?: HTMLElement;
   private goScore?: HTMLElement;
@@ -629,9 +631,13 @@ export class GameApp {
           </button>
         </div>
 
-        <div class="fr-hud-buffer" data-hud-buffer aria-hidden="true">
-          <span class="fr-hud-buffer-k">耐</span>
-          <span class="fr-hud-buffer-pip" data-hud-buffer-pip></span>
+        <div class="fr-hud-passive" data-hud-passive aria-hidden="true">
+          <span class="fr-hud-passive-k" data-hud-passive-k>耐</span>
+          <span class="fr-hud-passive-body">
+            <span class="fr-hud-passive-nm" data-hud-passive-nm>Passiv</span>
+            <span class="fr-hud-passive-bar"><i class="fr-hud-passive-fill" data-hud-passive-fill></i></span>
+          </span>
+          <span class="fr-hud-passive-rdy" data-hud-passive-rdy>bereit</span>
         </div>
       </section>
       <div class="fr-countdown" data-fr-countdown aria-hidden="true">
@@ -715,8 +721,10 @@ export class GameApp {
     this.hudActiveTime = ui.querySelector("[data-hud-active-t]") ?? undefined;
     this.countdownBox = ui.querySelector("[data-fr-countdown]") ?? undefined;
     this.countdownNum = ui.querySelector("[data-fr-countdown-num]") ?? undefined;
-    this.hudBuffer = ui.querySelector("[data-hud-buffer]") ?? undefined;
-    this.hudBufferPip = ui.querySelector("[data-hud-buffer-pip]") ?? undefined;
+    this.hudPassive = ui.querySelector("[data-hud-passive]") ?? undefined;
+    this.hudPassiveKanji = ui.querySelector("[data-hud-passive-k]") ?? undefined;
+    this.hudPassiveName = ui.querySelector("[data-hud-passive-nm]") ?? undefined;
+    this.hudPassiveFill = ui.querySelector("[data-hud-passive-fill]") ?? undefined;
     this.goMeta = ui.querySelector("[data-go-meta]") ?? undefined;
     this.goCoins = ui.querySelector("[data-go-coins]") ?? undefined;
     this.goScore = ui.querySelector("[data-go-score]") ?? undefined;
@@ -1631,15 +1639,22 @@ export class GameApp {
       }
     }
 
-    // 赤 extra-fail buffer indicator (only for vehicles with the crumple-zone passive).
-    const crumple = abilities.crumpleState();
-    if (this.hudBuffer) {
-      if (crumple) {
-        this.hudBuffer.classList.add("is-show");
-        this.hudBuffer.classList.toggle("is-ready", crumple.ready);
-        this.hudBufferPip?.style.setProperty("--p", `${Math.round(crumple.rechargeRatio * 100)}%`);
+    // Bottom-left passive-recharge indicator (赤 buffer, 藍 high-beam, 狐 extra life).
+    // Hidden for vehicles whose passive doesn't recharge (e.g. 桜 Sparbüchse).
+    const passive = abilities.passiveState();
+    if (this.hudPassive) {
+      if (passive) {
+        this.hudPassive.classList.add("is-show");
+        this.hudPassive.classList.toggle("is-ready", passive.ready);
+        if (this.hudPassiveKanji) {
+          this.hudPassiveKanji.textContent = passive.kanji;
+        }
+        if (this.hudPassiveName) {
+          this.hudPassiveName.textContent = passive.name;
+        }
+        this.hudPassiveFill?.style.setProperty("--p", `${Math.round(passive.rechargeRatio * 100)}%`);
       } else {
-        this.hudBuffer.classList.remove("is-show");
+        this.hudPassive.classList.remove("is-show");
       }
     }
 

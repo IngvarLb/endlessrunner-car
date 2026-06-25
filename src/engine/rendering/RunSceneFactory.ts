@@ -373,7 +373,9 @@ export class RunSceneFactory {
       if (!passiveHooks) {
         return;
       }
-      const front = trafficSystem.frontCarInLane(runnerController.getLane(), 7);
+      // Only ~3 m ahead: the car gives way right before impact (collision fires at
+      // ~2.2 m, and this runs before the collision check, so the swerve still beats it).
+      const front = trafficSystem.frontCarInLane(runnerController.getLane(), 3);
       if (front && passiveHooks.onApproachCar()) {
         trafficSystem.swerveCar(front);
       }

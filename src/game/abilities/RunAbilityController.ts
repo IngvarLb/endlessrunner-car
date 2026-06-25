@@ -34,7 +34,8 @@ export type ActiveEffectState = {
 /** What a weak fail (lane-edge mistake) does, decided by the vehicle's passive. */
 export type WeakFailOutcome = { type: "absorbed" } | { type: "coins"; amount: number } | { type: "normal" };
 
-export type CrumpleState = { ready: boolean; rechargeRatio: number };
+/** Generic HUD view of a recharging passive (赤 buffer, 藍 high-beam, 狐 extra life). */
+export type PassiveState = { kanji: string; name: string; ready: boolean; rechargeRatio: number };
 
 export class RunAbilityController {
   readonly vehicleId: string;
@@ -257,16 +258,32 @@ export class RunAbilityController {
     return true;
   }
 
-  /** 赤 extra-fail buffer state for the HUD (undefined when the vehicle isn't 赤). */
-  crumpleState(): CrumpleState | undefined {
-    if (!this.hasCrumple || !this.passive) {
+  /**
+   * Unified recharge state for the bottom-left HUD indicator. Returns undefined
+   * for vehicles whose passive doesn't recharge over distance (e.g. 桜 Sparbüchse).
+   */
+  passiveState(): PassiveState | undefined {
+    if (!this.passive) {
       return undefined;
     }
-    if (this.crumpleBuffer > 0) {
-      return { ready: true, rechargeRatio: 1 };
-    }
     const need = passiveValue(this.passive, this.masteryLevel());
-    return { ready: false, rechargeRatio: need > 0 ? Math.min(1, this.crumpleMeters / need) : 0 };
+    const ratio = (meters: number): number => (need > 0 ? Math.min(1, meters / need) : 1);
+    const view = (ready: boolean, rechargeRatio: number): PassiveState => ({
+      kanji: this.passive!.kanji,
+      name: this.passive!.name,
+      ready,
+      rechargeRatio
+    });
+    if (this.hasCrumple) {
+      return view(this.crumpleBuffer > 0, this.crumpleBuffer > 0 ? 1 : ratio(this.crumpleMeters));
+    }
+    if (this.hasHighBeam) {
+      return view(this.highBeamReady, this.highBeamReady ? 1 : ratio(this.highBeamMeters));
+    }
+    if (this.hasSecondLife) {
+      return view(this.extraLives > 0, this.extraLives > 0 ? 1 : ratio(this.metersSinceLife));
+    }
+    return undefined;
   }
 
   /**

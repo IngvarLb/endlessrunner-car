@@ -1988,40 +1988,97 @@ button {
   }
 }
 
-/* ===== 赤 extra-fail buffer (Knautschzone) — bottom-left of the run HUD ===== */
-.fr-hud-buffer {
+/* ===== Passive recharge indicator — bottom-left of the run HUD =====
+   赤 Knautschzone, 藍 Lichthupe, 狐 Zweites Leben. The fill bar shows how close the
+   passive is to being ready again; when ready the chip glows + "bereit" shows. */
+.fr-hud-passive {
   position: absolute;
   left: clamp(16px, 3vw, 40px);
   bottom: calc(clamp(16px, 3vw, 30px) + env(safe-area-inset-bottom));
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 11px;
-  background: rgb(20 14 22 / 0.5);
+  gap: 9px;
+  padding: 7px 11px 7px 8px;
+  background: rgb(20 14 22 / 0.62);
   border: 1px solid var(--color-border-ondark);
   opacity: 0;
+  transform: translateY(4px);
   pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.fr-hud-passive.is-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.fr-hud-passive-k {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgb(8 6 10 / 0.6);
+  border: 1px solid var(--color-border-ondark);
+  font-family: var(--font-jp);
+  font-weight: 900;
+  font-size: 15px;
+  line-height: 1;
+  color: #f4ede0;
+}
+.fr-hud-passive-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 84px;
+}
+.fr-hud-passive-nm {
+  font-family: var(--font-ui, inherit);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(244 237 224 / 0.78);
+  white-space: nowrap;
+}
+.fr-hud-passive-bar {
+  position: relative;
+  height: 5px;
+  border-radius: 999px;
+  background: rgb(244 237 224 / 0.14);
+  overflow: hidden;
+}
+.fr-hud-passive-fill {
+  --p: 0%;
+  position: absolute;
+  inset: 0;
+  width: var(--p);
+  border-radius: 999px;
+  background: rgb(244 237 224 / 0.5);
+  transition: width var(--dur-fast) linear, background var(--dur-fast) linear;
+}
+.fr-hud-passive-rdy {
+  font-family: var(--font-jp);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-gold);
+  opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
-.fr-hud-buffer.is-show {
+/* ready: chip + bar snap to gold and glow, "bereit" label appears */
+.fr-hud-passive.is-ready {
+  border-color: rgb(214 178 94 / 0.7);
+  box-shadow: 0 0 16px rgb(214 178 94 / 0.32);
+}
+.fr-hud-passive.is-ready .fr-hud-passive-k {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+  color: #20140e;
+}
+.fr-hud-passive.is-ready .fr-hud-passive-fill {
+  background: var(--color-gold);
+}
+.fr-hud-passive.is-ready .fr-hud-passive-rdy {
   opacity: 1;
-}
-.fr-hud-buffer-k {
-  font-family: var(--font-jp);
-  font-weight: 700;
-  font-size: 15px;
-  color: rgb(244 237 224 / 0.85);
-}
-.fr-hud-buffer-pip {
-  --p: 0%;
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid var(--color-accent);
-  background: linear-gradient(90deg, var(--color-accent) var(--p), rgb(226 59 46 / 0.12) var(--p));
-}
-.fr-hud-buffer.is-ready .fr-hud-buffer-pip {
-  background: var(--color-accent);
-  box-shadow: 0 0 8px rgb(226 59 46 / 0.6);
 }
 
 /* ===== Mastery level-up toast ===== */
