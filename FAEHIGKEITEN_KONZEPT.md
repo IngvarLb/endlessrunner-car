@@ -1,6 +1,6 @@
 # Fähigkeiten-Konzept — Main & Passive pro Auto (Feudal Runner)
 
-> Status: **Diskussionsgrundlage** (Stand 2026-06-22, Rev. 3). Noch nichts implementiert.
+> Status: **Phase 1 umgesetzt** (Stand 2026-06-26). 赤/藍/桜/狐 (Main + Passive) sind im Spiel; 将/鬼/龍 + das ausgebaute PursuitSystem stehen noch aus. Diese Datei bleibt die Referenz-Spezifikation; im Bau getunte Werte sind unten vermerkt.
 > Ergänzt [PROGRESSION_KONZEPT.md](PROGRESSION_KONZEPT.md) · Umsetzung: [UMSETZUNGSPLAN.md](UMSETZUNGSPLAN.md).
 > **Kein Thematik-Tausch** — Original-Zuordnung (bewusst so gewählt).
 
@@ -20,7 +20,7 @@ Jedes Auto hat **genau 2 Fähigkeiten** — kein Skill-Baum. **Zwei getrennte Tr
 - Passive linear: `Wert = Basis + (Max − Basis) · Level/100`. Jedes Auto sammelt seine Meter **getrennt**.
 - Da jeder Schritt winzig ist: das **Level-Up-Ereignis** selbst wird gefeiert (Anzeige), nicht der Zahlenwert.
 
-**Aktivierung der Main (Temple-Run-Prinzip):** eine **Ladeleiste** füllt sich beim Fahren (über **gesammelte Coins**, + etwas Distanz/Near-Miss). Bei **voll** → **Tap auf die Boost-Taste** zündet → läuft ihre Dauer → leert sich → lädt neu.
+**Aktivierung der Main (Temple-Run-Prinzip):** eine **Ladeleiste** (Charge-Ring im HUD) füllt sich beim Fahren (über **gesammelte Coins**, + etwas Distanz). Bei **voll** → Zünden per **W / ↑ bzw. Doppeltipp aufs Display** (eigene Activate-Zone, **getrennt vom Boost**; Space = Pause) → läuft ihre Dauer → leert sich → lädt neu.
 - Theoretisch **unendlich oft**, aber gebunden an „erst aufladen". Längere/stärkere Mains = **höhere Ladekosten**. Skaliert mit Run-Länge.
 - **Loop-Schutz:** coin-erzeugende Mains (桜, 鬼) laden **nicht** über ihre eigenen Coins.
 
@@ -61,9 +61,10 @@ Jedes Auto hat **genau 2 Fähigkeiten** — kein Skill-Baum. **Zwei getrennte Tr
 ---
 
 ## 8. Ladeleiste & Anzeigen
-- Füllung: primär eingesammelte Coins (+ Distanz/Near-Miss). Ladekosten relativ: 赤 niedrig · 藍 niedrig–mittel · 桜 mittel · 狐 mittel–hoch · 将 hoch · 鬼 mittel–hoch · 龍 hoch.
-- Zünden: Tap auf Boost bei voller Leiste. 鬼-Loch zusätzlich: Autos antippen während aktiv.
-- HUD unten: **Ladeleiste** + **Extra-Fail-Indikator** (赤) + **Aktive-Fähigkeit-Restzeit**. → Optik via Claude Design.
+- Füllung: primär eingesammelte Coins (+ Distanz). Ladekosten relativ: 赤 niedrig · 藍 niedrig–mittel · 桜 mittel · 狐 mittel–hoch · 将 hoch · 鬼 mittel–hoch · 龍 hoch.
+  - *Bau-Tuning:* 桜 und 狐 Ladekosten wurden im Spiel **reduziert** (kürzer bis einsetzbar); 桜 lädt **nur über Distanz** (Loop-Schutz). Aktuelle Werte: siehe [ChargeMeter.ts](src/game/abilities/ChargeMeter.ts).
+- Zünden: **W / ↑ / Doppeltipp** bei voller Leiste (nicht Boost). 鬼-Loch zusätzlich: Autos antippen während aktiv *(Phase 2, noch offen)*.
+- HUD: **Charge-Ring** (unten rechts) + **Passiv-Aufladeanzeige** (unten links: 赤/藍/狐) + **Aktive-Fähigkeit-Chip** (Restzeit, oben).
 
 ## 9. Offene Hinweise
 - **Polizei-System** trägt 3 Autos (将/鬼/龍) → muss früh robust stehen.

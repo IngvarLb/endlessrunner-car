@@ -1,6 +1,6 @@
 # Umsetzungsplan — Progression & Fähigkeiten (Feudal Runner)
 
-> Status: **Planung** (Stand 2026-06-22). Noch nichts gebaut — erst Plan, dann gestaffelt umsetzen.
+> Status: **Phase 0 + Phase 1 gebaut & live** (Stand 2026-06-26). Datenmodell, `src/game/abilities/`-Module, Garage-Karten (Main/Passive als Umschalt-Tab), HUD-Charge-Ring + Passiv-Anzeige und alle 4 einfachen Paare (赤/藍/桜/狐) stehen. **Offen:** Phase 2 (将/鬼/龍 + ausgebautes PursuitSystem/Nacht/Loch) und Phase 3 (Tuning). Dieser Plan bleibt die Referenz für die offenen Phasen.
 > Bezug: [PROGRESSION_KONZEPT.md](PROGRESSION_KONZEPT.md) · [FAEHIGKEITEN_KONZEPT.md](FAEHIGKEITEN_KONZEPT.md).
 
 ---
@@ -145,10 +145,10 @@ Ersetzt/ergänzt den heutigen Stats-Block ([.fr-gpanel]):
 
 ## 8. Bau-Reihenfolge (Phasen)
 
-- **Phase 0 — Fundament (keine sichtbaren Effekte):** `vehicleProgress` in SaveData; AbilityCatalog; Mastery-/Upgrade-/ChargeMeter-Services; `RunAbilityController`-Gerüst; Meter-Akkumulation + Buchung; **Garage-Panel** (Main/Passive-Karten, Upgrade-Kauf, Meisterstufe-Balken); **HUD-Ladeleiste** (Dummy). → Tracks + Wirtschaft + UI stehen.
-- **Phase 1 — Einfache Paare** (reuse bestehender Systeme): 赤 (Boost-Ram + Knautschzone) · 藍 (Hupe + Lichthupe) · 桜 (Blütenregen + Sparbüchse) · 狐 (Titan + 2. Leben). Brauchen: Traffic-Destroy/Lane-Clear, Coin-Spawn, Player-Scale, Extra-Life, Weak-Fail-Hooks.
-- **Phase 2 — Brocken:** `PursuitSystem` ausbauen; 将 (Nachtjagd + Draufgänger) · 鬼 (Schwarzes Loch: Tap-Raycast + Coin-Stream + VFX, + Anzapfen) · 龍 (Überschall: FOV/Stripes/Spur-Umverteilung + Zu-schnell).
-- **Phase 3 — Juice/Tuning:** VFX-Politur, Indikator-Design (Claude Design), Balancing, Performance (Mobile).
+- ✅ **Phase 0 — Fundament (keine sichtbaren Effekte):** `vehicleProgress` in SaveData; AbilityCatalog; Mastery-/Upgrade-/ChargeMeter-Services; `RunAbilityController`; Meter-Akkumulation + Buchung; **Garage-Panel** (Main/Passive als Umschalt-Tab, Upgrade-Kauf, Meisterstufe-Balken); **HUD-Charge-Ring**. → Tracks + Wirtschaft + UI stehen.
+- ✅ **Phase 1 — Einfache Paare:** 赤 (Boost-Ram + Knautschzone) · 藍 (Hupe/Freie Bahn + Lichthupe) · 桜 (Blütenregen + Sparbüchse) · 狐 (Titan + 2. Leben) — inkl. Fail-Routing über den Controller und der Passiv-Aufladeanzeige (赤/藍/狐).
+- ⬜ **Phase 2 — Brocken:** `PursuitSystem` ausbauen; 将 (Nachtjagd + Draufgänger) · 鬼 (Schwarzes Loch: Tap-Raycast + Coin-Stream + VFX, + Anzapfen) · 龍 (Überschall: FOV/Stripes/Spur-Umverteilung + Zu-schnell).
+- ⬜ **Phase 3 — Juice/Tuning:** VFX-Politur, Balancing, Performance (Mobile).
 
 Jede Phase: `npm run build` grün + Screenshot-Check + Commit.
 
@@ -156,9 +156,9 @@ Jede Phase: `npm run build` grün + Screenshot-Check + Commit.
 
 ## 9. Entscheidungen & technische Restrisiken
 
-**Entschieden:**
-- **Aktivierung:** eigene **Activate-Tap-Zone** (getrennt vom Boost) — Boost bleibt Boost, Fähigkeit ist aufsparbar.
-- **Garage:** 速/握/操/力-Bars werden **durch Main/Passive-Karten ersetzt**.
+**Entschieden (und umgesetzt):**
+- **Aktivierung:** eigene Activate-Eingabe getrennt vom Boost — umgesetzt als **W / ↑ / Doppeltipp** (Space = Pause); Fähigkeit ist aufsparbar.
+- **Garage:** 速/握/操/力-Bars wurden durch **Main/Passive-Karten** ersetzt — jetzt als **Umschalt-Tab** (Main/Passiv), damit der Drive-Button sichtbar bleibt.
 - **Polizei:** wird als eigenes, parametrierbares **`PursuitSystem`** sauber ausgebaut (trägt 将/鬼/龍).
 
 **Technische Restrisiken (im Bau zu lösen):**

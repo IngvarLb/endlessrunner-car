@@ -1,6 +1,8 @@
 # Design Overhaul Plan — "Neo-Ukiyo Print" (Claude Design import)
 
-Stand: 2026-06-20 · Quelle: Claude-Design-Projekt `6ad9a379-08ca-4e00-b4ec-fa96caccaa77`, Datei `Feudal Runner.dc.html` (via DesignSync MCP). Dieses Dokument ist die verbindliche Referenz für den UI-Umbau. Die alte Vision (`DESIGN_VISION.md`/`DESIGN_SYSTEM.md`) wird hierdurch **abgelöst**.
+> Status: **umgesetzt & live** (Stand 2026-06-26) — alle Screens laufen im Neo-Ukiyo-Print-Design über der Live-3D-Szene. Dieses Dokument bleibt die **Design-Referenz** (Tokens, Typo, Farben).
+
+Quelle: Claude-Design-Projekt `6ad9a379-08ca-4e00-b4ec-fa96caccaa77`, Datei `Feudal Runner.dc.html` (via DesignSync MCP). Es löste die frühere Design-Vision ab; die alten Vision-/System-Dokumente wurden entfernt.
 
 Arbeitsmodus: autonom im Projektordner, regelmäßige Git-Commits pro Meilenstein.
 
@@ -97,7 +99,7 @@ Responsiv: Der Import nutzt eine fixe 1600×900-Bühne (scale-to-fit). Wir bauen
 7. **Settings-Overlay** bauen (Slider/Toggles/Quality an bestehende SaveData/Config binden; Quality-Switch live).
 8. **Run-HUD + Game-Over** in der neuen Sprache ableiten.
 9. **Mobile** je Screen kompakt nachziehen.
-10. Aufräumen: alte `DESIGN_VISION/SYSTEM`-bezogene tote CSS/DOM entfernen; `plan.md` updaten.
+10. Aufräumen: altes Legacy-CSS/DOM entfernt. ✅
 
 Jeder Schritt: `npm run build` grün + (wo sinnvoll) Screenshot-Check + Git-Commit.
 
@@ -122,7 +124,7 @@ Git ist aktiv (`main`). Arbeitsmodus: **autonom im Projektordner, pro Meilenstei
 - **Step 10 Aufräumen ✅** (dieser Commit): Alle States sind von `.fr-*`-Screens abgedeckt → das komplette Legacy-DOM entfernt (`.top-bar`/`.menu-panel`/`.settings-panel`/`.hanko-rail`/`.garage-balance`/`.print-frame`) inkl. aller `GameApp`-Refs (~25 Felder), Caching, Bindings; tote Methoden raus (`bindSettingsControls`, `renderHankoRail`, `getStateLabel`, `getActionLabel`, `getRangeValue`, Legacy-Teile von `updateUi`/`updateGarageUi`/`updateStats`/`updateGameOverUi`/`syncSettingsUi`); `vehicleKanji.ts` gelöscht (nur noch hier referenziert). ~20 KB Legacy-CSS entfernt (global.css 34→28 KB) — Tokens/Base (`.game-ui`/`.game-canvas`/`[hidden]`/`.perf-hud`/reduced-motion) bleiben. Per Screenshot alle Screens (menu/garage/settings/hud/pause/gameover, desktop+mobile) auf Regressionsfreiheit geprüft; `npm run build` grün; src/ enthält keine Legacy-Referenzen mehr.
 
 ### Status: Design-Overhaul abgeschlossen
-Alle Screens (Menu, Garage, Settings, Run-HUD, Countdown, Pause, Game-Over) laufen im neuen Neo-Ukiyo-Print-Design als transparente Overlays über der Live-3D-Szene; das Legacy-UI ist vollständig entfernt. Mögliche optionale Folgearbeiten (nicht Teil des Overhauls): echtes LV/XP-System (statt der Coins-Ableitung), echte TIME/RUNS-Werte im Menü-Stat-Block (aktuell `—`/Platzhalter), Garage-Portrait-Kamera + Run-HUD am Gerät feinjustieren, evtl. das alte `DESIGN_VISION.md`/`DESIGN_SYSTEM.md` als überholt markieren/archivieren.
+Alle Screens (Menu, Garage, Settings, Run-HUD, Countdown, Pause, Game-Over) laufen im neuen Neo-Ukiyo-Print-Design als transparente Overlays über der Live-3D-Szene; das Legacy-UI ist vollständig entfernt; die überholten Alt-Design-Dokumente wurden gelöscht. Mögliche optionale Folgearbeiten (nicht Teil des Overhauls): echtes LV/XP-System (statt der Coins-Ableitung), echte TIME/RUNS-Werte im Menü-Stat-Block (aktuell `—`/Platzhalter), Garage-Portrait-Kamera + Run-HUD am Gerät feinjustieren.
 
 **Garage-Tunables** (falls Look justiert werden soll): `.fr-gword` opacity/Mask + `top` in `global.css`; `.fr-bg--garage::after` Wash-Stärke; Garage-3D-Licht in `GarageSceneFactory.buildLighting()` (dunkler Spotlight-Raum bleibt bewusst). Die `paint`-Farbe ist die Marken-/Chrome-Farbe pro Auto und stimmt nicht zwingend mit der 3D-Modellfarbe überein (z. B. Ryujin-Modell ist türkis, Chrome-`paint` gold) — bewusst.
 

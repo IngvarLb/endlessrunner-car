@@ -1,5 +1,7 @@
 # Procedural Music and SFX Plan
 
+> Status: **implemented** (2026-06-26) — the procedural AudioSystem follows this spec (menu/garage/run music states; coin, boost, collision, weak-fail, click, garage-switch and countdown SFX; master/music/SFX/mute settings respected). Kept as the reference for the audio design.
+
 ## Musical Direction
 
 Mood: stylized low-poly feudal Japan, arcade racing pressure, and a modern instrumental rap/hip-hop beat. The soundtrack should feel energetic during a run without becoming busy enough to fight the engine, UI, or gameplay SFX.
