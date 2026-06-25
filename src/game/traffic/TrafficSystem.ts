@@ -34,6 +34,13 @@ const WALL_BRAKE_SECONDS = 1.2;
 const ANTICIPATE_FAR = 30; // pre-empt a wall this far out, while it's still only two-wide
 const ANTICIPATE_BEHIND = 9; // ...by holding back a car this far behind the open lane's band
 
+// Difficulty ramp — NPCs make discretionary lane changes (on top of overtaking) that
+// get more frequent the further you drive. Each is still blinker-telegraphed and
+// gap/wall-checked, so there's always a readable, fair escape.
+const DIFFICULTY_RAMP_START = 120; // metres: calm intro before any churn
+const DIFFICULTY_RAMP_FULL = 1200; // metres: full difficulty reached within a solid run
+const LANE_CHURN_RATE_MAX = 0.16; // per car, per second, at full difficulty (density still caps it)
+
 export class TrafficSystem {
   private readonly cars: TrafficCar[] = [];
   /** While set, cars in this lane are knocked aside instead of failing (藍 Freie Bahn). */
@@ -90,10 +97,11 @@ export class TrafficSystem {
 
   /**
    * Per-frame traffic AI: cars cruise at their own (varied) speeds, follow/brake to
-   * avoid rear-ending, overtake slower cars into clear lanes, and a fairness guard
-   * keeps at least one lane open near the player.
+   * avoid rear-ending, overtake slower cars, weave between lanes more as difficulty
+   * rises, and a fairness guard keeps at least one lane open near the player.
    */
   private think(dt: number): void {
+    const churnRate = LANE_CHURN_RATE_MAX * this.difficulty();
     for (const car of this.cars) {
       if (car.hit || !car.mesh.visible) {
         continue;
@@ -105,9 +113,31 @@ export class TrafficSystem {
         continue;
       }
       this.considerOvertake(car);
+      this.considerLaneChurn(car, dt, churnRate);
     }
     this.cancelStaleSignals();
     this.ensureNoWall();
+  }
+
+  /** 0 at the start, ramping to 1 by DIFFICULTY_RAMP_FULL metres. */
+  private difficulty(): number {
+    const span = DIFFICULTY_RAMP_FULL - DIFFICULTY_RAMP_START;
+    return Math.max(0, Math.min(1, (this.getDistance() - DIFFICULTY_RAMP_START) / span));
+  }
+
+  /**
+   * Discretionary lane change (not driven by a slow leader): the further you've come,
+   * the more often NPCs switch lanes, adding pressure. Still blinker-telegraphed and
+   * gap/wall-checked, so the player always gets warning and a fair gap.
+   */
+  private considerLaneChurn(car: TrafficCar, dt: number, ratePerSecond: number): void {
+    if (ratePerSecond <= 0 || !car.canChangeLane() || Math.random() >= ratePerSecond * dt) {
+      return;
+    }
+    const to = this.clearAdjacentLane(car, OVERTAKE_CLEAR_AHEAD, OVERTAKE_CLEAR_BEHIND);
+    if (to !== undefined && !this.wouldCreateWall(car, to)) {
+      car.signalToLane(to, OVERTAKE_SIGNAL_SECONDS);
+    }
   }
 
   /** Drop a pending blink if its target lane filled up (or would now wall the player). */
