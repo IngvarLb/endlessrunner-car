@@ -19,8 +19,8 @@ const FOLLOW_STOP_GAP = 3.4; // match the leader's speed at this gap
 const FOLLOW_OVERLAP_GAP = 1.6; // ~touching — brake to a crawl to avoid overlapping
 
 // Overtaking (lateral).
-const OVERTAKE_LEAD_GAP = 13; // only overtake when held up within this gap
-const OVERTAKE_SPEED_MARGIN = 0.35; // ...and meaningfully faster than the leader
+const OVERTAKE_LEAD_GAP = 17; // start the pass while still well back, so it never bunches up first
+const OVERTAKE_SPEED_MARGIN = 0.25; // ...as long as it's faster than the car ahead
 const OVERTAKE_CLEAR_AHEAD = 9; // room needed ahead in the target lane to pull in
 const OVERTAKE_CLEAR_BEHIND = 4; // ...and behind
 const OVERTAKE_SIGNAL_SECONDS = 2; // blink this long before actually moving over
@@ -132,6 +132,11 @@ export class TrafficSystem {
       return car.cruiseSpeed;
     }
     const gap = lead.trackZ - car.trackZ;
+    // Already signalling a pass: keep momentum and pull out rather than braking into a
+    // stack behind the slower car — only ease off if a rear-end is actually imminent.
+    if (car.isSignalling() && gap > FOLLOW_STOP_GAP) {
+      return car.cruiseSpeed;
+    }
     if (gap >= FOLLOW_SLOW_GAP) {
       return car.cruiseSpeed;
     }
