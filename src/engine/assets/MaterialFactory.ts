@@ -61,6 +61,7 @@ export class MaterialFactory {
   readonly policeBlue = this.emissive(0x2f7dff, 1.8);
   readonly headlight = this.emissive(0xfff1c2, 1.05);
   readonly tailLight = this.emissive(0xff1f2d, 1);
+  readonly blinker = this.emissive(0xffa01f, 1.9); // amber turn signal
 
   dispose(): void {
     for (const value of Object.values(this)) {

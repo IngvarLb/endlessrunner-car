@@ -38,7 +38,14 @@ export class TrafficSystem {
       car.update(dt, isRunning);
 
       if (!car.hit && isRunning && this.collisionSystem.queryPair(this.runner, car)) {
-        if (this.runner.isBoosting() || this.runner.isInvincible() || car.lane === this.shieldedLane) {
+        if (car.isYielding()) {
+          // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
+        } else if (
+          this.runner.isBoosting() ||
+          this.runner.isInvincible() ||
+          (this.shieldedLane !== undefined && this.runner.getLane() === this.shieldedLane)
+        ) {
+          // 藍 Freie Bahn knocks any car aside while the player commits to the shielded lane.
           car.hit = true;
           car.mesh.visible = false;
           this.onDestroyed?.({ car });
@@ -120,7 +127,7 @@ export class TrafficSystem {
       }
       const rel = car.trackZ - distance;
       if (rel < 0 || rel > minSafeAheadZ) {
-        car.lane = car.initialLane;
+        car.mergeToLane(car.initialLane);
       }
     }
   }
@@ -128,7 +135,7 @@ export class TrafficSystem {
   /** Make a specific car pull aside into an adjacent lane (藍 Lichthupe: it gives way). */
   swerveCar(car: TrafficCar): void {
     if (!car.hit) {
-      car.lane = this.adjacentLane(car);
+      car.yieldToLane(this.adjacentLane(car));
     }
   }
 
@@ -156,7 +163,7 @@ export class TrafficSystem {
       if (car.trackZ - distance <= minAheadZ) {
         continue; // too close — leave it so it doesn't snap on screen
       }
-      car.lane = this.adjacentLane(car);
+      car.mergeToLane(this.adjacentLane(car));
     }
   }
 

@@ -477,6 +477,7 @@ export class ModelFactory {
       this.createWheel([0.66, 0.24, -0.55], 0.18, 0.13, 0.08)
     );
     this.enableShadows(group);
+    this.addBlinkers(group, 0.52, 0.52, -0.92);
 
     return group;
   }
@@ -517,6 +518,7 @@ export class ModelFactory {
       this.createWheel([0.75, 0.23, -0.76], 0.2, 0.15, 0.09)
     );
     this.enableShadows(group);
+    this.addBlinkers(group, 0.58, 0.52, -1.2);
 
     return group;
   }
@@ -559,8 +561,26 @@ export class ModelFactory {
       this.createWheel([0.74, 0.25, -0.72], 0.22, 0.16, 0.1)
     );
     this.enableShadows(group);
+    this.addBlinkers(group, 0.62, 0.62, -1.16);
 
     return group;
+  }
+
+  /**
+   * Amber turn-signal lights at the two rear corners, hidden by default. TrafficCar
+   * looks them up by name ("blinker_px" at +x, "blinker_nx" at -x) and blinks the
+   * one on the side it's merging toward.
+   */
+  private addBlinkers(group: THREE.Group, halfWidth: number, y: number, rearZ: number): void {
+    const geometry = new THREE.BoxGeometry(0.17, 0.12, 0.1);
+    for (const [name, x] of [["blinker_px", halfWidth], ["blinker_nx", -halfWidth]] as const) {
+      const light = this.mesh(geometry, this.materials.blinker, [x, y, rearZ]);
+      light.name = name;
+      light.visible = false;
+      light.castShadow = false;
+      light.receiveShadow = false;
+      group.add(light);
+    }
   }
 
   createTorii(): THREE.Group {
