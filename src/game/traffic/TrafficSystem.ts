@@ -23,6 +23,7 @@ const OVERTAKE_LEAD_GAP = 13; // only overtake when held up within this gap
 const OVERTAKE_SPEED_MARGIN = 0.35; // ...and meaningfully faster than the leader
 const OVERTAKE_CLEAR_AHEAD = 9; // room needed ahead in the target lane to pull in
 const OVERTAKE_CLEAR_BEHIND = 4; // ...and behind
+const OVERTAKE_SIGNAL_SECONDS = 2; // blink this long before actually moving over
 
 // Fairness — never let three lanes block within WALL_BAND metres in the player's view,
 // so there is always an open lane within reach (sometimes only after a car gives way).
@@ -104,7 +105,23 @@ export class TrafficSystem {
       }
       this.considerOvertake(car);
     }
+    this.cancelStaleSignals();
     this.ensureNoWall();
+  }
+
+  /** Drop a pending blink if its target lane filled up (or would now wall the player). */
+  private cancelStaleSignals(): void {
+    for (const car of this.cars) {
+      if (car.hit || !car.mesh.visible || !car.isSignalling() || car.pendingLane === null) {
+        continue;
+      }
+      // Only abort on a genuine conflict (a car about to be where we'd merge) or a
+      // wall — a transient car further up the target lane shouldn't cancel the plan.
+      const blocked = !this.laneClear(car.pendingLane, car.trackZ, 6, 3, car);
+      if (blocked || this.wouldCreateWall(car, car.pendingLane)) {
+        car.cancelSignal();
+      }
+    }
   }
 
   /** Target speed honouring the leader ahead in the same lane (car-following). */
@@ -142,7 +159,7 @@ export class TrafficSystem {
     if (to === undefined || this.wouldCreateWall(car, to)) {
       return;
     }
-    car.mergeToLane(to);
+    car.signalToLane(to, OVERTAKE_SIGNAL_SECONDS); // blink first, then merge
   }
 
   /**

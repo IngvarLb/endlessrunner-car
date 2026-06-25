@@ -68,6 +68,9 @@ export class TrafficCar implements Collidable {
   private blinkTime = 0;
   private laneCooldown = 0;
   private brakeTimer = 0; // while > 0 the scheduler wants this car to slow (wall relief)
+  private signalTimer = 0; // counts down a couple of seconds of blinking before an autonomous merge
+  private signalLane: LaneIndex | null = null;
+  private signalDir = 0;
   private readonly blinkerPosX?: THREE.Object3D;
   private readonly blinkerNegX?: THREE.Object3D;
 
@@ -104,20 +107,35 @@ export class TrafficCar implements Collidable {
       }
     }
 
-    // A new target lane (set via mergeToLane/yieldToLane) kicks off an angled merge
-    // from wherever the car currently sits.
+    // Signal phase: blink toward the intended lane for a couple of seconds (so the
+    // player can read where it's going) before the merge actually begins.
+    if (this.signalTimer > 0 && this.signalLane !== null) {
+      if (isRunning) {
+        this.signalTimer -= dt;
+      }
+      if (this.signalTimer <= 0) {
+        this.lane = this.signalLane; // commit — the merge kicks off below
+        this.mergeSpeed = POLITE_MERGE_SPEED;
+        this.laneCooldown = LANE_COOLDOWN;
+        this.signalLane = null;
+        this.signalTimer = 0;
+      }
+    }
+
+    // A new target lane (set via mergeToLane/yieldToLane or the commit above) kicks
+    // off an angled merge from wherever the car currently sits.
     const targetX = this.laneSystem.getLaneX(this.lane);
     if (targetX !== this.toX) {
       this.fromX = this.visualX;
       this.toX = targetX;
       this.mergeElapsed = 0;
-      this.blinkTime = 0;
       const distance = Math.abs(this.toX - this.fromX);
       this.mergeDuration = this.mergeSpeed > 0 ? distance / this.mergeSpeed : 0;
       this.mergeDir = Math.sign(this.toX - this.fromX);
     }
 
     let yaw = 0;
+    let blinkDir = this.signalTimer > 0 ? this.signalDir : 0;
     if (this.mergeDuration > 0 && this.mergeElapsed < this.mergeDuration) {
       if (isRunning) {
         this.mergeElapsed += dt;
@@ -129,14 +147,14 @@ export class TrafficCar implements Collidable {
       const lateralVel = ((this.toX - this.fromX) * slope) / this.mergeDuration;
       // Point the nose toward where it's heading, capped so it stays believable.
       yaw = Math.max(-MAX_YAW, Math.min(MAX_YAW, Math.atan2(lateralVel, Math.max(0.5, this.speed))));
-      this.updateBlinkers(dt, isRunning);
+      blinkDir = this.mergeDir;
     } else {
       this.visualX = this.toX;
       this.mergeDuration = 0;
       this.yielding = false;
-      this.setBlinkers(false, false);
     }
 
+    this.updateBlinkers(dt, isRunning, blinkDir);
     this.mesh.position.set(this.visualX, 0, this.trackZ);
     this.mesh.rotation.y = yaw;
   }
@@ -175,7 +193,7 @@ export class TrafficCar implements Collidable {
     };
   }
 
-  /** Casual lane change toward `lane`: slow, angled, signalled (overtaking, 藍 Freie Bahn, restore). */
+  /** Immediate casual merge toward `lane` (藍 Freie Bahn, restore) — slow + angled. */
   mergeToLane(lane: LaneIndex): void {
     if (this.hit || this.lane === lane) {
       return;
@@ -183,6 +201,40 @@ export class TrafficCar implements Collidable {
     this.lane = lane;
     this.mergeSpeed = POLITE_MERGE_SPEED;
     this.laneCooldown = LANE_COOLDOWN;
+    this.blinkTime = 0;
+    this.signalTimer = 0;
+    this.signalLane = null;
+  }
+
+  /**
+   * Blink toward `lane` for `seconds`, then merge — used for autonomous lane changes
+   * (overtaking) so the player gets a heads-up before the car actually moves over.
+   */
+  signalToLane(lane: LaneIndex, seconds: number): void {
+    if (!this.canChangeLane() || this.lane === lane) {
+      return;
+    }
+    this.signalLane = lane;
+    this.signalTimer = seconds;
+    this.signalDir = Math.sign(this.laneSystem.getLaneX(lane) - this.visualX);
+    this.blinkTime = 0;
+  }
+
+  /** Abort a pending signal (its target lane filled up before the merge began). */
+  cancelSignal(): void {
+    this.signalTimer = 0;
+    this.signalLane = null;
+    this.signalDir = 0;
+  }
+
+  /** True while blinking ahead of an autonomous lane change (not yet moving). */
+  isSignalling(): boolean {
+    return this.signalTimer > 0;
+  }
+
+  /** The lane this car is signalling toward, if any. */
+  get pendingLane(): LaneIndex | null {
+    return this.signalLane;
   }
 
   /** Emergency give-way toward `lane` (藍 Lichthupe): a quick veer that yields to the player. */
@@ -194,6 +246,9 @@ export class TrafficCar implements Collidable {
     this.mergeSpeed = URGENT_MERGE_SPEED;
     this.yielding = true;
     this.laneCooldown = LANE_COOLDOWN;
+    this.blinkTime = 0;
+    this.signalTimer = 0;
+    this.signalLane = null;
   }
 
   /** True while the car is actively giving way (so it shouldn't fatally hit the player). */
@@ -206,9 +261,9 @@ export class TrafficCar implements Collidable {
     return this.mergeDuration > 0;
   }
 
-  /** Ready to start a new lane change (off cooldown and not mid-merge). */
+  /** Ready to start a new lane change (off cooldown, not mid-merge, not already signalling). */
   canChangeLane(): boolean {
-    return !this.hit && this.laneCooldown <= 0 && this.mergeDuration === 0;
+    return !this.hit && this.laneCooldown <= 0 && this.mergeDuration === 0 && this.signalTimer <= 0;
   }
 
   recycle(worldLength: number): void {
@@ -229,12 +284,16 @@ export class TrafficCar implements Collidable {
     this.syncMeshPosition();
   }
 
-  private updateBlinkers(dt: number, isRunning: boolean): void {
+  private updateBlinkers(dt: number, isRunning: boolean, dir: number): void {
+    if (dir === 0) {
+      this.setBlinkers(false, false);
+      return;
+    }
     if (isRunning) {
       this.blinkTime += dt;
     }
     const on = Math.floor(this.blinkTime / BLINK_INTERVAL) % 2 === 0;
-    this.setBlinkers(this.mergeDir > 0 && on, this.mergeDir < 0 && on);
+    this.setBlinkers(dir > 0 && on, dir < 0 && on);
   }
 
   private setBlinkers(posX: boolean, negX: boolean): void {
@@ -258,6 +317,9 @@ export class TrafficCar implements Collidable {
     this.blinkTime = 0;
     this.laneCooldown = 0;
     this.brakeTimer = 0;
+    this.signalTimer = 0;
+    this.signalLane = null;
+    this.signalDir = 0;
     this.setBlinkers(false, false);
     this.mesh.position.set(x, 0, this.trackZ);
     this.mesh.rotation.y = 0;
