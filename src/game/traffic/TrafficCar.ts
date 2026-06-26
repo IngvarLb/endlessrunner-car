@@ -97,7 +97,7 @@ export class TrafficCar implements Collidable {
     this.patternId = definition.patternId;
     this.blinkerPosX = this.mesh.getObjectByName("blinker_px") ?? undefined;
     this.blinkerNegX = this.mesh.getObjectByName("blinker_nx") ?? undefined;
-    for (const name of ["smoke0", "smoke1"]) {
+    for (const name of ["smoke0", "smoke1", "smoke2", "smoke3"]) {
       const puff = this.mesh.getObjectByName(name);
       if (puff) {
         this.smokePuffs.push(puff);
@@ -340,12 +340,19 @@ export class TrafficCar implements Collidable {
     if (isRunning) {
       this.smokeTime += dt;
     }
-    const period = 1.3;
+    const period = 1.7;
+    const count = this.smokePuffs.length;
     this.smokePuffs.forEach((puff, index) => {
-      const phase = (this.smokeTime / period + index * 0.5) % 1; // 0..1, offset per puff
+      const phase = (this.smokeTime / period + index / count) % 1; // staggered 0..1
+      const grow = Math.sin(phase * Math.PI); // 0 → 1 → 0 (appear, swell, dissipate)
       puff.visible = true;
-      puff.position.y = 0.7 + phase * 1.5; // rises off the wreck
-      puff.scale.setScalar(Math.sin(phase * Math.PI) * 0.85 + 0.06); // grows then dissipates
+      puff.position.set(
+        0.05 + Math.sin(phase * 3.2 + index) * 0.32 * phase, // drifts wider as it rises
+        0.5 + phase * 1.75, // rises off the wreck
+        -0.3 + Math.cos(phase * 2.1 + index) * 0.16
+      );
+      puff.scale.setScalar(0.1 + grow * (0.46 + index * 0.07)); // higher puffs a touch larger
+      puff.rotation.set(index * 0.5, phase * 1.8 + index, index * 0.6); // tumble for a soft, non-cubic look
     });
   }
 

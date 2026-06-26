@@ -570,15 +570,14 @@ export class ModelFactory {
   }
 
   /**
-   * Two smoke puffs above the car, hidden by default. TrafficCar shows + animates
-   * them while the car is a 将 Nachtjagd wreck (looked up by name "smoke0"/"smoke1").
+   * Four smoke puffs above the car, hidden by default. TrafficCar shows + animates
+   * them (rise/drift/dissipate) into a wispy column while the car is a 将 wreck.
    */
   private addWreckSmoke(group: THREE.Group): void {
-    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    for (const name of ["smoke0", "smoke1"]) {
+    const geometry = new THREE.BoxGeometry(0.42, 0.42, 0.42);
+    for (const name of ["smoke0", "smoke1", "smoke2", "smoke3"]) {
       const puff = new THREE.Mesh(geometry, this.materials.smoke);
       puff.name = name;
-      puff.position.set(0.05, 0.7, -0.25);
       puff.visible = false;
       puff.castShadow = false;
       puff.receiveShadow = false;
