@@ -49,6 +49,8 @@ export type RunScene = AppScene & {
   openPursuit(seconds: number): void;
   /** True if the last fatal car hit was a side contact (not a rear-end). */
   wasHitFromSide(): boolean;
+  /** Credit coins to the run (used when 将 ram-drop coins land on the counter). */
+  creditCoins(amount: number): void;
 };
 
 const baseSpeed = 9.5;
@@ -141,13 +143,10 @@ export class RunSceneFactory {
       ({ car, coins }) => {
         cameraController.shake(0.18, 0.08);
         if (coins > 0) {
-          // 将 Nachtjagd ram payout.
-          scoreSystem.addCoin(coins);
-          events?.emit("coin:collected", {
-            amount: coins,
-            combo: scoreSystem.getStats(pressure, weakFails).combo,
-            worldPosition: { x: car.mesh.position.x, y: 0.9, z: car.trackZ - distance }
-          });
+          // 将 Nachtjagd: coins drop here and fly to the counter — credited on arrival.
+          const drop = new THREE.Vector3(car.mesh.position.x, 0.9, car.trackZ - distance);
+          drop.project(cameraController.camera);
+          events?.emit("coins:dropped", { amount: coins, ndc: { x: drop.x, y: drop.y } });
         }
       }
     );
@@ -684,6 +683,14 @@ export class RunSceneFactory {
         lightMistakeWindowTimer = seconds; // chaser closes in + any mistake now ends the run
       },
       wasHitFromSide: () => lastHitWasSide,
+      creditCoins: (amount: number) => {
+        scoreSystem.addCoin(amount);
+        events?.emit("coin:collected", {
+          amount,
+          combo: scoreSystem.getStats(pressure, weakFails).combo,
+          worldPosition: { x: runnerController.getPosition().x, y: 0.9, z: 0 }
+        });
+      },
       dispose
     };
   }

@@ -107,6 +107,7 @@ export class GameApp {
   private setSfxInput?: HTMLInputElement;
   private hudMeta?: HTMLElement;
   private hudCoins?: HTMLElement;
+  private coinFlyLayer?: HTMLElement;
   private hudCharge?: HTMLElement;
   private hudChargeRing?: HTMLElement;
   private hudChargeKanji?: HTMLElement;
@@ -610,6 +611,7 @@ export class GameApp {
         </div>
       </section>
       <section class="fr-hud" data-fr-hud aria-hidden="true">
+        <div class="fr-coinfly" data-coinfly aria-hidden="true"></div>
         <div class="fr-hud-top">
           <div class="fr-hud-meta">
             <span class="fr-hud-meta-k">走</span>
@@ -717,6 +719,7 @@ export class GameApp {
     this.cacheAndBindFrSettings(ui);
     this.hudMeta = ui.querySelector("[data-hud-meta]") ?? undefined;
     this.hudCoins = ui.querySelector("[data-hud-coins]") ?? undefined;
+    this.coinFlyLayer = ui.querySelector("[data-coinfly]") ?? undefined;
     this.hudCharge = ui.querySelector("[data-hud-charge]") ?? undefined;
     this.hudChargeRing = ui.querySelector("[data-hud-charge-ring]") ?? undefined;
     this.hudChargeKanji = ui.querySelector("[data-hud-charge-kanji]") ?? undefined;
@@ -761,6 +764,49 @@ export class GameApp {
     // Coins feed the charge meter; fires once per pickup while a run is active.
     // Distance is synced per frame in updateStats (no score:changed event exists).
     this.events.on("coin:collected", ({ amount }) => this.runAbilities?.onCoinCollected(amount));
+    // 将 ram payout: coins fly from the wreck to the counter, crediting on arrival.
+    this.events.on("coins:dropped", ({ amount, ndc }) => this.flyCoins(amount, ndc));
+  }
+
+  /** Animate `amount` coins from the drop point (clip space `ndc`) to the HUD counter. */
+  private flyCoins(amount: number, ndc: { x: number; y: number }): void {
+    const layer = this.coinFlyLayer;
+    const counter = this.hudCoins;
+    if (!layer || !counter) {
+      this.runScene?.creditCoins(amount);
+      return;
+    }
+    const rect = layer.getBoundingClientRect();
+    const startX = (ndc.x * 0.5 + 0.5) * rect.width;
+    const startY = (-ndc.y * 0.5 + 0.5) * rect.height;
+    const coinRect = counter.getBoundingClientRect();
+    const endX = coinRect.left + coinRect.width / 2 - rect.left;
+    const endY = coinRect.top + coinRect.height / 2 - rect.top;
+
+    const count = Math.min(6, Math.max(3, Math.round(amount / 2)));
+    const flyMs = 520;
+    const stagger = 45;
+    for (let i = 0; i < count; i += 1) {
+      const coin = document.createElement("div");
+      coin.className = "fr-coinfly-coin";
+      coin.textContent = "金";
+      coin.style.left = `${startX + (Math.random() * 34 - 17)}px`;
+      coin.style.top = `${startY + (Math.random() * 34 - 17)}px`;
+      layer.appendChild(coin);
+      void coin.offsetWidth; // reflow so the transition runs
+      window.setTimeout(() => {
+        coin.style.left = `${endX}px`;
+        coin.style.top = `${endY}px`;
+        coin.style.opacity = "0.85";
+      }, i * stagger);
+      window.setTimeout(() => coin.remove(), i * stagger + flyMs + 120);
+    }
+    // Credit + counter pop when the coins land.
+    window.setTimeout(() => {
+      this.runScene?.creditCoins(amount);
+      counter.parentElement?.classList.add("is-pop");
+      window.setTimeout(() => counter.parentElement?.classList.remove("is-pop"), 220);
+    }, (count - 1) * stagger + flyMs);
   }
 
   private bindAudioEvents(): void {

@@ -17,6 +17,8 @@ export type GameEventMap = {
   "runner:laneChanged": { lane: LaneIndex };
   "runner:turned": { direction: TurnDirection };
   "coin:collected": { amount: number; combo: number; worldPosition: Vec3Like };
+  /** 将 ram payout: coins drop, fly to the counter, and credit on arrival. `ndc` is the drop point in clip space. */
+  "coins:dropped": { amount: number; ndc: { x: number; y: number } };
   "powerup:activated": { type: PowerUpType; duration: number };
   "powerup:expired": { type: PowerUpType };
   "chaser:pressureChanged": { value: number; reason: PressureReason };
