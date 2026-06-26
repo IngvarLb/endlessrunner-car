@@ -397,7 +397,7 @@ export class GameApp {
         // brings the police down on you (a mistake during the chase ends the run).
         const outcome =
           gameOver.reason === "obstacle"
-            ? this.runAbilities?.onFatalHit(this.runScene.isPursued())
+            ? this.runAbilities?.onFatalHit(this.runScene.isPursued(), this.runScene.wasHitFromSide())
             : undefined;
         if (outcome?.survived) {
           this.audio?.playBoost();

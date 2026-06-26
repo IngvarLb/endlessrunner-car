@@ -303,13 +303,14 @@ export class RunAbilityController {
    * an extra life to survive; 将 survives the crash but opens a pursuit (unless already
    * being chased — then it's caught). Otherwise it's game over.
    */
-  onFatalHit(pursued: boolean): FatalOutcome {
+  onFatalHit(pursued: boolean, side: boolean): FatalOutcome {
     if (this.extraLives > 0) {
       this.extraLives -= 1;
       this.metersSinceLife = 0;
       return { survived: true };
     }
-    if (this.hasDaredevil && this.passive) {
+    // 将 Draufgänger only survives SIDE hits — a rear-end is a fatal mistake.
+    if (this.hasDaredevil && this.passive && side) {
       if (pursued) {
         return { survived: false }; // caught mid-chase
       }

@@ -47,6 +47,8 @@ export type RunScene = AppScene & {
   isPursued(): boolean;
   /** 将 Draufgänger: open a police pursuit for `seconds` (chaser closes in). */
   openPursuit(seconds: number): void;
+  /** True if the last fatal car hit was a side contact (not a rear-end). */
+  wasHitFromSide(): boolean;
 };
 
 const baseSpeed = 9.5;
@@ -119,6 +121,7 @@ export class RunSceneFactory {
     let introChaserTimer = introChaserDuration;
     let lightMistakeWindowTimer = 0;
     let daredevilPursuit = 0; // 将 Draufgänger police chase (seconds); a mistake while >0 ends the run
+    let lastHitWasSide = false; // was the last fatal car hit a side contact (vs a rear-end)?
     let chaserWanted = false;
     let chaserReceding = false;
     let passiveHooks: PassiveHooks | undefined;
@@ -130,7 +133,8 @@ export class RunSceneFactory {
       laneSystem,
       collisionSystem,
       () => distance,
-      () => {
+      ({ side }) => {
+        lastHitWasSide = side;
         scoreSystem.resetCombo();
         registerStrongFail("obstacle");
       },
@@ -679,6 +683,7 @@ export class RunSceneFactory {
         daredevilPursuit = seconds;
         lightMistakeWindowTimer = seconds; // chaser closes in + any mistake now ends the run
       },
+      wasHitFromSide: () => lastHitWasSide,
       dispose
     };
   }

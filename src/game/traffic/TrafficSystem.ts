@@ -6,6 +6,8 @@ import { TrafficCar, type TrafficCarDefinition } from "./TrafficCar";
 
 export type TrafficCarHit = {
   car: TrafficCar;
+  /** True for a side contact (player or car was changing lanes); false for a rear-end. */
+  side: boolean;
 };
 
 export type TrafficCarDestroyed = {
@@ -75,26 +77,29 @@ export class TrafficSystem {
       car.update(dt, isRunning);
 
       if (!car.hit && isRunning && this.collisionSystem.queryPair(this.runner, car)) {
-        const ramming = this.ramCoins !== undefined;
-        if (ramming) {
-          // 将 Nachtjagd: ram it for coins — it stays as a crumpled wreck.
-          car.wreck();
-          this.onDestroyed?.({ car, coins: this.ramCoins ?? 0 });
-        } else if (
+        // Side hit = lateral contact (player just swerved, or the car is merging into us);
+        // otherwise it's a straight rear-end (driving into the back of a car ahead).
+        const side = this.runner.isLaneChanging() || car.isMerging();
+        if (
           this.runner.isBoosting() ||
           this.runner.isInvincible() ||
           (this.shieldedLane !== undefined && this.runner.getLane() === this.shieldedLane)
         ) {
-          // 赤 Boost / 狐 Titan / 藍 Freie Bahn knock any car aside — even one mid-give-way
-          // (wins over isYielding, so you never phase through).
+          // 赤 Boost / 狐 Titan / 藍 Freie Bahn knock any car aside (rear too) — even one
+          // mid-give-way (wins over isYielding, so you never phase through).
           car.hit = true;
           car.mesh.visible = false;
           this.onDestroyed?.({ car, coins: 0 });
-        } else if (car.isYielding()) {
+        } else if (this.ramCoins !== undefined && side) {
+          // 将 Nachtjagd: SIDE ram only → coins + a crumpled wreck (rear-ending is fatal).
+          car.wreck();
+          this.onDestroyed?.({ car, coins: this.ramCoins });
+        } else if (this.ramCoins === undefined && car.isYielding()) {
           // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
         } else {
+          // Fatal: a rear-end (incl. during Nachtjagd), or a normal collision.
           car.hit = true;
-          this.onHit({ car });
+          this.onHit({ car, side });
         }
       }
 

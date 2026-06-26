@@ -26,6 +26,9 @@ const defaultOptions: RunnerControllerOptions = {
   bounds: { x: 1.15, y: 0.72, z: 1.96 }
 };
 
+// How long after a lane change a collision still counts as a "side" contact (not a rear-end).
+const LANE_CHANGE_GRACE = 0.4;
+
 export class RunnerController implements Collidable {
   readonly id = "runner";
 
@@ -37,6 +40,7 @@ export class RunnerController implements Collidable {
   private recoilZ = 0;
   private recoilPitch = 0;
   private boostTimer = 0;
+  private laneChangeTimer = 0; // >0 briefly after a lane change — a hit then counts as a side contact
   private titanActive = false;
   private invincible = false;
   private readonly options: RunnerControllerOptions;
@@ -69,6 +73,9 @@ export class RunnerController implements Collidable {
   update(dt: number, elapsed: number, isRunning: boolean): void {
     if (this.boostTimer > 0) {
       this.boostTimer = Math.max(0, this.boostTimer - dt);
+    }
+    if (this.laneChangeTimer > 0) {
+      this.laneChangeTimer = Math.max(0, this.laneChangeTimer - dt);
     }
 
     if (this.recoilTimer > 0) {
@@ -201,11 +208,17 @@ export class RunnerController implements Collidable {
 
     this.lane = this.laneSystem.move(this.lane, direction);
     this.targetX = this.laneSystem.getLaneX(this.lane);
+    this.laneChangeTimer = LANE_CHANGE_GRACE;
 
     return {
       moved: true,
       mistake: false,
       lane: this.lane
     };
+  }
+
+  /** True for a brief window after a lane change — used to tag a hit as a side contact. */
+  isLaneChanging(): boolean {
+    return this.laneChangeTimer > 0;
   }
 }
