@@ -71,6 +71,8 @@ export class TrafficCar implements Collidable {
   private signalTimer = 0; // counts down a couple of seconds of blinking before an autonomous merge
   private signalLane: LaneIndex | null = null;
   private signalDir = 0;
+  private wrecked = false; // 将 Nachtjagd: a rammed car becomes a stopped, crumpled wreck
+  private wreckRoll = 0;
   private readonly blinkerPosX?: THREE.Object3D;
   private readonly blinkerNegX?: THREE.Object3D;
 
@@ -97,6 +99,13 @@ export class TrafficCar implements Collidable {
   }
 
   update(dt: number, isRunning: boolean): void {
+    if (this.wrecked) {
+      // Stopped, crumpled wreck — sits where it crashed (speed 0); the world scrolls
+      // it past the player. No merge/blink logic.
+      this.mesh.position.set(this.visualX, -0.05, this.trackZ);
+      this.mesh.rotation.set(0.12, this.mesh.rotation.y, this.wreckRoll);
+      return;
+    }
     if (isRunning) {
       this.trackZ += this.speed * dt;
       if (this.laneCooldown > 0) {
@@ -281,6 +290,21 @@ export class TrafficCar implements Collidable {
     return !this.hit && this.laneCooldown <= 0 && this.mergeDuration === 0 && this.signalTimer <= 0;
   }
 
+  /** 将 Nachtjagd ram: become a stopped, crumpled wreck instead of vanishing. */
+  wreck(): void {
+    if (this.hit) {
+      return;
+    }
+    this.hit = true; // out of play (no further collision/AI), but stays visible
+    this.wrecked = true;
+    this.speed = 0;
+    this.mergeDuration = 0;
+    this.signalTimer = 0;
+    this.signalLane = null;
+    this.setBlinkers(false, false);
+    this.wreckRoll = (Math.floor(this.trackZ) % 2 === 0 ? 1 : -1) * 0.5;
+  }
+
   recycle(worldLength: number): void {
     this.trackZ += worldLength;
     this.lane = this.initialLane; // restore normal lane spread (e.g. after 藍 moved it aside)
@@ -335,8 +359,10 @@ export class TrafficCar implements Collidable {
     this.signalTimer = 0;
     this.signalLane = null;
     this.signalDir = 0;
+    this.wrecked = false;
+    this.wreckRoll = 0;
     this.setBlinkers(false, false);
     this.mesh.position.set(x, 0, this.trackZ);
-    this.mesh.rotation.y = 0;
+    this.mesh.rotation.set(0, 0, 0);
   }
 }

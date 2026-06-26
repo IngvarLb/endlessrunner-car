@@ -76,18 +76,20 @@ export class TrafficSystem {
 
       if (!car.hit && isRunning && this.collisionSystem.queryPair(this.runner, car)) {
         const ramming = this.ramCoins !== undefined;
-        if (
-          ramming ||
+        if (ramming) {
+          // 将 Nachtjagd: ram it for coins — it stays as a crumpled wreck.
+          car.wreck();
+          this.onDestroyed?.({ car, coins: this.ramCoins ?? 0 });
+        } else if (
           this.runner.isBoosting() ||
           this.runner.isInvincible() ||
           (this.shieldedLane !== undefined && this.runner.getLane() === this.shieldedLane)
         ) {
-          // 将 Nachtjagd rams any car for coins; 赤 Boost / 狐 Titan / 藍 Freie Bahn
-          // knock any car aside — even one mid-give-way (wins over isYielding, so you
-          // never phase through).
+          // 赤 Boost / 狐 Titan / 藍 Freie Bahn knock any car aside — even one mid-give-way
+          // (wins over isYielding, so you never phase through).
           car.hit = true;
           car.mesh.visible = false;
-          this.onDestroyed?.({ car, coins: ramming ? (this.ramCoins ?? 0) : 0 });
+          this.onDestroyed?.({ car, coins: 0 });
         } else if (car.isYielding()) {
           // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
         } else {
