@@ -1,6 +1,6 @@
 # Fähigkeiten-Konzept — Main & Passive pro Auto (Feudal Runner)
 
-> Status: **Phase 1 umgesetzt** (Stand 2026-06-26). 赤/藍/桜/狐 (Main + Passive) sind im Spiel; 将/鬼/龍 + das ausgebaute PursuitSystem stehen noch aus. Diese Datei bleibt die Referenz-Spezifikation; im Bau getunte Werte sind unten vermerkt.
+> Status: **Phase 1 + Phase 2 umgesetzt** (Stand 2026-06-27). Alle 7 Autos (赤/藍/桜/狐/将/鬼/龍, je Main + Passive) sind im Spiel. Offen ist nur noch Phase 3 (Tuning/Balancing). Diese Datei bleibt die Referenz-Spezifikation; im Bau getunte Werte sind unten vermerkt.
 > Ergänzt [PROGRESSION_KONZEPT.md](PROGRESSION_KONZEPT.md) · Umsetzung: [UMSETZUNGSPLAN.md](UMSETZUNGSPLAN.md).
 > **Kein Thematik-Tausch** — Original-Zuordnung (bewusst so gewählt).
 
@@ -63,7 +63,7 @@ Jedes Auto hat **genau 2 Fähigkeiten** — kein Skill-Baum. **Zwei getrennte Tr
 ## 8. Ladeleiste & Anzeigen
 - Füllung: primär eingesammelte Coins (+ Distanz). Ladekosten relativ: 赤 niedrig · 藍 niedrig–mittel · 桜 mittel · 狐 mittel–hoch · 将 hoch · 鬼 mittel–hoch · 龍 hoch.
   - *Bau-Tuning:* 桜 und 狐 Ladekosten wurden im Spiel **reduziert** (kürzer bis einsetzbar); 桜 lädt **nur über Distanz** (Loop-Schutz). Aktuelle Werte: siehe [ChargeMeter.ts](src/game/abilities/ChargeMeter.ts).
-- Zünden: **W / ↑ / Doppeltipp** bei voller Leiste (nicht Boost). 鬼-Loch zusätzlich: Autos antippen während aktiv *(Phase 2, noch offen)*.
+- Zünden: **W / ↑ / Doppeltipp** bei voller Leiste (nicht Boost). 鬼-Loch zusätzlich: Autos antippen während aktiv (Pointer→Raycast).
 - HUD: **Charge-Ring** (unten rechts) + **Passiv-Aufladeanzeige** (unten links: 赤/藍/狐) + **Aktive-Fähigkeit-Chip** (Restzeit, oben).
 
 ## 9. Offene Hinweise

@@ -1,6 +1,6 @@
 # Progression-System — Konzept, Forschung & Ideen (Feudal Runner)
 
-> Status: **Kernsystem umgesetzt** (Stand 2026-06-26). Die Zwei-Achsen-Progression (Coins → Main-Upgrades, Meter → Meisterstufen) und die Fähigkeiten der Phase 1 (赤/藍/桜/狐) laufen im Spiel; der breitere **Store** (Autos/Kosmetik/Booster) ist noch Konzept. Diese Datei bleibt die Hintergrund-/Begründungs-Referenz.
+> Status: **Kernsystem umgesetzt** (Stand 2026-06-27). Die Zwei-Achsen-Progression (Coins → Main-Upgrades, Meter → Meisterstufen) und die Fähigkeiten aller 7 Autos (赤/藍/桜/狐/将/鬼/龍) laufen im Spiel; der breitere **Store** (Autos/Kosmetik/Booster) ist noch Konzept. Diese Datei bleibt die Hintergrund-/Begründungs-Referenz.
 > Ziel dieses Dokuments: Ein konkretes, durchdachtes Progressions-/Wirtschaftssystem entwerfen, das den Spieler langfristig „fesselt" — fundiert auf Motivationspsychologie und auf dem, was erfolgreiche Racing-/Runner-Games gut gemacht haben.
 
 ---

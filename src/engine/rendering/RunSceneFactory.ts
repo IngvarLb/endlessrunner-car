@@ -23,6 +23,8 @@ import type { WeakFailOutcome } from "../../game/abilities/RunAbilityController"
 export type PassiveHooks = {
   onWeakFail(): WeakFailOutcome;
   onApproachCar(): boolean;
+  /** 龍 Zu schnell: catch-window length (s) after a weak fail, or undefined for the default. */
+  catchWindowSec(): number | undefined;
 };
 import { CameraController } from "./CameraController";
 import { LightingRig } from "./LightingRig";
@@ -97,6 +99,7 @@ export class RunSceneFactory {
     const DAY_SKY = new THREE.Color(0x58c7f3);
     const NIGHT_SKY = new THREE.Color(0x141a38); // 将 Nachtjagd
     const BLACKHOLE_SKY = new THREE.Color(0x1c0b30); // 鬼 Schwarzes Loch (deep violet)
+    const HYPER_SKY = new THREE.Color(0x9fe0ff); // 龍 Überschall (bright supersonic haze)
     const dayHemi = sceneLights.hemi.intensity;
     const daySun = sceneLights.sun.intensity;
     // Scene tint (将 night / 鬼 black hole): lerp lights + sky/fog toward a mood and back.
@@ -108,6 +111,34 @@ export class RunSceneFactory {
 
     const cameraController = new CameraController();
     const tapRaycaster = new THREE.Raycaster(); // 鬼 tap-to-lift
+
+    // 龍 Überschall speed lines: white streaks streaming past the camera at warp speed.
+    const speedLineGeo = new THREE.BoxGeometry(0.045, 0.045, 1);
+    const speedLineMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const speedLines = new THREE.Group();
+    speedLines.name = "hyper_speed_lines";
+    speedLines.visible = false;
+    const streaks: { mesh: THREE.Mesh; angle: number; radius: number }[] = [];
+    const seedStreak = (s: { mesh: THREE.Mesh; angle: number; radius: number }, z: number): void => {
+      s.angle = Math.random() * Math.PI * 2;
+      s.radius = 1.8 + Math.random() * 4.7;
+      s.mesh.scale.z = 2.5 + Math.random() * 2.5;
+      s.mesh.position.set(Math.cos(s.angle) * s.radius, Math.sin(s.angle) * s.radius, z);
+    };
+    for (let i = 0; i < 30; i++) {
+      const streak = { mesh: new THREE.Mesh(speedLineGeo, speedLineMat), angle: 0, radius: 0 };
+      seedStreak(streak, -38 + Math.random() * 41);
+      speedLines.add(streak.mesh);
+      streaks.push(streak);
+    }
+    let hyperLevel = 0; // eased 0→1 fade of the speed-line / haze intensity
+    let hyperTarget = 0;
     const runner = models.createVehicle(vehicle.modelKey);
     const chaser = models.createTokyoPoliceCar();
     const boostAura = models.createShieldPowerUp();
@@ -230,7 +261,7 @@ export class RunSceneFactory {
     });
 
     world.name = "playable_feudal_japan_world";
-    scene.add(world, runner, chaser);
+    scene.add(world, runner, chaser, speedLines);
     runner.add(boostAura);
     collisionSystem.register(runnerController);
 
@@ -322,6 +353,12 @@ export class RunSceneFactory {
       sceneLights.sun.intensity = daySun;
       (scene.background as THREE.Color).copy(DAY_SKY);
       (scene.fog as THREE.Fog).color.copy(DAY_SKY);
+      // 龍 Überschall: clear the supersonic VFX so a new run starts at normal speed/FOV.
+      hyperTarget = 0;
+      hyperLevel = 0;
+      speedLineMat.opacity = 0;
+      speedLines.visible = false;
+      cameraController.setFovBoost(0);
     };
 
     const moveLane = (direction: -1 | 1): void => {
@@ -374,6 +411,7 @@ export class RunSceneFactory {
       world.position.z = -distance;
       cameraController.update(dt, elapsed, state, isRunning ? runnerController.getPosition().x : 0);
       updateTint(dt);
+      updateSpeedLines(dt);
     };
 
     function setTint(on: boolean, sky: THREE.Color, hemiScale: number, sunScale: number): void {
@@ -398,6 +436,37 @@ export class RunSceneFactory {
       const sky = DAY_SKY.clone().lerp(tintSky, tintLevel);
       (scene.background as THREE.Color).copy(sky);
       (scene.fog as THREE.Fog).color.copy(sky);
+    }
+
+    function setHyperspeed(on: boolean): void {
+      // Bright supersonic haze (no darkening), a punched-out FOV and the speed lines.
+      setTint(on, HYPER_SKY, 1, 1.08);
+      cameraController.setFovBoost(on ? 12 : 0);
+      hyperTarget = on ? 1 : 0;
+    }
+
+    function updateSpeedLines(dt: number): void {
+      if (hyperLevel !== hyperTarget) {
+        hyperLevel = THREE.MathUtils.lerp(hyperLevel, hyperTarget, Math.min(1, dt * 4));
+        if (Math.abs(hyperLevel - hyperTarget) < 0.01) {
+          hyperLevel = hyperTarget;
+        }
+        speedLineMat.opacity = hyperLevel * 0.6;
+        speedLines.visible = hyperLevel > 0.01;
+      }
+      if (!speedLines.visible) {
+        return;
+      }
+      // Anchor the field to the camera, then stream the streaks toward (and past) the viewer.
+      speedLines.position.copy(cameraController.camera.position);
+      speedLines.quaternion.copy(cameraController.camera.quaternion);
+      const step = 55 * dt;
+      for (const s of streaks) {
+        s.mesh.position.z += step;
+        if (s.mesh.position.z > 3.5) {
+          seedStreak(s, -38);
+        }
+      }
     }
 
     const effectContext: RunEffectContext = {
@@ -431,13 +500,15 @@ export class RunSceneFactory {
       },
       scene: {
         setNight: (on) => setTint(on, NIGHT_SKY, 0.28, 0.32),
-        setBlackHole: (on) => setTint(on, BLACKHOLE_SKY, 0.2, 0.26)
+        setBlackHole: (on) => setTint(on, BLACKHOLE_SKY, 0.2, 0.26),
+        setHyperspeed: (on) => setHyperspeed(on)
       }
     };
 
     const dispose = (): void => {
       coinRain.dispose();
       turret.dispose();
+      speedLineMat.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();
@@ -632,7 +703,8 @@ export class RunSceneFactory {
         shieldConsumed: false,
         pressureAfter: pressure
       });
-      lightMistakeWindowTimer = lightMistakeCatchWindow;
+      // 龍 Zu schnell shrinks this window (10 s → 1 s) — the police barely get a second chance.
+      lightMistakeWindowTimer = passiveHooks?.catchWindowSec() ?? lightMistakeCatchWindow;
       cleanRunTimer = 0;
       runnerController.applyStumble(direction);
       cameraController.shake(0.26, 0.16);

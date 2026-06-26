@@ -7,6 +7,7 @@ import { TitanEffect } from "./effects/TitanEffect";
 import { TurretEffect } from "./effects/TurretEffect";
 import { NightHuntEffect } from "./effects/NightHuntEffect";
 import { BlackHoleEffect } from "./effects/BlackHoleEffect";
+import { HyperspeedEffect } from "./effects/HyperspeedEffect";
 
 /** A run-time ability effect. One instance per activation; start → update* → end. */
 export interface RunEffect {
@@ -39,6 +40,6 @@ export function createEffect(key: EffectKey): RunEffect | undefined {
     case "blackHole":
       return new BlackHoleEffect();
     case "hyperspeed":
-      return undefined; // Phase 2: implemented incrementally
+      return new HyperspeedEffect();
   }
 }

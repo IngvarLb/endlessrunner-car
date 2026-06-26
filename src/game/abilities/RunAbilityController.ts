@@ -80,6 +80,10 @@ export class RunAbilityController {
   // 鬼 Anzapfen (siphon): while the police are right behind you, nearby cars drip coins.
   private readonly hasSiphon: boolean;
 
+  // 龍 Zu schnell für die Polizei (tooFast): the post-weak-fail catch window shrinks
+  // 10 s → 1 s with mastery, so the police almost never get a second chance to catch you.
+  private readonly hasTooFast: boolean;
+
   // 藍 Lichthupe (highBeam): makes the front car give way; recharges over distance.
   private readonly hasHighBeam: boolean;
   private highBeamReady = false;
@@ -102,6 +106,7 @@ export class RunAbilityController {
     this.highBeamReady = this.hasHighBeam;
     this.hasDaredevil = this.passive?.effect === "daredevil";
     this.hasSiphon = this.passive?.effect === "siphon";
+    this.hasTooFast = this.passive?.effect === "tooFast";
   }
 
   get mainAbility(): MainAbilityDef | undefined {
@@ -255,6 +260,18 @@ export class RunAbilityController {
     const coinsPerCar = Math.max(1, Math.round(passiveValue(this.passive, level)));
     const cars = level >= 100 ? 4 : level >= 67 ? 3 : level >= 34 ? 2 : 1;
     return { coinsPerCar, cars };
+  }
+
+  /**
+   * 龍 Zu schnell: how long the police catch-window stays open after a weak fail
+   * (10 s → 1 s by mastery). Returns undefined for every other vehicle, so the
+   * scene keeps its default window length.
+   */
+  catchWindowSec(): number | undefined {
+    if (!this.hasTooFast || !this.passive) {
+      return undefined;
+    }
+    return Math.max(0.5, passiveValue(this.passive, this.masteryLevel()));
   }
 
   /** Whether a 狐 extra life is currently available. */

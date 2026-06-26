@@ -261,7 +261,8 @@ export class GameApp {
     this.resetChargeHud(this.selectedVehicle);
     this.runScene.setPassiveHooks({
       onWeakFail: () => this.runAbilities?.onWeakFail() ?? { type: "normal" },
-      onApproachCar: () => this.runAbilities?.onApproachCar() ?? false
+      onApproachCar: () => this.runAbilities?.onApproachCar() ?? false,
+      catchWindowSec: () => this.runAbilities?.catchWindowSec()
     });
     this.stateMachine.transition("countdown", reason);
     this.runNumericCountdown();

@@ -1,6 +1,6 @@
 # Umsetzungsplan — Progression & Fähigkeiten (Feudal Runner)
 
-> Status: **Phase 0 + Phase 1 gebaut & live** (Stand 2026-06-26). Datenmodell, `src/game/abilities/`-Module, Garage-Karten (Main/Passive als Umschalt-Tab), HUD-Charge-Ring + Passiv-Anzeige und alle 4 einfachen Paare (赤/藍/桜/狐) stehen. **Offen:** Phase 2 (将/鬼/龍 + ausgebautes PursuitSystem/Nacht/Loch) und Phase 3 (Tuning). Dieser Plan bleibt die Referenz für die offenen Phasen.
+> Status: **Phase 0 + Phase 1 + Phase 2 gebaut & live** (Stand 2026-06-27). Datenmodell, `src/game/abilities/`-Module, Garage-Karten (Main/Passive als Umschalt-Tab), HUD-Charge-Ring + Passiv-Anzeige, alle 4 einfachen Paare (赤/藍/桜/狐) **und alle 3 Brocken (将 Nachtjagd+Draufgänger · 鬼 Schwarzes Loch+Anzapfen · 龍 Überschall+Zu schnell)** stehen. **Offen:** nur noch Phase 3 (Tuning/Balancing). Dieser Plan bleibt die Referenz.
 > Bezug: [PROGRESSION_KONZEPT.md](PROGRESSION_KONZEPT.md) · [FAEHIGKEITEN_KONZEPT.md](FAEHIGKEITEN_KONZEPT.md).
 
 ---
@@ -147,7 +147,7 @@ Ersetzt/ergänzt den heutigen Stats-Block ([.fr-gpanel]):
 
 - ✅ **Phase 0 — Fundament (keine sichtbaren Effekte):** `vehicleProgress` in SaveData; AbilityCatalog; Mastery-/Upgrade-/ChargeMeter-Services; `RunAbilityController`; Meter-Akkumulation + Buchung; **Garage-Panel** (Main/Passive als Umschalt-Tab, Upgrade-Kauf, Meisterstufe-Balken); **HUD-Charge-Ring**. → Tracks + Wirtschaft + UI stehen.
 - ✅ **Phase 1 — Einfache Paare:** 赤 (Boost-Ram + Knautschzone) · 藍 (Hupe/Freie Bahn + Lichthupe) · 桜 (Blütenregen + Sparbüchse) · 狐 (Titan + 2. Leben) — inkl. Fail-Routing über den Controller und der Passiv-Aufladeanzeige (赤/藍/狐).
-- ⬜ **Phase 2 — Brocken:** `PursuitSystem` ausbauen; 将 (Nachtjagd + Draufgänger) · 鬼 (Schwarzes Loch: Tap-Raycast + Coin-Stream + VFX, + Anzapfen) · 龍 (Überschall: FOV/Stripes/Spur-Umverteilung + Zu-schnell).
+- ✅ **Phase 2 — Brocken:** 将 (Nachtjagd: Nacht-Tint + seitlich rammbare Autos, die Coins/Wrack lassen + Draufgänger-Pursuit) · 鬼 (Schwarzes Loch: Tap-Raycast + Coin-Stream + lila VFX, + Anzapfen) · 龍 (Überschall: Boost + linke Spur frei + FOV-Punch + Speedlines + bright Haze, + Zu schnell = Polizei-Fenster 10 s→1 s). Pursuit läuft als parametrierbares Fang-Fenster im RunScene (kein eigenes `PursuitSystem`-Modul — der Bedarf war zu klein, das Fenster + Chaser im RunScene reichen).
 - ⬜ **Phase 3 — Juice/Tuning:** VFX-Politur, Balancing, Performance (Mobile).
 
 Jede Phase: `npm run build` grün + Screenshot-Check + Commit.

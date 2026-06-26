@@ -42,6 +42,8 @@ export type RunEffectContext = {
     setNight(on: boolean): void;
     /** 鬼 Schwarzes Loch: fade the world to a deep violet (and back). */
     setBlackHole(on: boolean): void;
+    /** 龍 Überschall: supersonic atmosphere — wider FOV, speed lines, bright haze (and back). */
+    setHyperspeed(on: boolean): void;
   };
   coins: {
     /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */

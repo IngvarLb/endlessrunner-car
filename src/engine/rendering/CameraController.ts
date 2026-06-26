@@ -15,6 +15,7 @@ export class CameraController {
   private shakeTimer = 0;
   private shakeDuration = 0;
   private shakeIntensity = 0;
+  private fovBoost = 0; // 龍 Überschall: extra FOV that widens the view at supersonic speed
 
   constructor() {
     this.camera.position.copy(this.desiredPosition);
@@ -32,9 +33,14 @@ export class CameraController {
     this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
   }
 
+  /** 龍 Überschall: target extra FOV (degrees) layered on top of the running FOV. */
+  setFovBoost(extra: number): void {
+    this.fovBoost = extra;
+  }
+
   update(dt: number, elapsed: number, state: GameState, lateral = 0): void {
     const speedFov = state === "running" ? 4 : 0;
-    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, 58 + speedFov, dt * 3);
+    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, 58 + speedFov + this.fovBoost, dt * 3);
     this.camera.updateProjectionMatrix();
 
     // Chase the player's lateral position with a lag — the lag is the swing.
