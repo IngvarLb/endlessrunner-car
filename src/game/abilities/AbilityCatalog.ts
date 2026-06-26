@@ -78,6 +78,7 @@ const mains: Record<string, MainAbilityDef> = {
     params: { ramCoins: 10 }
   },
   // 鬼 Schwarzes Loch — tapped cars are lifted, stream coins into the hole → account. 10s → 20s.
+  // Distance-charged (loop-protected); "mid" (42) instead of "midHigh" (125) = ~3× faster charge.
   "oni-interceptor": {
     id: "black-hole",
     name: "Schwarzes Loch",
@@ -87,7 +88,7 @@ const mains: Record<string, MainAbilityDef> = {
     durationBase: 10,
     durationStep: 10 / MAIN_MAX_LEVEL,
     maxLevel: MAIN_MAX_LEVEL,
-    chargeCost: "midHigh"
+    chargeCost: "mid"
   },
   // 龍 Überschall — very fast; NPCs biased right, left lane sparse; FOV widens + speed lines. 10s → 40s.
   "ryujin-hypercar": {
