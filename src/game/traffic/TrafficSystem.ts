@@ -27,7 +27,7 @@ const OVERTAKE_SIGNAL_SECONDS = 2; // blink this long before actually moving ove
 
 // Fairness — never let three lanes block within WALL_BAND metres in the player's view,
 // so there is always an open lane within reach (sometimes only after a car gives way).
-const WALL_NEAR = 4;
+const WALL_NEAR = 2.5;
 const WALL_FAR = 56;
 const WALL_BAND = 8;
 const WALL_BRAKE_SECONDS = 1.2;
@@ -37,9 +37,9 @@ const ANTICIPATE_BEHIND = 9; // ...by holding back a car this far behind the ope
 // Difficulty ramp — NPCs make discretionary lane changes (on top of overtaking) that
 // get more frequent the further you drive. Each is still blinker-telegraphed and
 // gap/wall-checked, so there's always a readable, fair escape.
-const DIFFICULTY_RAMP_START = 120; // metres: calm intro before any churn
-const DIFFICULTY_RAMP_FULL = 1200; // metres: full difficulty reached within a solid run
-const LANE_CHURN_RATE_MAX = 0.16; // per car, per second, at full difficulty (density still caps it)
+const DIFFICULTY_RAMP_START = 160; // metres: calm intro before any churn
+const DIFFICULTY_RAMP_FULL = 2400; // metres: flatter ramp — full difficulty only deep into a run
+const LANE_CHURN_RATE_MAX = 0.1; // per car, per second, at full difficulty (less frequent than before)
 
 export class TrafficSystem {
   private readonly cars: TrafficCar[] = [];
@@ -238,7 +238,9 @@ export class TrafficSystem {
           break;
         }
         band.push(ahead[j]);
-        lanes.add(ahead[j].lane);
+        for (const lane of ahead[j].occupiedLanes()) {
+          lanes.add(lane); // a mid-merge car spans two lanes — count both
+        }
       }
       if (lanes.size >= laneCount) {
         // Already a full wall: brake the rearmost so it drops back and its lane opens.
@@ -319,15 +321,22 @@ export class TrafficSystem {
     });
   }
 
-  /** Would moving `car` into `toLane` form a three-lane block within WALL_BAND? */
+  /**
+   * Would moving `car` into `toLane` form a three-lane block within WALL_BAND?
+   * The mover spans BOTH its current lane and the target while merging, and any other
+   * mid-merge car spans two lanes too — so a swerve is only allowed when the remaining
+   * lane stays open (no "swerve covers two lanes + a third car blocks all three").
+   */
   private wouldCreateWall(car: TrafficCar, toLane: LaneIndex): boolean {
-    const lanes = new Set<LaneIndex>([toLane]);
+    const lanes = new Set<LaneIndex>([toLane, car.lane]);
     for (const other of this.cars) {
       if (other === car || other.hit || !other.mesh.visible) {
         continue;
       }
       if (Math.abs(other.trackZ - car.trackZ) <= WALL_BAND) {
-        lanes.add(other.lane);
+        for (const lane of other.occupiedLanes()) {
+          lanes.add(lane);
+        }
       }
     }
     return lanes.size >= this.laneSystem.lanes.length;

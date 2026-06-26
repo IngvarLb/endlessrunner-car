@@ -4,7 +4,7 @@
  *  - same-origin assets + Google Fonts: stale-while-revalidate
  * Bump CACHE_VERSION to roll the cache on a new release.
  */
-const CACHE_VERSION = "v40";
+const CACHE_VERSION = "v41";
 const CACHE = `feudal-runner-${CACHE_VERSION}`;
 
 const SHELL = [

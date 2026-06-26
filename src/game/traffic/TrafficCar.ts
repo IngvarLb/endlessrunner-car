@@ -193,6 +193,21 @@ export class TrafficCar implements Collidable {
     };
   }
 
+  /**
+   * Lanes this car currently blocks. While merging it spans BOTH the lane it came
+   * from and the one it's moving into, so it counts as two — that's what lets the
+   * fairness checks see a swerve covering two lanes at once.
+   */
+  occupiedLanes(): LaneIndex[] {
+    if (this.mergeDuration > 0 && this.mergeDir !== 0) {
+      const from = (this.lane - this.mergeDir) as LaneIndex;
+      if (from !== this.lane && this.laneSystem.lanes.includes(from)) {
+        return [this.lane, from];
+      }
+    }
+    return [this.lane];
+  }
+
   /** Immediate casual merge toward `lane` (藍 Freie Bahn, restore) — slow + angled. */
   mergeToLane(lane: LaneIndex): void {
     if (this.hit || this.lane === lane) {
