@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import type { QualityMode } from "../../app/GameConfig";
 
+export type SceneLights = { hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight };
+
 export class LightingRig {
-  static addTo(scene: THREE.Scene, quality: QualityMode): void {
+  static addTo(scene: THREE.Scene, quality: QualityMode): SceneLights {
     const hemi = new THREE.HemisphereLight(0x9fe8ff, 0x3b2f23, 2.1);
     scene.add(hemi);
 
@@ -23,5 +25,7 @@ export class LightingRig {
     }
 
     scene.add(sun);
+
+    return { hemi, sun };
   }
 }

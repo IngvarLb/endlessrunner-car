@@ -32,6 +32,12 @@ export type RunEffectContext = {
      * promptly without snapping a car unfairly into the player's path).
      */
     restoreLanes(minReactionSec: number): void;
+    /** 将 Nachtjagd: ram any car for `coins` each (undefined to clear). */
+    setRamMode(coins: number | undefined): void;
+  };
+  scene: {
+    /** 将 Nachtjagd: fade the world to night (and back). */
+    setNight(on: boolean): void;
   };
   coins: {
     /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */

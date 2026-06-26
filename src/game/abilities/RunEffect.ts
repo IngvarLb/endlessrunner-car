@@ -5,6 +5,7 @@ import { HornClearEffect } from "./effects/HornClearEffect";
 import { CoinRainEffect } from "./effects/CoinRainEffect";
 import { TitanEffect } from "./effects/TitanEffect";
 import { TurretEffect } from "./effects/TurretEffect";
+import { NightHuntEffect } from "./effects/NightHuntEffect";
 
 /** A run-time ability effect. One instance per activation; start → update* → end. */
 export interface RunEffect {
@@ -33,8 +34,9 @@ export function createEffect(key: EffectKey): RunEffect | undefined {
     case "turret":
       return new TurretEffect();
     case "nightHunt":
+      return new NightHuntEffect();
     case "blackHole":
     case "hyperspeed":
-      return undefined; // Phase 1/2: implemented incrementally
+      return undefined; // Phase 2: implemented incrementally
   }
 }

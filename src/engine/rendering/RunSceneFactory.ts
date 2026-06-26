@@ -78,7 +78,14 @@ export class RunSceneFactory {
     scene.background = new THREE.Color(0x58c7f3);
     scene.fog = new THREE.Fog(0x58c7f3, 24, 72);
 
-    LightingRig.addTo(scene, config.quality);
+    const sceneLights = LightingRig.addTo(scene, config.quality);
+    // 将 Nachtjagd night fade — lerp lights + sky/fog between day and a deep indigo night.
+    const DAY_SKY = new THREE.Color(0x58c7f3);
+    const NIGHT_SKY = new THREE.Color(0x141a38);
+    const dayHemi = sceneLights.hemi.intensity;
+    const daySun = sceneLights.sun.intensity;
+    let nightTarget = 0;
+    let nightLevel = 0;
 
     const cameraController = new CameraController();
     const runner = models.createVehicle(vehicle.modelKey);
@@ -122,8 +129,17 @@ export class RunSceneFactory {
         scoreSystem.resetCombo();
         registerStrongFail("obstacle");
       },
-      () => {
+      ({ car, coins }) => {
         cameraController.shake(0.18, 0.08);
+        if (coins > 0) {
+          // 将 Nachtjagd ram payout.
+          scoreSystem.addCoin(coins);
+          events?.emit("coin:collected", {
+            amount: coins,
+            combo: scoreSystem.getStats(pressure, weakFails).combo,
+            worldPosition: { x: car.mesh.position.x, y: 0.9, z: car.trackZ - distance }
+          });
+        }
       }
     );
     const collectibleSystem = new CollectibleSystem(
@@ -276,7 +292,14 @@ export class RunSceneFactory {
       collectibleSystem.reset();
       coinRain.reset();
       trafficSystem.reset();
+      trafficSystem.setRamMode(undefined);
       turret.reset();
+      nightTarget = 0;
+      nightLevel = 0;
+      sceneLights.hemi.intensity = dayHemi;
+      sceneLights.sun.intensity = daySun;
+      (scene.background as THREE.Color).copy(DAY_SKY);
+      (scene.fog as THREE.Fog).color.copy(DAY_SKY);
     };
 
     const moveLane = (direction: -1 | 1): void => {
@@ -327,7 +350,23 @@ export class RunSceneFactory {
 
       world.position.z = -distance;
       cameraController.update(dt, elapsed, state, isRunning ? runnerController.getPosition().x : 0);
+      updateNight(dt);
     };
+
+    function updateNight(dt: number): void {
+      if (nightLevel === nightTarget) {
+        return;
+      }
+      nightLevel = THREE.MathUtils.lerp(nightLevel, nightTarget, Math.min(1, dt * 3.5));
+      if (Math.abs(nightLevel - nightTarget) < 0.01) {
+        nightLevel = nightTarget;
+      }
+      sceneLights.hemi.intensity = THREE.MathUtils.lerp(dayHemi, dayHemi * 0.28, nightLevel);
+      sceneLights.sun.intensity = THREE.MathUtils.lerp(daySun, daySun * 0.32, nightLevel);
+      const sky = DAY_SKY.clone().lerp(NIGHT_SKY, nightLevel);
+      (scene.background as THREE.Color).copy(sky);
+      (scene.fog as THREE.Fog).color.copy(sky);
+    }
 
     const effectContext: RunEffectContext = {
       runner: {
@@ -348,13 +387,19 @@ export class RunSceneFactory {
           // (player speed minus traffic's ~5 m/s) so the safe band is fair at any speed.
           const closing = Math.max(2, getRunSpeed() * runnerController.getSpeedMultiplier() - 5);
           trafficSystem.restoreLanes(minReactionSec * closing);
-        }
+        },
+        setRamMode: (coins) => trafficSystem.setRamMode(coins)
       },
       coins: {
         biasLane: (lane) => collectibleSystem.setLaneBias(lane),
         pullToLane: (lane) => collectibleSystem.pullToLane(lane),
         redistribute: () => collectibleSystem.redistribute(),
         rain: (on, level) => coinRain.setActive(on, level)
+      },
+      scene: {
+        setNight: (on) => {
+          nightTarget = on ? 1 : 0;
+        }
       }
     };
 

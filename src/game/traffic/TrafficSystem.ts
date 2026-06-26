@@ -10,6 +10,8 @@ export type TrafficCarHit = {
 
 export type TrafficCarDestroyed = {
   car: TrafficCar;
+  /** Coins to award for this kill (>0 only when rammed during 将 Nachtjagd). */
+  coins: number;
 };
 
 // Car-following (longitudinal) — centre-to-centre gaps in metres.
@@ -45,6 +47,8 @@ export class TrafficSystem {
   private readonly cars: TrafficCar[] = [];
   /** While set, cars in this lane are knocked aside instead of failing (藍 Freie Bahn). */
   private shieldedLane?: LaneIndex;
+  /** While set, any car rammed is destroyed for this many coins (将 Nachtjagd). */
+  private ramCoins?: number;
 
   constructor(
     private readonly runner: RunnerController,
@@ -71,16 +75,19 @@ export class TrafficSystem {
       car.update(dt, isRunning);
 
       if (!car.hit && isRunning && this.collisionSystem.queryPair(this.runner, car)) {
+        const ramming = this.ramCoins !== undefined;
         if (
+          ramming ||
           this.runner.isBoosting() ||
           this.runner.isInvincible() ||
           (this.shieldedLane !== undefined && this.runner.getLane() === this.shieldedLane)
         ) {
-          // 赤 Boost / 狐 Titan / 藍 Freie Bahn knock any car aside — even one that's
-          // mid-give-way (this check wins over isYielding, so you never phase through).
+          // 将 Nachtjagd rams any car for coins; 赤 Boost / 狐 Titan / 藍 Freie Bahn
+          // knock any car aside — even one mid-give-way (wins over isYielding, so you
+          // never phase through).
           car.hit = true;
           car.mesh.visible = false;
-          this.onDestroyed?.({ car });
+          this.onDestroyed?.({ car, coins: ramming ? (this.ramCoins ?? 0) : 0 });
         } else if (car.isYielding()) {
           // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
         } else {
@@ -353,6 +360,11 @@ export class TrafficSystem {
     this.shieldedLane = lane;
   }
 
+  /** 将 Nachtjagd: ram any car for `coins` each (undefined to clear). */
+  setRamMode(coins: number | undefined): void {
+    this.ramCoins = coins;
+  }
+
   /** Nearest live car ahead within `maxAheadZ` metres (for 狐's turret targeting). */
   nearestCarAhead(maxAheadZ: number): TrafficCar | undefined {
     const distance = this.getDistance();
@@ -433,7 +445,7 @@ export class TrafficSystem {
     }
     car.hit = true;
     car.mesh.visible = false;
-    this.onDestroyed?.({ car });
+    this.onDestroyed?.({ car, coins: 0 }); // turret credits its own coins separately
   }
 
   /**
