@@ -109,6 +109,7 @@ export class GameApp {
   private hudCoins?: HTMLElement;
   private coinFlyLayer?: HTMLElement;
   private tapStart?: { x: number; y: number };
+  private siphonAccum = 0; // 鬼 Anzapfen per-second tick
   private hudCharge?: HTMLElement;
   private hudChargeRing?: HTMLElement;
   private hudChargeKanji?: HTMLElement;
@@ -392,6 +393,18 @@ export class GameApp {
 
     if (this.activeScene === this.runScene && state === "running" && this.runScene) {
       this.runAbilities?.update(dt, this.runScene.getEffectContext());
+
+      // 鬼 Anzapfen: while the police are right behind you, nearby cars drip coins each second.
+      const siphon = this.runAbilities?.siphonParams();
+      if (siphon && this.runScene.isPoliceBehind()) {
+        this.siphonAccum += dt;
+        while (this.siphonAccum >= 1) {
+          this.siphonAccum -= 1;
+          this.runScene.siphonCoins(siphon.coinsPerCar, siphon.cars);
+        }
+      } else {
+        this.siphonAccum = 0;
+      }
 
       const gameOver = this.runScene.consumeGameOver();
       if (gameOver) {

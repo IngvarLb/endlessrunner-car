@@ -53,6 +53,10 @@ export type RunScene = AppScene & {
   creditCoins(amount: number): void;
   /** 鬼 Schwarzes Loch: lift the car tapped at clip-space (`ndcX`,`ndcY`), if any. */
   tapLift(ndcX: number, ndcY: number): void;
+  /** True while the police are right behind you (a catch window is open). */
+  isPoliceBehind(): boolean;
+  /** 鬼 Anzapfen: drip `coinsPerCar` coins from up to `cars` nearby cars to the counter. */
+  siphonCoins(coinsPerCar: number, cars: number): void;
 };
 
 const baseSpeed = 9.5;
@@ -704,6 +708,14 @@ export class RunSceneFactory {
       tapLift: (ndcX: number, ndcY: number) => {
         tapRaycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraController.camera);
         trafficSystem.tryLift(tapRaycaster);
+      },
+      isPoliceBehind: () => lightMistakeWindowTimer > 0 || daredevilPursuit > 0,
+      siphonCoins: (coinsPerCar: number, cars: number) => {
+        for (const car of trafficSystem.nearestCars(cars, 42)) {
+          const drop = new THREE.Vector3(car.mesh.position.x, 0.9, car.trackZ - distance);
+          drop.project(cameraController.camera);
+          events?.emit("coins:dropped", { amount: coinsPerCar, ndc: { x: drop.x, y: drop.y } });
+        }
       },
       creditCoins: (amount: number) => {
         scoreSystem.addCoin(amount);

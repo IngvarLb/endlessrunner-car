@@ -418,6 +418,21 @@ export class TrafficSystem {
     return false;
   }
 
+  /** Up to `count` nearest live cars within `maxAheadZ` ahead (鬼 Anzapfen siphon). */
+  nearestCars(count: number, maxAheadZ: number): TrafficCar[] {
+    const distance = this.getDistance();
+    return this.cars
+      .filter((car) => {
+        if (car.hit || !car.mesh.visible) {
+          return false;
+        }
+        const rel = car.trackZ - distance;
+        return rel > -2 && rel < maxAheadZ;
+      })
+      .sort((a, b) => a.trackZ - b.trackZ)
+      .slice(0, count);
+  }
+
   /** Nearest live car ahead within `maxAheadZ` metres (for 狐's turret targeting). */
   nearestCarAhead(maxAheadZ: number): TrafficCar | undefined {
     const distance = this.getDistance();

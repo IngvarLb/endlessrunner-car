@@ -77,6 +77,9 @@ export class RunAbilityController {
   // mistake during the pursuit ends the run. Pursuit length drops with mastery.
   private readonly hasDaredevil: boolean;
 
+  // 鬼 Anzapfen (siphon): while the police are right behind you, nearby cars drip coins.
+  private readonly hasSiphon: boolean;
+
   // 藍 Lichthupe (highBeam): makes the front car give way; recharges over distance.
   private readonly hasHighBeam: boolean;
   private highBeamReady = false;
@@ -98,6 +101,7 @@ export class RunAbilityController {
     this.hasHighBeam = this.passive?.effect === "highBeam";
     this.highBeamReady = this.hasHighBeam;
     this.hasDaredevil = this.passive?.effect === "daredevil";
+    this.hasSiphon = this.passive?.effect === "siphon";
   }
 
   get mainAbility(): MainAbilityDef | undefined {
@@ -237,6 +241,20 @@ export class RunAbilityController {
       return;
     }
     this.activeEffect.update(dt, ctx);
+  }
+
+  /**
+   * 鬼 Anzapfen: coins per car per second + how many cars drip at once (mastery-tiered),
+   * or undefined if the vehicle isn't 鬼. Only pays out while the police are behind you.
+   */
+  siphonParams(): { coinsPerCar: number; cars: number } | undefined {
+    if (!this.hasSiphon || !this.passive) {
+      return undefined;
+    }
+    const level = this.masteryLevel();
+    const coinsPerCar = Math.max(1, Math.round(passiveValue(this.passive, level)));
+    const cars = level >= 100 ? 4 : level >= 67 ? 3 : level >= 34 ? 2 : 1;
+    return { coinsPerCar, cars };
   }
 
   /** Whether a 狐 extra life is currently available. */
