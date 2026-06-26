@@ -478,6 +478,7 @@ export class ModelFactory {
     );
     this.enableShadows(group);
     this.addBlinkers(group, 0.52, 0.52, -0.92);
+    this.addWreckSmoke(group);
 
     return group;
   }
@@ -519,6 +520,7 @@ export class ModelFactory {
     );
     this.enableShadows(group);
     this.addBlinkers(group, 0.58, 0.52, -1.2);
+    this.addWreckSmoke(group);
 
     return group;
   }
@@ -562,8 +564,26 @@ export class ModelFactory {
     );
     this.enableShadows(group);
     this.addBlinkers(group, 0.62, 0.62, -1.16);
+    this.addWreckSmoke(group);
 
     return group;
+  }
+
+  /**
+   * Two smoke puffs above the car, hidden by default. TrafficCar shows + animates
+   * them while the car is a 将 Nachtjagd wreck (looked up by name "smoke0"/"smoke1").
+   */
+  private addWreckSmoke(group: THREE.Group): void {
+    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    for (const name of ["smoke0", "smoke1"]) {
+      const puff = new THREE.Mesh(geometry, this.materials.smoke);
+      puff.name = name;
+      puff.position.set(0.05, 0.7, -0.25);
+      puff.visible = false;
+      puff.castShadow = false;
+      puff.receiveShadow = false;
+      group.add(puff);
+    }
   }
 
   /**

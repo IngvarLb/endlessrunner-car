@@ -71,8 +71,10 @@ export class TrafficCar implements Collidable {
   private signalTimer = 0; // counts down a couple of seconds of blinking before an autonomous merge
   private signalLane: LaneIndex | null = null;
   private signalDir = 0;
-  private wrecked = false; // 将 Nachtjagd: a rammed car becomes a stopped, crumpled wreck
-  private wreckRoll = 0;
+  private wrecked = false; // 将 Nachtjagd: a rammed car becomes a stopped, smoking wreck
+  private wreckYaw = 0; // sits a little askew on the road (no dramatic roll)
+  private smokeTime = 0;
+  private readonly smokePuffs: THREE.Object3D[] = [];
   private readonly blinkerPosX?: THREE.Object3D;
   private readonly blinkerNegX?: THREE.Object3D;
 
@@ -95,15 +97,22 @@ export class TrafficCar implements Collidable {
     this.patternId = definition.patternId;
     this.blinkerPosX = this.mesh.getObjectByName("blinker_px") ?? undefined;
     this.blinkerNegX = this.mesh.getObjectByName("blinker_nx") ?? undefined;
+    for (const name of ["smoke0", "smoke1"]) {
+      const puff = this.mesh.getObjectByName(name);
+      if (puff) {
+        this.smokePuffs.push(puff);
+      }
+    }
     this.syncMeshPosition();
   }
 
   update(dt: number, isRunning: boolean): void {
     if (this.wrecked) {
-      // Stopped, crumpled wreck — sits where it crashed (speed 0); the world scrolls
-      // it past the player. No merge/blink logic.
-      this.mesh.position.set(this.visualX, -0.05, this.trackZ);
-      this.mesh.rotation.set(0.12, this.mesh.rotation.y, this.wreckRoll);
+      // Stopped, smoking wreck — sits a little askew where it crashed (speed 0); the
+      // world scrolls it past the player. No merge/blink logic.
+      this.mesh.position.set(this.visualX, 0, this.trackZ);
+      this.mesh.rotation.set(0, this.wreckYaw, 0);
+      this.updateSmoke(dt, isRunning);
       return;
     }
     if (isRunning) {
@@ -302,7 +311,8 @@ export class TrafficCar implements Collidable {
     this.signalTimer = 0;
     this.signalLane = null;
     this.setBlinkers(false, false);
-    this.wreckRoll = (Math.floor(this.trackZ) % 2 === 0 ? 1 : -1) * 0.5;
+    this.wreckYaw = (Math.floor(this.trackZ) % 2 === 0 ? 1 : -1) * 0.3;
+    this.smokeTime = 0;
   }
 
   recycle(worldLength: number): void {
@@ -321,6 +331,22 @@ export class TrafficCar implements Collidable {
     this.speed = this.cruiseSpeed;
     this.mesh.visible = true;
     this.syncMeshPosition();
+  }
+
+  private updateSmoke(dt: number, isRunning: boolean): void {
+    if (this.smokePuffs.length === 0) {
+      return;
+    }
+    if (isRunning) {
+      this.smokeTime += dt;
+    }
+    const period = 1.3;
+    this.smokePuffs.forEach((puff, index) => {
+      const phase = (this.smokeTime / period + index * 0.5) % 1; // 0..1, offset per puff
+      puff.visible = true;
+      puff.position.y = 0.7 + phase * 1.5; // rises off the wreck
+      puff.scale.setScalar(Math.sin(phase * Math.PI) * 0.85 + 0.06); // grows then dissipates
+    });
   }
 
   private updateBlinkers(dt: number, isRunning: boolean, dir: number): void {
@@ -360,7 +386,11 @@ export class TrafficCar implements Collidable {
     this.signalLane = null;
     this.signalDir = 0;
     this.wrecked = false;
-    this.wreckRoll = 0;
+    this.wreckYaw = 0;
+    this.smokeTime = 0;
+    for (const puff of this.smokePuffs) {
+      puff.visible = false;
+    }
     this.setBlinkers(false, false);
     this.mesh.position.set(x, 0, this.trackZ);
     this.mesh.rotation.set(0, 0, 0);

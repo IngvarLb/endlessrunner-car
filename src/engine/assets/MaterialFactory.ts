@@ -62,6 +62,12 @@ export class MaterialFactory {
   readonly headlight = this.emissive(0xfff1c2, 1.05);
   readonly tailLight = this.emissive(0xff1f2d, 1);
   readonly blinker = this.emissive(0xffa01f, 1.9); // amber turn signal
+  readonly smoke = new THREE.MeshBasicMaterial({
+    color: 0x80858d,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false
+  }); // 将 wreck smoke puff (unlit, soft)
 
   dispose(): void {
     for (const value of Object.values(this)) {

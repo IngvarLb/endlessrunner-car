@@ -41,6 +41,7 @@ export class RunnerController implements Collidable {
   private recoilPitch = 0;
   private boostTimer = 0;
   private laneChangeTimer = 0; // >0 briefly after a lane change — a hit then counts as a side contact
+  private laneBeforeChange: LaneIndex = 0; // the lane the player came from (for bounce-back on a side ram)
   private titanActive = false;
   private invincible = false;
   private readonly options: RunnerControllerOptions;
@@ -206,6 +207,7 @@ export class RunnerController implements Collidable {
       };
     }
 
+    this.laneBeforeChange = this.lane;
     this.lane = this.laneSystem.move(this.lane, direction);
     this.targetX = this.laneSystem.getLaneX(this.lane);
     this.laneChangeTimer = LANE_CHANGE_GRACE;
@@ -220,5 +222,20 @@ export class RunnerController implements Collidable {
   /** True for a brief window after a lane change — used to tag a hit as a side contact. */
   isLaneChanging(): boolean {
     return this.laneChangeTimer > 0;
+  }
+
+  /**
+   * Side-rammed a car mid-lane-change: recoil back to the lane we came from instead of
+   * sliding into the car (no glitching into the wreck).
+   */
+  bounceBack(): void {
+    const from = this.lane;
+    this.lane = this.laneBeforeChange;
+    this.targetX = this.laneSystem.getLaneX(this.lane);
+    this.laneChangeTimer = 0;
+    const direction = Math.sign(this.lane - from);
+    if (direction !== 0) {
+      this.applyStumble(direction as -1 | 1);
+    }
   }
 }

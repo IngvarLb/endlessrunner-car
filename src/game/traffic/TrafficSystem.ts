@@ -93,11 +93,15 @@ export class TrafficSystem {
         } else if (this.ramCoins !== undefined && side) {
           // 将 Nachtjagd: SIDE ram only → coins + a crumpled wreck (rear-ending is fatal).
           car.wreck();
+          this.runner.bounceBack(); // recoil to our lane — don't slide into the wreck
           this.onDestroyed?.({ car, coins: this.ramCoins });
         } else if (this.ramCoins === undefined && car.isYielding()) {
           // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
         } else {
           // Fatal: a rear-end (incl. during Nachtjagd), or a normal collision.
+          if (side) {
+            this.runner.bounceBack(); // 将 Draufgänger survives this — don't glitch into the car
+          }
           car.hit = true;
           this.onHit({ car, side });
         }
