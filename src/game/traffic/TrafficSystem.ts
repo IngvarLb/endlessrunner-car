@@ -1,3 +1,4 @@
+import type * as THREE from "three";
 import type { LaneIndex } from "../../app/GameConfig";
 import { CollisionSystem } from "../../engine/physics/CollisionSystem";
 import { RunnerController } from "../runner/RunnerController";
@@ -51,6 +52,8 @@ export class TrafficSystem {
   private shieldedLane?: LaneIndex;
   /** While set, any car rammed is destroyed for this many coins (将 Nachtjagd). */
   private ramCoins?: number;
+  /** While set, a tapped car can be lifted for this many coins (鬼 Schwarzes Loch). */
+  private liftCoins?: number;
 
   constructor(
     private readonly runner: RunnerController,
@@ -375,6 +378,44 @@ export class TrafficSystem {
   /** 将 Nachtjagd: ram any car for `coins` each (undefined to clear). */
   setRamMode(coins: number | undefined): void {
     this.ramCoins = coins;
+  }
+
+  /** 鬼 Schwarzes Loch: tapped cars become liftable for `coins` each (undefined to clear). */
+  setLiftMode(coins: number | undefined): void {
+    this.liftCoins = coins;
+  }
+
+  /**
+   * 鬼 Schwarzes Loch: lift the live car under `raycaster` (the tap), pay its coins, and
+   * float it up into the hole. Returns true if a car was lifted.
+   */
+  tryLift(raycaster: THREE.Raycaster): boolean {
+    if (this.liftCoins === undefined) {
+      return false;
+    }
+    const distance = this.getDistance();
+    let best: TrafficCar | undefined;
+    let bestDist = Infinity;
+    for (const car of this.cars) {
+      if (car.hit || car.isLifted() || !car.mesh.visible) {
+        continue;
+      }
+      const rel = car.trackZ - distance;
+      if (rel < -2 || rel > 34) {
+        continue; // only cars in view ahead are tappable
+      }
+      const hits = raycaster.intersectObject(car.mesh, true);
+      if (hits.length > 0 && hits[0].distance < bestDist) {
+        bestDist = hits[0].distance;
+        best = car;
+      }
+    }
+    if (best) {
+      best.lift();
+      this.onDestroyed?.({ car: best, coins: this.liftCoins });
+      return true;
+    }
+    return false;
   }
 
   /** Nearest live car ahead within `maxAheadZ` metres (for 狐's turret targeting). */

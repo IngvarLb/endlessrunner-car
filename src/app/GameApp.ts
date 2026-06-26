@@ -108,6 +108,7 @@ export class GameApp {
   private hudMeta?: HTMLElement;
   private hudCoins?: HTMLElement;
   private coinFlyLayer?: HTMLElement;
+  private tapStart?: { x: number; y: number };
   private hudCharge?: HTMLElement;
   private hudChargeRing?: HTMLElement;
   private hudChargeKanji?: HTMLElement;
@@ -766,6 +767,31 @@ export class GameApp {
     this.events.on("coin:collected", ({ amount }) => this.runAbilities?.onCoinCollected(amount));
     // 将 ram payout: coins fly from the wreck to the counter, crediting on arrival.
     this.events.on("coins:dropped", ({ amount, ndc }) => this.flyCoins(amount, ndc));
+    this.bindTapLift();
+  }
+
+  /** 鬼 Schwarzes Loch: a tap (not a swipe) on a car lifts it — only while 鬼 is active. */
+  private bindTapLift(): void {
+    this.root.addEventListener("pointerdown", (event) => {
+      this.tapStart = { x: event.clientX, y: event.clientY };
+    });
+    this.root.addEventListener("pointerup", (event) => {
+      const start = this.tapStart;
+      this.tapStart = undefined;
+      if (!start || this.runAbilities?.activeEffectState()?.effect !== "blackHole") {
+        return;
+      }
+      if ((event.target as HTMLElement | null)?.closest("button")) {
+        return; // tapped a HUD control, not the road
+      }
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 16) {
+        return; // a swipe (lane change), not a tap
+      }
+      const rect = this.root.getBoundingClientRect();
+      const ndcX = ((start.x - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -((start.y - rect.top) / rect.height) * 2 + 1;
+      this.runScene?.tapLift(ndcX, ndcY);
+    });
   }
 
   /** Animate `amount` coins from the drop point (clip space `ndc`) to the HUD counter. */

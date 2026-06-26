@@ -34,10 +34,14 @@ export type RunEffectContext = {
     restoreLanes(minReactionSec: number): void;
     /** 将 Nachtjagd: ram any car for `coins` each (undefined to clear). */
     setRamMode(coins: number | undefined): void;
+    /** 鬼 Schwarzes Loch: tapped cars are liftable for `coins` each (undefined to clear). */
+    setLiftMode(coins: number | undefined): void;
   };
   scene: {
     /** 将 Nachtjagd: fade the world to night (and back). */
     setNight(on: boolean): void;
+    /** 鬼 Schwarzes Loch: fade the world to a deep violet (and back). */
+    setBlackHole(on: boolean): void;
   };
   coins: {
     /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */

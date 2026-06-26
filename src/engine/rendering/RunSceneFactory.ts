@@ -51,6 +51,8 @@ export type RunScene = AppScene & {
   wasHitFromSide(): boolean;
   /** Credit coins to the run (used when 将 ram-drop coins land on the counter). */
   creditCoins(amount: number): void;
+  /** 鬼 Schwarzes Loch: lift the car tapped at clip-space (`ndcX`,`ndcY`), if any. */
+  tapLift(ndcX: number, ndcY: number): void;
 };
 
 const baseSpeed = 9.5;
@@ -89,13 +91,19 @@ export class RunSceneFactory {
     const sceneLights = LightingRig.addTo(scene, config.quality);
     // 将 Nachtjagd night fade — lerp lights + sky/fog between day and a deep indigo night.
     const DAY_SKY = new THREE.Color(0x58c7f3);
-    const NIGHT_SKY = new THREE.Color(0x141a38);
+    const NIGHT_SKY = new THREE.Color(0x141a38); // 将 Nachtjagd
+    const BLACKHOLE_SKY = new THREE.Color(0x1c0b30); // 鬼 Schwarzes Loch (deep violet)
     const dayHemi = sceneLights.hemi.intensity;
     const daySun = sceneLights.sun.intensity;
-    let nightTarget = 0;
-    let nightLevel = 0;
+    // Scene tint (将 night / 鬼 black hole): lerp lights + sky/fog toward a mood and back.
+    let tintTarget = 0;
+    let tintLevel = 0;
+    const tintSky = NIGHT_SKY.clone();
+    let tintHemiScale = 0.28;
+    let tintSunScale = 0.32;
 
     const cameraController = new CameraController();
+    const tapRaycaster = new THREE.Raycaster(); // 鬼 tap-to-lift
     const runner = models.createVehicle(vehicle.modelKey);
     const chaser = models.createTokyoPoliceCar();
     const boostAura = models.createShieldPowerUp();
@@ -302,9 +310,10 @@ export class RunSceneFactory {
       coinRain.reset();
       trafficSystem.reset();
       trafficSystem.setRamMode(undefined);
+      trafficSystem.setLiftMode(undefined);
       turret.reset();
-      nightTarget = 0;
-      nightLevel = 0;
+      tintTarget = 0;
+      tintLevel = 0;
       sceneLights.hemi.intensity = dayHemi;
       sceneLights.sun.intensity = daySun;
       (scene.background as THREE.Color).copy(DAY_SKY);
@@ -360,20 +369,29 @@ export class RunSceneFactory {
 
       world.position.z = -distance;
       cameraController.update(dt, elapsed, state, isRunning ? runnerController.getPosition().x : 0);
-      updateNight(dt);
+      updateTint(dt);
     };
 
-    function updateNight(dt: number): void {
-      if (nightLevel === nightTarget) {
+    function setTint(on: boolean, sky: THREE.Color, hemiScale: number, sunScale: number): void {
+      tintTarget = on ? 1 : 0;
+      if (on) {
+        tintSky.copy(sky);
+        tintHemiScale = hemiScale;
+        tintSunScale = sunScale;
+      }
+    }
+
+    function updateTint(dt: number): void {
+      if (tintLevel === tintTarget) {
         return;
       }
-      nightLevel = THREE.MathUtils.lerp(nightLevel, nightTarget, Math.min(1, dt * 3.5));
-      if (Math.abs(nightLevel - nightTarget) < 0.01) {
-        nightLevel = nightTarget;
+      tintLevel = THREE.MathUtils.lerp(tintLevel, tintTarget, Math.min(1, dt * 3.5));
+      if (Math.abs(tintLevel - tintTarget) < 0.01) {
+        tintLevel = tintTarget;
       }
-      sceneLights.hemi.intensity = THREE.MathUtils.lerp(dayHemi, dayHemi * 0.28, nightLevel);
-      sceneLights.sun.intensity = THREE.MathUtils.lerp(daySun, daySun * 0.32, nightLevel);
-      const sky = DAY_SKY.clone().lerp(NIGHT_SKY, nightLevel);
+      sceneLights.hemi.intensity = THREE.MathUtils.lerp(dayHemi, dayHemi * tintHemiScale, tintLevel);
+      sceneLights.sun.intensity = THREE.MathUtils.lerp(daySun, daySun * tintSunScale, tintLevel);
+      const sky = DAY_SKY.clone().lerp(tintSky, tintLevel);
       (scene.background as THREE.Color).copy(sky);
       (scene.fog as THREE.Fog).color.copy(sky);
     }
@@ -398,7 +416,8 @@ export class RunSceneFactory {
           const closing = Math.max(2, getRunSpeed() * runnerController.getSpeedMultiplier() - 5);
           trafficSystem.restoreLanes(minReactionSec * closing);
         },
-        setRamMode: (coins) => trafficSystem.setRamMode(coins)
+        setRamMode: (coins) => trafficSystem.setRamMode(coins),
+        setLiftMode: (coins) => trafficSystem.setLiftMode(coins)
       },
       coins: {
         biasLane: (lane) => collectibleSystem.setLaneBias(lane),
@@ -407,9 +426,8 @@ export class RunSceneFactory {
         rain: (on, level) => coinRain.setActive(on, level)
       },
       scene: {
-        setNight: (on) => {
-          nightTarget = on ? 1 : 0;
-        }
+        setNight: (on) => setTint(on, NIGHT_SKY, 0.28, 0.32),
+        setBlackHole: (on) => setTint(on, BLACKHOLE_SKY, 0.2, 0.26)
       }
     };
 
@@ -683,6 +701,10 @@ export class RunSceneFactory {
         lightMistakeWindowTimer = seconds; // chaser closes in + any mistake now ends the run
       },
       wasHitFromSide: () => lastHitWasSide,
+      tapLift: (ndcX: number, ndcY: number) => {
+        tapRaycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraController.camera);
+        trafficSystem.tryLift(tapRaycaster);
+      },
       creditCoins: (amount: number) => {
         scoreSystem.addCoin(amount);
         events?.emit("coin:collected", {

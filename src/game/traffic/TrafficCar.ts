@@ -9,6 +9,7 @@ const POLITE_MERGE_SPEED = 1.5; // casual highway lane change — slow + angled 
 const URGENT_MERGE_SPEED = 10; // emergency give-way (藍 Lichthupe): a quick veer out of the way
 const MAX_YAW = 0.42; // rad (~24°): cap the body angle so it never looks like driving sideways
 const BLINK_INTERVAL = 0.22; // seconds per on/off phase of the turn signal
+const LIFT_DURATION = 1.4; // 鬼: seconds for a tapped car to rise into the hole and vanish
 
 // Longitudinal tuning: cars cruise at varied speeds and ease toward a target.
 const ACCEL = 6; // m/s² when speeding up to cruise / overtaking
@@ -75,6 +76,8 @@ export class TrafficCar implements Collidable {
   private wreckYaw = 0; // sits a little askew on the road (no dramatic roll)
   private smokeTime = 0;
   private readonly smokePuffs: THREE.Object3D[] = [];
+  private lifted = false; // 鬼 Schwarzes Loch: tapped car rises into the hole
+  private liftTime = 0;
   private readonly blinkerPosX?: THREE.Object3D;
   private readonly blinkerNegX?: THREE.Object3D;
 
@@ -107,6 +110,20 @@ export class TrafficCar implements Collidable {
   }
 
   update(dt: number, isRunning: boolean): void {
+    if (this.lifted) {
+      // 鬼: tapped car tumbles up into the black hole and shrinks away; you drive under.
+      if (isRunning) {
+        this.liftTime += dt;
+      }
+      const p = Math.min(1, this.liftTime / LIFT_DURATION);
+      this.mesh.position.set(this.visualX, p * 3.8, this.trackZ);
+      this.mesh.rotation.set(p * 1.3, this.liftTime * 4.5, p * 0.9);
+      this.mesh.scale.setScalar(1 - p * 0.75);
+      if (p >= 1) {
+        this.mesh.visible = false; // swallowed
+      }
+      return;
+    }
     if (this.wrecked) {
       // Stopped, smoking wreck — sits a little askew where it crashed (speed 0); the
       // world scrolls it past the player. No merge/blink logic.
@@ -299,6 +316,25 @@ export class TrafficCar implements Collidable {
     return !this.hit && this.laneCooldown <= 0 && this.mergeDuration === 0 && this.signalTimer <= 0;
   }
 
+  /** 鬼 Schwarzes Loch: tapped — rise into the hole and vanish (you drive under it). */
+  lift(): void {
+    if (this.hit) {
+      return;
+    }
+    this.hit = true; // out of play (no collision/AI) while it floats up
+    this.lifted = true;
+    this.liftTime = 0;
+    this.speed = 0;
+    this.mergeDuration = 0;
+    this.signalTimer = 0;
+    this.signalLane = null;
+    this.setBlinkers(false, false);
+  }
+
+  isLifted(): boolean {
+    return this.lifted;
+  }
+
   /** 将 Nachtjagd ram: become a stopped, crumpled wreck instead of vanishing. */
   wreck(): void {
     if (this.hit) {
@@ -393,11 +429,14 @@ export class TrafficCar implements Collidable {
     this.wrecked = false;
     this.wreckYaw = 0;
     this.smokeTime = 0;
+    this.lifted = false;
+    this.liftTime = 0;
     for (const puff of this.smokePuffs) {
       puff.visible = false;
     }
     this.setBlinkers(false, false);
     this.mesh.position.set(x, 0, this.trackZ);
     this.mesh.rotation.set(0, 0, 0);
+    this.mesh.scale.setScalar(1);
   }
 }
