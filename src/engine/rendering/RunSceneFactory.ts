@@ -43,6 +43,10 @@ export type RunScene = AppScene & {
   getEffectContext(): RunEffectContext;
   /** Wire the per-run passive hooks (weak-fail / approach decisions). */
   setPassiveHooks(hooks: PassiveHooks): void;
+  /** True while a 将 police pursuit is active (a mistake now ends the run). */
+  isPursued(): boolean;
+  /** 将 Draufgänger: open a police pursuit for `seconds` (chaser closes in). */
+  openPursuit(seconds: number): void;
 };
 
 const baseSpeed = 9.5;
@@ -114,6 +118,7 @@ export class RunSceneFactory {
     let cleanRunTimer = 0;
     let introChaserTimer = introChaserDuration;
     let lightMistakeWindowTimer = 0;
+    let daredevilPursuit = 0; // 将 Draufgänger police chase (seconds); a mistake while >0 ends the run
     let chaserWanted = false;
     let chaserReceding = false;
     let passiveHooks: PassiveHooks | undefined;
@@ -290,6 +295,7 @@ export class RunSceneFactory {
       resetWorldPieces();
       runnerController.reset();
       collectibleSystem.reset();
+      daredevilPursuit = 0;
       coinRain.reset();
       trafficSystem.reset();
       trafficSystem.setRamMode(undefined);
@@ -326,6 +332,7 @@ export class RunSceneFactory {
         cleanRunTimer += dt;
         pressure = Math.max(0, pressure - dt * 4);
         introChaserTimer = Math.max(0, introChaserTimer - dt);
+        daredevilPursuit = Math.max(0, daredevilPursuit - dt);
 
         if (lightMistakeWindowTimer > 0) {
           lightMistakeWindowTimer = Math.max(0, lightMistakeWindowTimer - dt);
@@ -666,6 +673,11 @@ export class RunSceneFactory {
       getEffectContext: () => effectContext,
       setPassiveHooks: (hooks: PassiveHooks) => {
         passiveHooks = hooks;
+      },
+      isPursued: () => daredevilPursuit > 0,
+      openPursuit: (seconds: number) => {
+        daredevilPursuit = seconds;
+        lightMistakeWindowTimer = seconds; // chaser closes in + any mistake now ends the run
       },
       dispose
     };

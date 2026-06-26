@@ -393,10 +393,20 @@ export class GameApp {
 
       const gameOver = this.runScene.consumeGameOver();
       if (gameOver) {
-        // 狐 Zweites Leben: an extra life saves a fatal collision instead of ending the run.
-        if (gameOver.reason === "obstacle" && this.runAbilities?.onFatalHit()) {
+        // 狐 Zweites Leben saves a fatal collision; 将 Draufgänger survives it but
+        // brings the police down on you (a mistake during the chase ends the run).
+        const outcome =
+          gameOver.reason === "obstacle"
+            ? this.runAbilities?.onFatalHit(this.runScene.isPursued())
+            : undefined;
+        if (outcome?.survived) {
           this.audio?.playBoost();
-          this.showHudToast("狐", "ZWEITES LEBEN", "GERETTET");
+          if (outcome.pursuitSec !== undefined) {
+            this.runScene.openPursuit(outcome.pursuitSec);
+            this.showHudToast("将", "DRAUFGÄNGER", "POLIZEI!");
+          } else {
+            this.showHudToast("狐", "ZWEITES LEBEN", "GERETTET");
+          }
         } else if (this.stateMachine.canTransition("gameOver")) {
           this.lastRunStats = this.runScene.getRunStats();
           this.stateMachine.transition("gameOver", gameOver.reason);

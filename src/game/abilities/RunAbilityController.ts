@@ -34,6 +34,13 @@ export type ActiveEffectState = {
 /** What a weak fail (lane-edge mistake) does, decided by the vehicle's passive. */
 export type WeakFailOutcome = { type: "absorbed" } | { type: "coins"; amount: number } | { type: "normal" };
 
+/**
+ * What a fatal car hit does. `survived` keeps the run going; `pursuitSec`, if set,
+ * opens a police pursuit for that many seconds (将 Draufgänger): you survive the
+ * crash but must drive clean to shake them.
+ */
+export type FatalOutcome = { survived: boolean; pursuitSec?: number };
+
 /** Generic HUD view of a recharging passive (赤 buffer, 藍 high-beam, 狐 extra life). */
 export type PassiveState = { kanji: string; name: string; ready: boolean; rechargeRatio: number };
 
@@ -66,6 +73,10 @@ export class RunAbilityController {
   private crumpleBuffer = 0;
   private crumpleMeters = 0;
 
+  // 将 Draufgänger (daredevil): survive a car hit, but the police give chase — a
+  // mistake during the pursuit ends the run. Pursuit length drops with mastery.
+  private readonly hasDaredevil: boolean;
+
   // 藍 Lichthupe (highBeam): makes the front car give way; recharges over distance.
   private readonly hasHighBeam: boolean;
   private highBeamReady = false;
@@ -86,6 +97,7 @@ export class RunAbilityController {
     this.crumpleBuffer = this.hasCrumple ? 1 : 0;
     this.hasHighBeam = this.passive?.effect === "highBeam";
     this.highBeamReady = this.hasHighBeam;
+    this.hasDaredevil = this.passive?.effect === "daredevil";
   }
 
   get mainAbility(): MainAbilityDef | undefined {
@@ -287,16 +299,23 @@ export class RunAbilityController {
   }
 
   /**
-   * A fatal hit happened. If an extra life is available, consume it and return
-   * true (the player survives); otherwise false (game over).
+   * A fatal car hit happened (`pursued` = a 将 police chase is already on). 狐 spends
+   * an extra life to survive; 将 survives the crash but opens a pursuit (unless already
+   * being chased — then it's caught). Otherwise it's game over.
    */
-  onFatalHit(): boolean {
+  onFatalHit(pursued: boolean): FatalOutcome {
     if (this.extraLives > 0) {
       this.extraLives -= 1;
       this.metersSinceLife = 0;
-      return true;
+      return { survived: true };
     }
-    return false;
+    if (this.hasDaredevil && this.passive) {
+      if (pursued) {
+        return { survived: false }; // caught mid-chase
+      }
+      return { survived: true, pursuitSec: passiveValue(this.passive, this.masteryLevel()) };
+    }
+    return { survived: false };
   }
 
   /** Drain mastery level-ups gained this frame/run (for a one-shot HUD toast). */
