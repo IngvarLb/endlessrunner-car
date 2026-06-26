@@ -112,7 +112,7 @@ export class TrafficCar implements Collidable {
       // world scrolls it past the player. No merge/blink logic.
       this.mesh.position.set(this.visualX, 0, this.trackZ);
       this.mesh.rotation.set(0, this.wreckYaw, 0);
-      this.updateSmoke(dt, isRunning);
+      this.updateSmoke(dt);
       return;
     }
     if (isRunning) {
@@ -333,13 +333,11 @@ export class TrafficCar implements Collidable {
     this.syncMeshPosition();
   }
 
-  private updateSmoke(dt: number, isRunning: boolean): void {
+  private updateSmoke(dt: number): void {
     if (this.smokePuffs.length === 0) {
       return;
     }
-    if (isRunning) {
-      this.smokeTime += dt;
-    }
+    this.smokeTime += dt; // keep billowing even on the game-over freeze-frame
     const period = 1.7;
     const count = this.smokePuffs.length;
     this.smokePuffs.forEach((puff, index) => {

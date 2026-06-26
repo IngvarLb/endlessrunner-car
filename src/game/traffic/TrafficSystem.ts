@@ -98,11 +98,12 @@ export class TrafficSystem {
         } else if (this.ramCoins === undefined && car.isYielding()) {
           // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
         } else {
-          // Fatal: a rear-end (incl. during Nachtjagd), or a normal collision.
+          // Fatal crash (rear-end, or a normal collision): the car you hit becomes a
+          // smoking wreck — every crash, not just Nachtjagd.
           if (side) {
             this.runner.bounceBack(); // 将 Draufgänger survives this — don't glitch into the car
           }
-          car.hit = true;
+          car.wreck();
           this.onHit({ car, side });
         }
       }
