@@ -104,19 +104,21 @@ export class ProceduralAudioService {
   private nextStepIndex = 0;
   private activeMusicNodes = new Set<ScheduledNode>();
   private activeSfxNodes = new Set<ScheduledNode>();
-  // Continuous EV motor sound (Taycan / e-tron GT style) whose whine pitch + brightness
-  // track the player's speed: a filtered "turbine" saw + a shimmer harmonic + a high
-  // inverter coil-whine + a subtle sport-sound tremolo + airy road noise.
+  // Continuous EV motor sound: a deep, SINGING two-tone harmony (a fundamental + a perfect
+  // fifth, slightly detuned for a chorus shimmer) warmed by a master lowpass, with a faint
+  // sub for depth, a hint of inverter coil-whine, airy road noise + a sport-sound tremolo.
+  // Pitch + brightness rise with the player's speed.
   private engine: {
-    whine: OscillatorNode;
-    harm: OscillatorNode;
+    toneA: OscillatorNode;
+    toneB: OscillatorNode;
+    sub: OscillatorNode;
     inverter: OscillatorNode;
     noise: AudioBufferSourceNode;
     lfo: OscillatorNode;
-    bp: BiquadFilterNode;
-    whineGain: GainNode;
-    invGain: GainNode;
+    gA: GainNode;
+    gInv: GainNode;
     air: GainNode;
+    lp: BiquadFilterNode;
     gain: GainNode;
   } | null = null;
   private runIntensity = 0.4;
@@ -213,66 +215,75 @@ export class ProceduralAudioService {
     const gain = ctx.createGain();
     gain.gain.value = 0.0001;
 
-    // Main motor "turbine": a sawtooth shaped by a resonant bandpass into a smooth,
-    // rising electric whine (no combustion rumble).
-    const whine = ctx.createOscillator();
-    whine.type = "sawtooth";
-    const bp = ctx.createBiquadFilter();
-    bp.type = "bandpass";
-    bp.frequency.value = 900;
-    bp.Q.value = 3.2;
-    const whineGain = ctx.createGain();
-    whineGain.gain.value = 0.5;
+    // Master lowpass keeps the whole sound deep + warm (the two tones sing rather than buzz).
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 900;
+    lp.Q.value = 0.7;
 
-    // Shimmer harmonic an octave up (slightly detuned) for the metallic EV sheen.
-    const harm = ctx.createOscillator();
-    harm.type = "triangle";
-    const harmGain = ctx.createGain();
-    harmGain.gain.value = 0.12;
+    // The two singing tones: a deep fundamental + a perfect fifth above it. Equal-ish
+    // weight so you clearly hear a two-note harmony.
+    const toneA = ctx.createOscillator();
+    toneA.type = "sawtooth";
+    const gA = ctx.createGain();
+    gA.gain.value = 0.34;
+    const toneB = ctx.createOscillator();
+    toneB.type = "sawtooth";
+    const gB = ctx.createGain();
+    gB.gain.value = 0.3;
 
-    // High inverter coil-whine — the unmistakable electric "sparkle" up top.
+    // Faint sub an octave below the fundamental for body / "tiefer".
+    const sub = ctx.createOscillator();
+    sub.type = "sine";
+    const gSub = ctx.createGain();
+    gSub.gain.value = 0.12;
+
+    // Just a hint of high inverter coil-whine for EV character (mostly tamed by the lowpass).
     const inverter = ctx.createOscillator();
     inverter.type = "sine";
-    const invGain = ctx.createGain();
-    invGain.gain.value = 0.01;
+    const gInv = ctx.createGain();
+    gInv.gain.value = 0.004;
 
-    // Airy road/tyre noise (high-passed so it hisses rather than rumbles).
+    // Airy high-passed road noise (faint hiss, no rumble).
     const noise = ctx.createBufferSource();
     noise.buffer = this.getNoiseBuffer(ctx);
     noise.loop = true;
     const hp = ctx.createBiquadFilter();
     hp.type = "highpass";
-    hp.frequency.value = 2200;
+    hp.frequency.value = 2400;
     const air = ctx.createGain();
-    air.gain.value = 0.012;
+    air.gain.value = 0.008;
 
-    // Sport-sound tremolo — a gentle pulse on the whine that quickens with speed.
+    // Slow sport-sound tremolo so the harmony gently breathes/sings.
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
-    lfo.frequency.value = 6;
+    lfo.frequency.value = 5;
     const lfoDepth = ctx.createGain();
-    lfoDepth.gain.value = 0.12;
+    lfoDepth.gain.value = 0.07;
 
-    whine.connect(bp);
-    bp.connect(whineGain);
-    whineGain.connect(gain);
-    harm.connect(harmGain);
-    harmGain.connect(gain);
-    inverter.connect(invGain);
-    invGain.connect(gain);
+    toneA.connect(gA);
+    gA.connect(gain);
+    toneB.connect(gB);
+    gB.connect(gain);
+    sub.connect(gSub);
+    gSub.connect(gain);
+    inverter.connect(gInv);
+    gInv.connect(gain);
     noise.connect(hp);
     hp.connect(air);
     air.connect(gain);
     lfo.connect(lfoDepth);
-    lfoDepth.connect(whineGain.gain); // modulate the whine level for the pulsing shimmer
-    gain.connect(this.sfxGain ?? ctx.destination);
+    lfoDepth.connect(gA.gain); // breathe the fundamental for the singing pulse
+    gain.connect(lp);
+    lp.connect(this.sfxGain ?? ctx.destination);
 
-    whine.start();
-    harm.start();
+    toneA.start();
+    toneB.start();
+    sub.start();
     inverter.start();
     noise.start();
     lfo.start();
-    this.engine = { whine, harm, inverter, noise, lfo, bp, whineGain, invGain, air, gain };
+    this.engine = { toneA, toneB, sub, inverter, noise, lfo, gA, gInv, air, lp, gain };
     this.applyEngineIntensity();
   }
 
@@ -286,7 +297,7 @@ export class ProceduralAudioService {
     const now = ctx ? ctx.currentTime : 0;
     engine.gain.gain.setTargetAtTime(0.0001, now, 0.12);
     const stopAt = now + 0.4;
-    for (const node of [engine.whine, engine.harm, engine.inverter, engine.noise, engine.lfo]) {
+    for (const node of [engine.toneA, engine.toneB, engine.sub, engine.inverter, engine.noise, engine.lfo]) {
       try {
         node.stop(stopAt);
         node.onended = () => node.disconnect();
@@ -304,16 +315,18 @@ export class ProceduralAudioService {
     }
     const v = this.runIntensity;
     const t = ctx.currentTime;
-    // Whine sweeps from a soft idle hum up to a high "spaceship" turbine.
-    const whineFreq = 150 + v * 560; // ~150 Hz idle → ~1150 Hz flat-out/boost
-    engine.whine.frequency.setTargetAtTime(whineFreq, t, 0.08);
-    engine.harm.frequency.setTargetAtTime(whineFreq * 2.02, t, 0.08); // detuned octave shimmer
-    engine.bp.frequency.setTargetAtTime(whineFreq * 2.4, t, 0.1); // brightness tracks pitch
-    engine.inverter.frequency.setTargetAtTime(2200 + v * 4200, t, 0.1); // coil whine climbs
-    engine.invGain.gain.setTargetAtTime(0.006 + v * 0.03, t, 0.12);
-    engine.air.gain.setTargetAtTime(0.008 + v * 0.045, t, 0.12);
-    engine.lfo.frequency.setTargetAtTime(5 + v * 5, t, 0.2); // tremolo quickens with speed
-    engine.gain.gain.setTargetAtTime(0.05 + v * 0.05, t, 0.12);
+    // Deep, singing two-tone harmony: a low fundamental + a perfect fifth (×1.5), the
+    // fifth nudged +0.4% for a slow chorus beat. Much lower than a whine.
+    const fund = 55 + v * 205; // ~55 Hz idle → ~430 Hz flat-out (deep, not a high whine)
+    engine.toneA.frequency.setTargetAtTime(fund, t, 0.09);
+    engine.toneB.frequency.setTargetAtTime(fund * 1.5 * 1.004, t, 0.09);
+    engine.sub.frequency.setTargetAtTime(fund * 0.5, t, 0.09);
+    engine.inverter.frequency.setTargetAtTime(1400 + v * 2400, t, 0.1);
+    engine.gInv.gain.setTargetAtTime(0.003 + v * 0.01, t, 0.12);
+    engine.lp.frequency.setTargetAtTime(700 + v * 1500, t, 0.12); // warmth opens with speed
+    engine.air.gain.setTargetAtTime(0.005 + v * 0.03, t, 0.12);
+    engine.lfo.frequency.setTargetAtTime(4 + v * 3, t, 0.2);
+    engine.gain.gain.setTargetAtTime(0.07 + v * 0.05, t, 0.12);
   }
 
   setSettings(settings: Partial<ProceduralAudioSettings>): void {
