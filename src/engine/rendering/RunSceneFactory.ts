@@ -14,6 +14,7 @@ import { getVehicleDefinition, type VehicleDefinition } from "../../game/vehicle
 import { FEUDAL_JAPAN_BIOME_CONTENT, type DecorationKind } from "../../game/world/BiomeContent";
 import { LaneSystem } from "../../game/world/LaneSystem";
 import { MaterialFactory } from "../assets/MaterialFactory";
+import { mergeByMaterial } from "../assets/mergeByMaterial";
 import { ModelFactory } from "../assets/ModelFactory";
 import type { AppScene } from "./AppScene";
 import type { RunEffectContext } from "../../game/abilities/RunEffectContext";
@@ -1284,21 +1285,23 @@ export class RunSceneFactory {
     }
 
     function createDecoration(kind: DecorationKind): THREE.Object3D {
+      // Every decoration is static low-poly — merge its dozens of boxes into a handful
+      // of draw calls (per material). Houses alone drop from ~25-46 meshes to ~5-7.
       switch (kind) {
         case "torii":
-          return models.createTorii();
+          return mergeByMaterial(models.createTorii());
         case "bambooCluster":
-          return models.createBambooCluster();
+          return mergeByMaterial(models.createBambooCluster());
         case "stoneLantern":
-          return models.createStoneLantern();
+          return mergeByMaterial(models.createStoneLantern());
         case "machiyaHouse":
-          return models.createMachiyaHouse();
+          return mergeByMaterial(models.createMachiyaHouse());
         case "minkaHouse":
-          return models.createMinkaHouse();
+          return mergeByMaterial(models.createMinkaHouse());
         case "nagayaRowHouse":
-          return models.createNagayaRowHouse();
+          return mergeByMaterial(models.createNagayaRowHouse());
         case "kuraStorehouse":
-          return models.createKuraStorehouse();
+          return mergeByMaterial(models.createKuraStorehouse());
       }
     }
 

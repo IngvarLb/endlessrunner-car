@@ -433,6 +433,37 @@ export class GameApp {
     }
 
     this.renderer.render(this.activeScene.scene, this.activeScene.cameraController.camera);
+    if (import.meta.env.DEV) {
+      // Dev-only: tally visible draw-call sources by category for perf profiling.
+      type Node = { isMesh?: boolean; name: string; visible: boolean; parent: Node | null; traverse: (cb: (o: Node) => void) => void };
+      (window as unknown as { __meshStats?: () => unknown }).__meshStats = () => {
+        const counts: Record<string, number> = {};
+        let total = 0;
+        const visible = (o: Node): boolean => {
+          let n: Node | null = o;
+          while (n) {
+            if (!n.visible) return false;
+            n = n.parent;
+          }
+          return true;
+        };
+        (this.activeScene?.scene as unknown as Node | undefined)?.traverse((o) => {
+          if (!o.isMesh || !visible(o)) return;
+          total += 1;
+          let n: Node | null = o;
+          let tag = o.name || "(unnamed)";
+          while (n) {
+            if (n.name && /house|bamboo|lantern|torii|kura|machiya|minka|nagaya|traffic|police|koban|seg_|runner|char_|black|petal|speed/i.test(n.name)) {
+              tag = n.name.replace(/_low_poly|_fallback/g, "");
+              break;
+            }
+            n = n.parent;
+          }
+          counts[tag] = (counts[tag] ?? 0) + 1;
+        });
+        return { total, counts };
+      };
+    }
   }
 
   private getFrameInterval(state: GameState): number {
