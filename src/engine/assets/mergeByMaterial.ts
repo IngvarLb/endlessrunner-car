@@ -14,15 +14,25 @@ const KEEP_ATTRIBUTES = ["position", "normal", "uv"];
  * Meshes are grouped by their material *reference*, so props that reuse the shared
  * MaterialFactory materials collapse to a tiny set of draw calls.
  */
-export function mergeByMaterial(group: THREE.Group): THREE.Group {
+export function mergeByMaterial(group: THREE.Group, keep?: RegExp): THREE.Group {
   group.updateMatrixWorld(true);
   const inverse = new THREE.Matrix4().copy(group.matrixWorld).invert();
 
+  const merged = new THREE.Group();
+  merged.name = group.name;
+
   const byMaterial = new Map<THREE.Material, THREE.BufferGeometry[]>();
   const order: THREE.Material[] = [];
+  const kept: THREE.Object3D[] = [];
   group.traverse((child) => {
     const mesh = child as THREE.Mesh;
     if (!mesh.isMesh) {
+      return;
+    }
+    // Animated parts (blinkers, wreck smoke, …) must stay separate meshes: collect
+    // them to re-base onto the merged group with their transform intact.
+    if (keep && mesh.name && keep.test(mesh.name)) {
+      kept.push(mesh);
       return;
     }
     // Low-poly props are single-material; if an array slips through, take the first.
@@ -48,8 +58,13 @@ export function mergeByMaterial(group: THREE.Group): THREE.Group {
     byMaterial.get(material)!.push(flat);
   });
 
-  const merged = new THREE.Group();
-  merged.name = group.name;
+  // Re-base kept (animated) meshes onto the merged group, preserving world placement.
+  for (const mesh of kept) {
+    const rel = new THREE.Matrix4().multiplyMatrices(inverse, mesh.matrixWorld);
+    rel.decompose(mesh.position, mesh.quaternion, mesh.scale);
+    merged.add(mesh);
+  }
+
   for (const material of order) {
     const geometries = byMaterial.get(material)!;
     const combined = geometries.length === 1 ? geometries[0] : mergeGeometries(geometries, false);

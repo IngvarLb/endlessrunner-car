@@ -244,8 +244,8 @@ export class RunSceneFactory {
     const miniGlowGeo = new THREE.CircleGeometry(0.72, 20);
     const miniArmGeo = new THREE.PlaneGeometry(0.13, 0.04);
     const miniHoles: { group: THREE.Group; swirl: THREE.Group }[] = [];
-    const runner = models.createVehicle(vehicle.modelKey);
-    const chaser = models.createTokyoPoliceCar();
+    const runner = mergeByMaterial(models.createVehicle(vehicle.modelKey));
+    const chaser = mergeByMaterial(models.createTokyoPoliceCar());
     const collisionSystem = new CollisionSystem();
     const laneSystem = new LaneSystem(2.4);
     const runnerController = new RunnerController(runner, laneSystem, {
@@ -621,7 +621,8 @@ export class RunSceneFactory {
       const rowZ = ROW_START + key * ROW_GAP;
       for (let slot = 0; slot < 2; slot += 1) {
         const kind = TRAFFIC_KINDS[(key + slot) % TRAFFIC_KINDS.length];
-        const mesh = models.createTrafficCar(kind);
+        // Merge the static body; keep the animated blinkers + wreck smoke separate.
+        const mesh = mergeByMaterial(models.createTrafficCar(kind), /blinker|smoke/);
         const spec = TRAFFIC_CAR_SPECS[kind];
         trafficSystem.add({
           id: `traffic-${key}-${slot}`,
