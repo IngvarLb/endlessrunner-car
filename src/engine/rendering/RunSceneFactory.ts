@@ -585,7 +585,8 @@ export class RunSceneFactory {
 
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {
       const index = biome.track.startIndex + offset;
-      const segment = models.createGroundSegment(biome.track.segmentLength);
+      // Merge road + grass + every lane dash into a few draw calls (per material).
+      const segment = mergeByMaterial(models.createGroundSegment(biome.track.segmentLength));
       segment.position.z = index * biome.track.segmentLength;
       freezeStaticChildren(segment);
       groundSegments.push({ object: segment, initialZ: segment.position.z });
