@@ -489,6 +489,25 @@ export class RunSceneFactory {
     boostBurn.add(boostHalo);
     runner.add(boostBurn);
 
+    // 藍 Freie Bahn horn blast: expanding indigo shockwave rings that radiate from the
+    // car as the horn sounds (cars part before it). Each ring fades over ~0.55 s.
+    const hornRingMat = new THREE.MeshBasicMaterial({
+      color: 0x86c0ff, // bright indigo so it reads over the grey road
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const hornRingGeo = new THREE.TorusGeometry(1, 0.06, 10, 36); // thin tube → a crisp ripple, not a disc
+    const hornRings: { mesh: THREE.Mesh; life: number }[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const mesh = new THREE.Mesh(hornRingGeo, hornRingMat.clone());
+      mesh.rotation.x = Math.PI / 2; // lie flat on the road, radiating outward
+      mesh.visible = false;
+      scene.add(mesh);
+      hornRings.push({ mesh, life: 0 });
+    }
+
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {
       const index = biome.track.startIndex + offset;
       const segment = models.createGroundSegment(biome.track.segmentLength);
@@ -582,6 +601,10 @@ export class RunSceneFactory {
       dragonAura.visible = false;
       boostLevel = 0;
       boostBurn.visible = false;
+      for (const ring of hornRings) {
+        ring.life = 0;
+        ring.mesh.visible = false;
+      }
       cameraController.setFovBoost(0);
       // 鬼 Schwarzes Loch: hide the vortex and reset the siphon stream.
       bhTarget = 0;
@@ -647,6 +670,7 @@ export class RunSceneFactory {
       trafficSystem.update(dt, isRunning, contentLoopLength);
       turret.update(dt, isRunning);
       updateBoostAura(dt, elapsed);
+      updateHornPulse(dt);
       updateChaser(dt, elapsed, isRunning);
 
       world.position.z = -distance;
@@ -808,7 +832,8 @@ export class RunSceneFactory {
         setNight: (on) => setTint(on, NIGHT_SKY, 0.28, 0.32),
         setBlackHole: (on) => setBlackHole(on),
         setHyperspeed: (on) => setHyperspeed(on),
-        kick: () => cameraController.shake(0.24, 0.13)
+        kick: () => cameraController.shake(0.24, 0.13),
+        hornPulse: () => triggerHornPulse()
       }
     };
 
@@ -823,6 +848,11 @@ export class RunSceneFactory {
       boostJetMat.dispose();
       boostCoreMat.dispose();
       boostHaloMat.dispose();
+      hornRingMat.dispose();
+      hornRingGeo.dispose();
+      for (const ring of hornRings) {
+        (ring.mesh.material as THREE.Material).dispose();
+      }
       bhGlowMat.dispose();
       bhCoreMat.dispose();
       bhDiskMat.dispose();
@@ -876,6 +906,34 @@ export class RunSceneFactory {
         core.scale.set(1, 1, boostLevel * (1.0 + 0.4 * flicker));
       }
       boostHalo.rotation.z += dt * 1.8;
+    }
+
+    function triggerHornPulse(): void {
+      const ring = hornRings.find((r) => r.life <= 0) ?? hornRings[0];
+      const pos = runnerController.getPosition();
+      ring.life = 1;
+      ring.mesh.visible = true;
+      ring.mesh.position.set(pos.x, 0.35, pos.z);
+      ring.mesh.scale.setScalar(0.4);
+    }
+
+    function updateHornPulse(dt: number): void {
+      for (const ring of hornRings) {
+        if (ring.life <= 0) {
+          continue;
+        }
+        ring.life = Math.max(0, ring.life - dt / 0.55);
+        if (ring.life <= 0.01) {
+          ring.mesh.visible = false;
+          continue;
+        }
+        const grow = 1 - ring.life;
+        ring.mesh.scale.setScalar(0.5 + grow * 4.0); // stays roughly road-width
+        (ring.mesh.material as THREE.MeshBasicMaterial).opacity = ring.life * 0.85;
+        const pos = runnerController.getPosition(); // ride along with the car
+        ring.mesh.position.x = pos.x;
+        ring.mesh.position.z = pos.z;
+      }
     }
 
     function updateChaser(dt: number, _elapsed: number, isRunning: boolean): void {

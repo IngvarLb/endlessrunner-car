@@ -46,6 +46,8 @@ export type RunEffectContext = {
     setHyperspeed(on: boolean): void;
     /** A short camera punch on activation (e.g. 赤 Striker Boost kicking off). */
     kick(): void;
+    /** 藍 Freie Bahn: emit an expanding horn shockwave ring from the car. */
+    hornPulse(): void;
   };
   coins: {
     /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */

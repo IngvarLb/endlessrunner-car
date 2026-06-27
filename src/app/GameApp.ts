@@ -1799,9 +1799,12 @@ export class GameApp {
       return; // not charged, already active, or effect not implemented yet
     }
     this.unlockAudio();
-    // 龍 Überschall gets its own sonic-boom roar; the rest share the boost whoosh.
-    if (this.runAbilities.activeEffectState()?.effect === "hyperspeed") {
+    // Per-ability activation sting; the rest share the boost whoosh.
+    const firedEffect = this.runAbilities.activeEffectState()?.effect;
+    if (firedEffect === "hyperspeed") {
       this.audio?.playHyperspeed();
+    } else if (firedEffect === "hornClear") {
+      this.audio?.playHorn();
     } else {
       this.audio?.playBoost();
     }

@@ -315,6 +315,13 @@ export class ProceduralAudioService {
     this.playSweep(now + 0.2, 150, 58, 0.55, "square", 0.12, this.sfxGain);
   }
 
+  /** 藍 Freie Bahn activation — a two-tone car horn blast. */
+  playHorn(): void {
+    const now = this.ensureContext().currentTime;
+    this.playTone(now, 440, 0.5, "sawtooth", 0.14, this.sfxGain, 0.01); // A4
+    this.playTone(now, 554, 0.5, "sawtooth", 0.12, this.sfxGain, 0.01); // C#5 → a horn chord
+  }
+
   playCollision(): void {
     const context = this.ensureContext();
     const now = context.currentTime;

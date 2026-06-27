@@ -12,19 +12,32 @@ const RESTORE_REACTION_SEC = 1.3; // on end, snap traffic back to normal beyond 
  * harmlessly aside), while coins funnel into it: a clear, coin-lined lane to blast
  * down for the duration. Side lanes stay lethal, so you commit to the middle.
  */
+const HORN_PULSE_INTERVAL = 1.5; // seconds between repeating horn shockwaves
+
 export class HornClearEffect implements RunEffect {
   readonly key: EffectKey = "hornClear";
   readonly displayName = "Freie Bahn";
+
+  private pulseTimer = 0;
 
   start(ctx: RunEffectContext): void {
     ctx.traffic.setLaneShield(MIDDLE_LANE);
     ctx.coins.biasLane(MIDDLE_LANE);
     ctx.coins.pullToLane(MIDDLE_LANE); // coin row appears at once, synced with the cars parting
+    ctx.scene.kick(); // a punch as the horn blares
+    ctx.scene.hornPulse(); // first shockwave parts the traffic
+    this.pulseTimer = HORN_PULSE_INTERVAL;
   }
 
-  update(_dt: number, ctx: RunEffectContext): void {
+  update(dt: number, ctx: RunEffectContext): void {
     // Keep clearing — newly recycled/spawned cars can land in the middle lane.
     ctx.traffic.swerveOutOfLane(MIDDLE_LANE, SWERVE_AHEAD);
+    // Re-honk on a steady beat so the shockwave keeps pulsing for the duration.
+    this.pulseTimer -= dt;
+    if (this.pulseTimer <= 0) {
+      this.pulseTimer = HORN_PULSE_INTERVAL;
+      ctx.scene.hornPulse();
+    }
   }
 
   end(ctx: RunEffectContext): void {
