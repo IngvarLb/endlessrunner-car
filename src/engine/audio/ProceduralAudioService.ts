@@ -326,7 +326,7 @@ export class ProceduralAudioService {
     engine.lp.frequency.setTargetAtTime(700 + v * 1500, t, 0.12); // warmth opens with speed
     engine.air.gain.setTargetAtTime(0.005 + v * 0.03, t, 0.12);
     engine.lfo.frequency.setTargetAtTime(4 + v * 3, t, 0.2);
-    engine.gain.gain.setTargetAtTime(0.07 + v * 0.05, t, 0.12);
+    engine.gain.gain.setTargetAtTime(0.032 + v * 0.026, t, 0.12); // sits behind the music
   }
 
   setSettings(settings: Partial<ProceduralAudioSettings>): void {
