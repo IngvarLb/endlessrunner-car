@@ -13,7 +13,9 @@ export class LightingRig {
     sun.castShadow = quality !== "low";
 
     if (sun.castShadow) {
-      const shadowSize = quality === "high" ? 2048 : 1024;
+      // 1024 over a 36×36 frustum (~28 texels/unit) is plenty for low-poly; 2048 was
+      // 4× the shadow-map work for no visible gain.
+      const shadowSize = 1024;
       sun.shadow.mapSize.set(shadowSize, shadowSize);
       sun.shadow.bias = -0.0005;
       sun.shadow.camera.near = 1;

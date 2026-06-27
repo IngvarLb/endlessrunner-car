@@ -14,7 +14,9 @@ export class RendererService {
     this.renderer.setClearColor(0x58c7f3, 1);
     this.renderer.setPixelRatio(this.getPixelRatio(quality));
     this.renderer.shadowMap.enabled = quality !== "low";
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PCF (single-pass) instead of PCFSoft (multi-tap) — far cheaper per lit fragment,
+    // visually near-identical for this low-poly art. Big GPU/thermal saving.
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.18;
