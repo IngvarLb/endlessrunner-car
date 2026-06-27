@@ -111,7 +111,7 @@ export class RunSceneFactory {
     const DAY_SKY = new THREE.Color(0x58c7f3);
     const NIGHT_SKY = new THREE.Color(0x141a38); // 将 Nachtjagd
     const BLACKHOLE_SKY = new THREE.Color(0x1c0b30); // 鬼 Schwarzes Loch (deep violet)
-    const HYPER_SKY = new THREE.Color(0x9fe0ff); // 龍 Überschall (bright supersonic haze)
+    const HYPER_SKY = new THREE.Color(0xffe1a6); // 龍 Überschall (bright golden supersonic haze — the dragon's realm)
     const dayHemi = sceneLights.hemi.intensity;
     const daySun = sceneLights.sun.intensity;
     // Scene tint (将 night / 鬼 black hole): lerp lights + sky/fog toward a mood and back.
@@ -124,10 +124,18 @@ export class RunSceneFactory {
     const cameraController = new CameraController();
     const tapRaycaster = new THREE.Raycaster(); // 鬼 tap-to-lift
 
-    // 龍 Überschall speed lines: white streaks streaming past the camera at warp speed.
-    const speedLineGeo = new THREE.BoxGeometry(0.045, 0.045, 1);
+    // 龍 Überschall warp: a dense GOLDEN slipstream tunnel streaming past the camera —
+    // the dragon's own light tearing past at supersonic speed (legendary, not cheap white scratches).
+    const speedLineGeo = new THREE.BoxGeometry(0.07, 0.07, 1);
     const speedLineMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
+      color: 0xfff3df, // warm-white warp streaks (carry contrast over the golden sky)
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const speedLineCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xff9a2a, // saturated orange-gold accent streaks
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,
@@ -136,21 +144,24 @@ export class RunSceneFactory {
     const speedLines = new THREE.Group();
     speedLines.name = "hyper_speed_lines";
     speedLines.visible = false;
-    const streaks: { mesh: THREE.Mesh; angle: number; radius: number }[] = [];
-    const seedStreak = (s: { mesh: THREE.Mesh; angle: number; radius: number }, z: number): void => {
+    const streaks: { mesh: THREE.Mesh; angle: number; radius: number; len: number }[] = [];
+    const seedStreak = (s: { mesh: THREE.Mesh; angle: number; radius: number; len: number }, z: number): void => {
       s.angle = Math.random() * Math.PI * 2;
-      s.radius = 1.8 + Math.random() * 4.7;
-      s.mesh.scale.z = 2.5 + Math.random() * 2.5;
+      s.radius = 1.5 + Math.random() * 5.0;
+      s.len = 2.5 + Math.random() * 4.5;
+      s.mesh.scale.z = s.len;
       s.mesh.position.set(Math.cos(s.angle) * s.radius, Math.sin(s.angle) * s.radius, z);
     };
-    for (let i = 0; i < 30; i++) {
-      const streak = { mesh: new THREE.Mesh(speedLineGeo, speedLineMat), angle: 0, radius: 0 };
-      seedStreak(streak, -38 + Math.random() * 41);
+    for (let i = 0; i < 70; i++) {
+      // Every 3rd streak is an orange-gold accent — the rest are warm-white.
+      const streak = { mesh: new THREE.Mesh(speedLineGeo, i % 3 === 0 ? speedLineCoreMat : speedLineMat), angle: 0, radius: 0, len: 0 };
+      seedStreak(streak, -42 + Math.random() * 45);
       speedLines.add(streak.mesh);
       streaks.push(streak);
     }
     let hyperLevel = 0; // eased 0→1 fade of the speed-line / haze intensity
     let hyperTarget = 0;
+    let hyperTime = 0; // free-running clock for afterburner flicker
 
     // 鬼 Schwarzes Loch — an epic violet black hole brewing in the sky. A dark SPHERE
     // (writes depth, so it genuinely occludes the disk's far half → it reads 3D, not a
@@ -390,6 +401,53 @@ export class RunSceneFactory {
     boostAura.scale.set(1.75, 0.72, 2.25);
     boostAura.visible = false;
 
+    // 龍 Überschall afterburner: twin two-layer flame jets (white-hot core inside a
+    // saturated-orange flame) streaming off the dragon's tail, plus a warm halo wrapping
+    // the car — only lit while Überschall runs (driven by hyperLevel). Saturated/hot so
+    // it reads as flame even additively over the bright golden sky.
+    const dragonJetMat = new THREE.MeshBasicMaterial({
+      color: 0xff6a10, // outer flame (saturated orange)
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const dragonCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xfff0c8, // white-hot inner core
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const dragonHaloMat = new THREE.MeshBasicMaterial({
+      color: 0xffb347, // warm gold body halo
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const dragonAura = new THREE.Group();
+    dragonAura.name = "runner_dragon_aura";
+    dragonAura.visible = false;
+    const dragonJets: THREE.Mesh[] = [];
+    const dragonCores: THREE.Mesh[] = [];
+    for (const sx of [-1, 1]) {
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.26, 2.4, 14), dragonJetMat);
+      flame.rotation.x = -Math.PI / 2; // apex points backward (-Z), trailing the car
+      flame.position.set(sx * 0.34, 0.42, -2.4);
+      const core = new THREE.Mesh(new THREE.ConeGeometry(0.13, 1.7, 12), dragonCoreMat);
+      core.rotation.x = -Math.PI / 2;
+      core.position.set(sx * 0.34, 0.42, -2.0);
+      dragonJets.push(flame);
+      dragonCores.push(core);
+      dragonAura.add(flame, core);
+    }
+    const dragonHalo = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), dragonHaloMat);
+    dragonHalo.scale.set(1.0, 0.62, 1.7);
+    dragonHalo.position.set(0, 0.5, -0.1);
+    dragonAura.add(dragonHalo);
+    runner.add(dragonAura);
+
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {
       const index = biome.track.startIndex + offset;
       const segment = models.createGroundSegment(biome.track.segmentLength);
@@ -478,7 +536,9 @@ export class RunSceneFactory {
       hyperTarget = 0;
       hyperLevel = 0;
       speedLineMat.opacity = 0;
+      speedLineCoreMat.opacity = 0;
       speedLines.visible = false;
+      dragonAura.visible = false;
       cameraController.setFovBoost(0);
       // 鬼 Schwarzes Loch: hide the vortex and reset the siphon stream.
       bhTarget = 0;
@@ -590,22 +650,44 @@ export class RunSceneFactory {
         if (Math.abs(hyperLevel - hyperTarget) < 0.01) {
           hyperLevel = hyperTarget;
         }
-        speedLineMat.opacity = hyperLevel * 0.6;
+        speedLineMat.opacity = hyperLevel * 0.85;
+        speedLineCoreMat.opacity = hyperLevel * 0.95;
         speedLines.visible = hyperLevel > 0.01;
       }
+      updateDragonAura(dt);
       if (!speedLines.visible) {
         return;
       }
       // Anchor the field to the camera, then stream the streaks toward (and past) the viewer.
       speedLines.position.copy(cameraController.camera.position);
       speedLines.quaternion.copy(cameraController.camera.quaternion);
-      const step = 55 * dt;
+      const step = 80 * dt; // supersonic streaming
       for (const s of streaks) {
         s.mesh.position.z += step;
         if (s.mesh.position.z > 3.5) {
-          seedStreak(s, -38);
+          seedStreak(s, -42);
         }
       }
+    }
+
+    function updateDragonAura(dt: number): void {
+      dragonAura.visible = hyperLevel > 0.01;
+      if (!dragonAura.visible) {
+        return;
+      }
+      hyperTime += dt;
+      const flicker = 0.8 + 0.2 * Math.sin(hyperTime * 38); // fast jet flutter
+      const pulse = 0.85 + 0.15 * Math.sin(hyperTime * 6);
+      dragonJetMat.opacity = hyperLevel * 0.95 * flicker;
+      dragonCoreMat.opacity = hyperLevel * 0.95;
+      dragonHaloMat.opacity = hyperLevel * 0.34 * pulse;
+      for (const jet of dragonJets) {
+        jet.scale.set(flicker, flicker, hyperLevel * (1.1 + 0.5 * flicker));
+      }
+      for (const core of dragonCores) {
+        core.scale.set(1, 1, hyperLevel * (1.0 + 0.4 * flicker));
+      }
+      dragonHalo.rotation.z += dt * 1.6;
     }
 
     function setBlackHole(on: boolean): void {
@@ -690,6 +772,10 @@ export class RunSceneFactory {
       coinRain.dispose();
       turret.dispose();
       speedLineMat.dispose();
+      speedLineCoreMat.dispose();
+      dragonJetMat.dispose();
+      dragonCoreMat.dispose();
+      dragonHaloMat.dispose();
       bhGlowMat.dispose();
       bhCoreMat.dispose();
       bhDiskMat.dispose();
@@ -719,7 +805,8 @@ export class RunSceneFactory {
     }
 
     function updateBoostAura(dt: number, elapsed: number): void {
-      boostAura.visible = runnerController.isBoosting();
+      // During 龍 Überschall the golden dragon afterburner replaces the turquoise boost ring.
+      boostAura.visible = runnerController.isBoosting() && hyperLevel < 0.01;
       boostAura.rotation.y += dt * 4.5;
       boostAura.rotation.z += dt * 2.4;
       boostAura.position.y = -0.14 + Math.sin(elapsed * 14) * 0.02;

@@ -255,6 +255,10 @@ export class GameApp {
       meters: progress.meters
     });
     this.resetChargeHud(this.selectedVehicle);
+    if (import.meta.env.DEV) {
+      // Dev-only: fill the Main charge from the console for visual smoke tests.
+      (window as unknown as { __charge?: () => void }).__charge = () => this.runAbilities?.debugFillCharge();
+    }
     this.runScene.setPassiveHooks({
       onWeakFail: () => this.runAbilities?.onWeakFail() ?? { type: "normal" },
       onApproachCar: () => this.runAbilities?.onApproachCar() ?? false,
@@ -1795,7 +1799,12 @@ export class GameApp {
       return; // not charged, already active, or effect not implemented yet
     }
     this.unlockAudio();
-    this.audio?.playBoost();
+    // 龍 Überschall gets its own sonic-boom roar; the rest share the boost whoosh.
+    if (this.runAbilities.activeEffectState()?.effect === "hyperspeed") {
+      this.audio?.playHyperspeed();
+    } else {
+      this.audio?.playBoost();
+    }
     this.hudCharge?.classList.remove("is-ready");
     this.hudCharge?.classList.add("is-fired");
     window.setTimeout(() => this.hudCharge?.classList.remove("is-fired"), 360);

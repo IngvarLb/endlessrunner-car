@@ -302,6 +302,19 @@ export class ProceduralAudioService {
     this.playNoiseBurst(now, 0.28, 0.16, 900, 5200, "bandpass", this.sfxGain);
   }
 
+  /** 龍 Überschall activation — a sonic boom + dragon roar tearing into warp speed. */
+  playHyperspeed(): void {
+    const now = this.ensureContext().currentTime;
+    // sonic boom: a deep, hard impact
+    this.playSweep(now, 240, 38, 0.5, "sawtooth", 0.3, this.sfxGain);
+    this.playNoiseBurst(now, 0.5, 0.32, 1900, 110, "lowpass", this.sfxGain);
+    // rising whoosh into the warp tunnel
+    this.playNoiseBurst(now + 0.04, 0.42, 0.13, 300, 3400, "bandpass", this.sfxGain);
+    // dragon roar: a layered low growl that swells then falls
+    this.playSweep(now + 0.05, 86, 150, 0.34, "sawtooth", 0.17, this.sfxGain);
+    this.playSweep(now + 0.2, 150, 58, 0.55, "square", 0.12, this.sfxGain);
+  }
+
   playCollision(): void {
     const context = this.ensureContext();
     const now = context.currentTime;

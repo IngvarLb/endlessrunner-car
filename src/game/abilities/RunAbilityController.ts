@@ -354,6 +354,11 @@ export class RunAbilityController {
     return { survived: false };
   }
 
+  /** Dev-only: top the charge meter to ready (wired behind import.meta.env.DEV for visual smoke tests). */
+  debugFillCharge(): void {
+    this.charge?.add(Number.MAX_SAFE_INTEGER);
+  }
+
   /** Drain mastery level-ups gained this frame/run (for a one-shot HUD toast). */
   consumeLevelUp(): number {
     const count = this.pendingLevelUps;
