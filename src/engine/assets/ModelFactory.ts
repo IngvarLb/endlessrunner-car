@@ -640,6 +640,39 @@ export class ModelFactory {
     return group;
   }
 
+  createMapleTree(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_maple_tree";
+
+    const trunk = this.mesh(new THREE.CylinderGeometry(0.12, 0.2, 2.4, 6), this.materials.darkWood, [0, 1.2, 0]);
+    group.add(trunk);
+    const branchL = this.mesh(new THREE.CylinderGeometry(0.06, 0.09, 1.0, 5), this.materials.darkWood, [-0.28, 2.0, 0.05]);
+    branchL.rotation.z = 0.7;
+    const branchR = this.mesh(new THREE.CylinderGeometry(0.06, 0.09, 1.0, 5), this.materials.darkWood, [0.3, 2.05, -0.05]);
+    branchR.rotation.z = -0.8;
+    group.add(branchL, branchR);
+
+    // Fiery faceted canopy: overlapping low-poly icosahedron blobs across the 3 maple
+    // materials so each tree blends crimson/orange/gold in autumn (green in summer).
+    const mats = [this.materials.mapleLeafRed, this.materials.mapleLeafOrange, this.materials.mapleLeafGold];
+    const blobs: Array<[number, number, number, number, number]> = [
+      [0, 2.7, 0, 1.15, 0],
+      [0.6, 3.05, 0.2, 0.82, 1],
+      [-0.62, 2.95, -0.18, 0.8, 2],
+      [0.1, 3.35, -0.35, 0.74, 1],
+      [-0.25, 3.4, 0.32, 0.66, 0],
+      [0.4, 2.55, -0.5, 0.6, 2]
+    ];
+    for (const [x, y, z, r, mi] of blobs) {
+      const blob = this.mesh(new THREE.IcosahedronGeometry(r, 0), mats[mi], [x, y, z]);
+      blob.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      group.add(blob);
+    }
+
+    this.enableShadows(group);
+    return group;
+  }
+
   createStoneLantern(): THREE.Group {
     const group = new THREE.Group();
     group.name = "deco_stone_lantern_fallback";

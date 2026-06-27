@@ -3,6 +3,7 @@ import type { TrafficRowDefinition } from "../traffic/TrafficTypes";
 export type DecorationKind =
   | "torii"
   | "bambooCluster"
+  | "mapleTree"
   | "stoneLantern"
   | "machiyaHouse"
   | "minkaHouse"
@@ -163,6 +164,28 @@ function createFeudalJapanDecorations(): DecorationPlacement[] {
         z: z + 1
       });
     }
+  }
+
+  // 紅葉 Momiji maples lining the road just inside the houses — leafy green in the
+  // village leg, blazing crimson/orange/gold in the autumn leg. Staggered both sides.
+  for (let index = 0, z = 6; z < loopLength; index += 1, z += 9.5) {
+    const side = index % 2 === 0 ? -1 : 1;
+    decorations.push(
+      {
+        kind: "mapleTree",
+        x: side * (5.0 + (index % 3) * 0.3),
+        z,
+        rotationY: index * 1.3,
+        scale: 1.0 + (index % 4) * 0.12
+      },
+      {
+        kind: "mapleTree",
+        x: -side * (5.2 + (index % 2) * 0.4),
+        z: z + 4.5,
+        rotationY: index * 2.1 + 1,
+        scale: 0.92 + (index % 3) * 0.14
+      }
+    );
   }
 
   for (let index = 0, z = 0; z < loopLength + 4; index += 1, z += 4) {

@@ -98,7 +98,7 @@ export class RunSceneFactory {
   static create(
     config: GameConfig,
     models: ModelFactory,
-    _materials: MaterialFactory,
+    materials: MaterialFactory,
     vehicle: VehicleDefinition = getVehicleDefinition(),
     events?: GameEvents
   ): RunScene {
@@ -122,6 +122,31 @@ export class RunSceneFactory {
     const tintSky = NIGHT_SKY.clone();
     let tintHemiScale = 0.28;
     let tintSunScale = 0.32;
+
+    // 紅葉 Autumn Momiji season — a slow crossfade that oscillates the world between the
+    // summer village and a blazing autumn leg by distance. It is the BASE atmosphere; the
+    // ability tints (night / black-hole / blossom / hyper) still layer on top of it.
+    let seasonLevel = 0; // 0 = summer village, 1 = autumn momiji
+    let seasonTarget = 0;
+    const SEASON_LEG = 500; // metres per leg (leg 0 village, leg 1 autumn, leg 2 village …)
+    const AUTUMN_SKY = new THREE.Color(0xe9b16a); // warm hazy golden-hour amber
+    const SUMMER_SUN = sceneLights.sun.color.clone();
+    const AUTUMN_SUN = new THREE.Color(0xffcf8a); // low golden sun
+    const SUMMER_HEMI = sceneLights.hemi.color.clone();
+    const AUTUMN_HEMI = new THREE.Color(0xffd9a8);
+    // Shared materials the season recolours (snapshot summer base → lerp toward autumn).
+    // Only the run scene renders these, so morphing the shared instances is safe.
+    const seasonMats: { mat: { color: THREE.Color }; summer: THREE.Color; autumn: THREE.Color }[] = [
+      { mat: materials.grass, summer: materials.grass.color.clone(), autumn: new THREE.Color(0x9c8a3c) },
+      { mat: materials.mapleLeafRed, summer: materials.mapleLeafRed.color.clone(), autumn: new THREE.Color(0xc62f1c) },
+      { mat: materials.mapleLeafOrange, summer: materials.mapleLeafOrange.color.clone(), autumn: new THREE.Color(0xe0701c) },
+      { mat: materials.mapleLeafGold, summer: materials.mapleLeafGold.color.clone(), autumn: new THREE.Color(0xe6b022) }
+    ];
+    const restoreSeasonMats = (): void => {
+      for (const s of seasonMats) {
+        s.mat.color.copy(s.summer);
+      }
+    };
 
     const cameraController = new CameraController();
     const tapRaycaster = new THREE.Raycaster(); // 鬼 tap-to-lift
@@ -598,6 +623,34 @@ export class RunSceneFactory {
     let blossomTarget = 0;
     let petalTime = 0;
 
+    // 紅葉 falling maple leaves — same drift idea as the 桜 petals, but red/orange/gold and
+    // driven by the season level (ambient, not an ability). Camera-anchored to fill the frame.
+    type LeafD = { mesh: THREE.Mesh; sway: number; phase: number; fall: number; spin: number };
+    const leafMats = [0xd23a1e, 0xe07a1e, 0xe6b324].map(
+      (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })
+    );
+    const leafGeo = new THREE.PlaneGeometry(0.26, 0.2);
+    const leaves = new THREE.Group();
+    leaves.name = "momiji_leaves";
+    leaves.visible = false;
+    const leafData: LeafD[] = [];
+    const seedLeaf = (d: LeafD, y: number): void => {
+      d.sway = 0.5 + Math.random() * 1.1;
+      d.phase = Math.random() * Math.PI * 2;
+      d.fall = 1.3 + Math.random() * 1.6;
+      d.spin = (Math.random() - 0.5) * 5;
+      d.mesh.position.set((Math.random() * 2 - 1) * 6.5, y, -3 - Math.random() * 13);
+      d.mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    };
+    for (let i = 0; i < 64; i += 1) {
+      const d: LeafD = { mesh: new THREE.Mesh(leafGeo, leafMats[i % leafMats.length]), sway: 0, phase: 0, fall: 0, spin: 0 };
+      seedLeaf(d, -3 + Math.random() * 9);
+      leaves.add(d.mesh);
+      leafData.push(d);
+    }
+    scene.add(leaves);
+    let leafTime = 0;
+
     // Coin pickup pop: a quick additive gold burst at each collected street coin.
     // Lives in `world` so it rides the road as it scrolls past during its short life.
     const sparkleMat = new THREE.MeshBasicMaterial({ color: 0xffe48a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -728,6 +781,16 @@ export class RunSceneFactory {
       blossomTarget = 0;
       petalMat.opacity = 0;
       petals.visible = false;
+      // 紅葉 season: back to the summer village; restore the morphed shared materials.
+      seasonLevel = 0;
+      seasonTarget = 0;
+      restoreSeasonMats();
+      sceneLights.sun.color.copy(SUMMER_SUN);
+      sceneLights.hemi.color.copy(SUMMER_HEMI);
+      for (const m of leafMats) {
+        m.opacity = 0;
+      }
+      leaves.visible = false;
       moonLevel = 0;
       moonTarget = 0;
       moon.visible = false;
@@ -776,6 +839,8 @@ export class RunSceneFactory {
       if (isRunning) {
         distance += activeSpeed * dt;
         scoreSystem.updateDistance(distance);
+        // 紅葉 season oscillates by distance: village (leg 0) → autumn (leg 1) → … .
+        seasonTarget = Math.floor(distance / SEASON_LEG) % 2 === 1 ? 1 : 0;
         cleanRunTimer += dt;
         pressure = Math.max(0, pressure - dt * 4);
         introChaserTimer = Math.max(0, introChaserTimer - dt);
@@ -803,13 +868,14 @@ export class RunSceneFactory {
       updateTailStreaks(activeSpeed, isRunning);
       updateHornPulse(dt);
       updatePetals(dt);
+      updateLeaves(dt);
       updateMoon(dt);
       updateCoinSparkles(dt);
       updateChaser(dt, elapsed, isRunning);
 
       world.position.z = -distance;
       cameraController.update(dt, elapsed, state, isRunning ? runnerController.getPosition().x : 0);
-      updateTint(dt);
+      updateAtmosphere(dt);
       updateSpeedLines(dt);
       updateBlackHole(dt);
     };
@@ -823,19 +889,58 @@ export class RunSceneFactory {
       }
     }
 
-    function updateTint(dt: number): void {
-      if (tintLevel === tintTarget) {
-        return;
+    function updateAtmosphere(dt: number): void {
+      // Ease the season (slow, ~few seconds) and the ability tint (fast) toward target.
+      seasonLevel = THREE.MathUtils.lerp(seasonLevel, seasonTarget, Math.min(1, dt * 0.5));
+      if (Math.abs(seasonLevel - seasonTarget) < 0.002) {
+        seasonLevel = seasonTarget;
       }
-      tintLevel = THREE.MathUtils.lerp(tintLevel, tintTarget, Math.min(1, dt * 3.5));
-      if (Math.abs(tintLevel - tintTarget) < 0.01) {
-        tintLevel = tintTarget;
+      if (tintLevel !== tintTarget) {
+        tintLevel = THREE.MathUtils.lerp(tintLevel, tintTarget, Math.min(1, dt * 3.5));
+        if (Math.abs(tintLevel - tintTarget) < 0.01) {
+          tintLevel = tintTarget;
+        }
       }
-      sceneLights.hemi.intensity = THREE.MathUtils.lerp(dayHemi, dayHemi * tintHemiScale, tintLevel);
-      sceneLights.sun.intensity = THREE.MathUtils.lerp(daySun, daySun * tintSunScale, tintLevel);
-      const sky = DAY_SKY.clone().lerp(tintSky, tintLevel);
+      // Seasonal base atmosphere (village → autumn), then the ability tint layered over it.
+      const baseHemiI = dayHemi * THREE.MathUtils.lerp(1, 0.96, seasonLevel);
+      const baseSunI = daySun * THREE.MathUtils.lerp(1, 1.02, seasonLevel);
+      const sky = DAY_SKY.clone().lerp(AUTUMN_SKY, seasonLevel).lerp(tintSky, tintLevel);
       (scene.background as THREE.Color).copy(sky);
       (scene.fog as THREE.Fog).color.copy(sky);
+      sceneLights.hemi.intensity = THREE.MathUtils.lerp(baseHemiI, baseHemiI * tintHemiScale, tintLevel);
+      sceneLights.sun.intensity = THREE.MathUtils.lerp(baseSunI, baseSunI * tintSunScale, tintLevel);
+      // Golden-hour warmth on the lights in autumn (independent of the ability tint).
+      sceneLights.sun.color.copy(SUMMER_SUN).lerp(AUTUMN_SUN, seasonLevel);
+      sceneLights.hemi.color.copy(SUMMER_HEMI).lerp(AUTUMN_HEMI, seasonLevel);
+      // Recolour the shared world materials (grass + maple canopy) with the season.
+      for (const s of seasonMats) {
+        s.mat.color.copy(s.summer).lerp(s.autumn, seasonLevel);
+      }
+    }
+
+    function updateLeaves(dt: number): void {
+      const op = seasonLevel * 0.85;
+      for (const m of leafMats) {
+        m.opacity = op;
+      }
+      leaves.visible = op > 0.02;
+      if (!leaves.visible) {
+        return;
+      }
+      leafTime += dt;
+      // Anchor the field to the camera so leaves fill the view wherever it points.
+      leaves.position.copy(cameraController.camera.position);
+      leaves.quaternion.copy(cameraController.camera.quaternion);
+      for (const d of leafData) {
+        const m = d.mesh;
+        m.position.y -= d.fall * dt;
+        m.position.x += Math.sin(leafTime * d.sway + d.phase) * dt * 0.8;
+        m.rotation.x += d.spin * dt;
+        m.rotation.z += d.spin * dt * 0.7;
+        if (m.position.y < -4) {
+          seedLeaf(d, 6); // recycle to the top of the field
+        }
+      }
     }
 
     function updateTailStreaks(speed: number, running: boolean): void {
@@ -1008,6 +1113,15 @@ export class RunSceneFactory {
       }
       petalMat.dispose();
       petalGeo.dispose();
+      // 紅葉 leaves + restore the shared materials the season morphed (so other scenes
+      // that share MaterialFactory always see the summer base).
+      restoreSeasonMats();
+      sceneLights.sun.color.copy(SUMMER_SUN);
+      sceneLights.hemi.color.copy(SUMMER_HEMI);
+      leafGeo.dispose();
+      for (const m of leafMats) {
+        m.dispose();
+      }
       moonBodyMat.dispose();
       moonGlowMat.dispose();
       sparkleMat.dispose();
@@ -1355,6 +1469,8 @@ export class RunSceneFactory {
           return mergeByMaterial(models.createTorii());
         case "bambooCluster":
           return mergeByMaterial(models.createBambooCluster());
+        case "mapleTree":
+          return mergeByMaterial(models.createMapleTree());
         case "stoneLantern":
           return mergeByMaterial(models.createStoneLantern());
         case "machiyaHouse":

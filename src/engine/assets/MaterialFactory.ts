@@ -15,6 +15,12 @@ export class MaterialFactory {
   readonly stone = this.standard(0x7e858b, 0.9, 0.02);
   readonly foliage = this.standard(0x35a853, 0.95, 0.02);
   readonly foliageDark = this.standard(0x1f7a42, 0.95, 0.02);
+  // 紅葉 Autumn Momiji maple canopy — summer-green base colors; the run scene morphs
+  // these toward fiery crimson/orange/gold as the season crossfades (one shared trio,
+  // so every maple shifts together with no pop). Only the run scene uses them.
+  readonly mapleLeafRed = this.standard(0x4f9e3a, 0.95, 0.02);
+  readonly mapleLeafOrange = this.standard(0x5aa83e, 0.95, 0.02);
+  readonly mapleLeafGold = this.standard(0x74b23f, 0.95, 0.02);
   readonly torii = this.standard(0xe9442e, 0.75, 0.05);
   readonly gold = this.standard(0xffc857, 0.45, 0.25);
   readonly turquoise = this.emissive(0x00e5ff, 0.35);
