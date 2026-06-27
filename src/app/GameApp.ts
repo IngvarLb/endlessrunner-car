@@ -118,10 +118,6 @@ export class GameApp {
   private hudToastK?: HTMLElement;
   private hudToastBig?: HTMLElement;
   private hudToastTimeout = 0;
-  private hudActive?: HTMLElement;
-  private hudActiveKanji?: HTMLElement;
-  private hudActiveName?: HTMLElement;
-  private hudActiveTime?: HTMLElement;
   private countdownBox?: HTMLElement;
   private countdownNum?: HTMLElement;
   private hudPassive?: HTMLElement;
@@ -640,12 +636,6 @@ export class GameApp {
           <span class="fr-hud-toast-txt"><span class="fr-hud-toast-k" data-hud-toast-k>MEISTERSCHAFT</span><span class="fr-hud-toast-big" data-hud-toast-big>Stufe 2</span></span>
         </div>
 
-        <div class="fr-hud-active" data-hud-active aria-hidden="true">
-          <span class="fr-hud-active-k" data-hud-active-k>赤</span>
-          <span class="fr-hud-active-nm" data-hud-active-nm>STRIKER BOOST</span>
-          <span class="fr-hud-active-t" data-hud-active-t>0,0 s</span>
-        </div>
-
         <div class="fr-hud-bottom">
           <button class="fr-charge fr-charge-action" type="button" data-hud-charge aria-label="Fähigkeit aktivieren">
             <span class="fr-charge-ring" data-hud-charge-ring></span>
@@ -739,10 +729,6 @@ export class GameApp {
     this.hudToastStar = ui.querySelector("[data-hud-toast-star]") ?? undefined;
     this.hudToastK = ui.querySelector("[data-hud-toast-k]") ?? undefined;
     this.hudToastBig = ui.querySelector("[data-hud-toast-big]") ?? undefined;
-    this.hudActive = ui.querySelector("[data-hud-active]") ?? undefined;
-    this.hudActiveKanji = ui.querySelector("[data-hud-active-k]") ?? undefined;
-    this.hudActiveName = ui.querySelector("[data-hud-active-nm]") ?? undefined;
-    this.hudActiveTime = ui.querySelector("[data-hud-active-t]") ?? undefined;
     this.countdownBox = ui.querySelector("[data-fr-countdown]") ?? undefined;
     this.countdownNum = ui.querySelector("[data-fr-countdown-num]") ?? undefined;
     this.hudPassive = ui.querySelector("[data-hud-passive]") ?? undefined;
@@ -1718,14 +1704,10 @@ export class GameApp {
     this.hudCharge?.style.setProperty("--cc", vehicle.paint);
     this.hudChargeRing?.style.setProperty("--p", "0%");
     this.hudCharge?.classList.remove("is-ready");
+    this.hudCharge?.classList.remove("is-active");
     if (this.hudChargeTag) {
       this.hudChargeTag.textContent = "0%";
     }
-    if (this.hudActiveKanji) {
-      this.hudActiveKanji.textContent = vehicle.kanji;
-    }
-    this.hudActive?.style.setProperty("--cc", vehicle.paint);
-    this.hudActive?.classList.remove("is-show");
   }
 
   /** Per-frame: charge-ring fill/ready state + mastery level-up toast. */
@@ -1735,26 +1717,25 @@ export class GameApp {
       return;
     }
 
-    const ratio = abilities.chargeRatio();
-    const ready = abilities.isReady();
-    this.hudChargeRing?.style.setProperty("--p", `${(ratio * 100).toFixed(1)}%`);
-    this.hudCharge?.classList.toggle("is-ready", ready);
-    if (this.hudChargeTag) {
-      this.hudChargeTag.textContent = ready ? "発動" : `${Math.round(ratio * 100)}%`;
-    }
-
     const active = abilities.activeEffectState();
-    if (this.hudActive) {
-      if (active) {
-        this.hudActive.classList.add("is-show");
-        if (this.hudActiveName) {
-          this.hudActiveName.textContent = active.name;
-        }
-        if (this.hudActiveTime) {
-          this.hudActiveTime.textContent = this.formatDuration(active.remaining);
-        }
-      } else {
-        this.hudActive.classList.remove("is-show");
+    if (active && active.durationSec > 0) {
+      // While the Main runs, the charge ring runs BACKWARDS to show the time left —
+      // no top banner, no seconds (you read the remaining duration off the ring).
+      const remain = Math.max(0, Math.min(1, active.remaining / active.durationSec));
+      this.hudChargeRing?.style.setProperty("--p", `${(remain * 100).toFixed(1)}%`);
+      this.hudCharge?.classList.remove("is-ready");
+      this.hudCharge?.classList.add("is-active");
+      if (this.hudChargeTag) {
+        this.hudChargeTag.textContent = "";
+      }
+    } else {
+      const ratio = abilities.chargeRatio();
+      const ready = abilities.isReady();
+      this.hudChargeRing?.style.setProperty("--p", `${(ratio * 100).toFixed(1)}%`);
+      this.hudCharge?.classList.toggle("is-ready", ready);
+      this.hudCharge?.classList.remove("is-active");
+      if (this.hudChargeTag) {
+        this.hudChargeTag.textContent = ready ? "発動" : `${Math.round(ratio * 100)}%`;
       }
     }
 
