@@ -44,6 +44,8 @@ export type RunEffectContext = {
     setBlackHole(on: boolean): void;
     /** 龍 Überschall: supersonic atmosphere — wider FOV, speed lines, bright haze (and back). */
     setHyperspeed(on: boolean): void;
+    /** A short camera punch on activation (e.g. 赤 Striker Boost kicking off). */
+    kick(): void;
   };
   coins: {
     /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */

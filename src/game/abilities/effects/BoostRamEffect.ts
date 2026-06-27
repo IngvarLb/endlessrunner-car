@@ -12,6 +12,7 @@ export class BoostRamEffect implements RunEffect {
 
   start(ctx: RunEffectContext, opts: { durationSec: number; level: number }): void {
     ctx.runner.boost(opts.durationSec);
+    ctx.scene.kick(); // a camera punch as the nitro lights up
   }
 
   update(): void {

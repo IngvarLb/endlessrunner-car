@@ -162,6 +162,8 @@ export class RunSceneFactory {
     let hyperLevel = 0; // eased 0→1 fade of the speed-line / haze intensity
     let hyperTarget = 0;
     let hyperTime = 0; // free-running clock for afterburner flicker
+    let boostLevel = 0; // eased 0→1 fade of the 赤 red nitro afterburner
+    let boostTime = 0;
 
     // 鬼 Schwarzes Loch — an epic violet black hole brewing in the sky. A dark SPHERE
     // (writes depth, so it genuinely occludes the disk's far half → it reads 3D, not a
@@ -242,7 +244,6 @@ export class RunSceneFactory {
     const miniHoles: { group: THREE.Group; swirl: THREE.Group }[] = [];
     const runner = models.createVehicle(vehicle.modelKey);
     const chaser = models.createTokyoPoliceCar();
-    const boostAura = models.createShieldPowerUp();
     const collisionSystem = new CollisionSystem();
     const laneSystem = new LaneSystem(2.4);
     const runnerController = new RunnerController(runner, laneSystem, {
@@ -388,18 +389,12 @@ export class RunSceneFactory {
 
     world.name = "playable_feudal_japan_world";
     scene.add(world, runner, chaser, speedLines, blackHole);
-    runner.add(boostAura);
     collisionSystem.register(runnerController);
 
     chaser.position.set(introChaserSideOffset, 0, introChaserZ);
     chaser.rotation.y = 0;
     chaser.scale.setScalar(0.92);
     chaser.visible = false;
-
-    boostAura.name = "runner_boost_aura";
-    boostAura.position.set(0, -0.12, 0);
-    boostAura.scale.set(1.75, 0.72, 2.25);
-    boostAura.visible = false;
 
     // 龍 Überschall afterburner: twin two-layer flame jets (white-hot core inside a
     // saturated-orange flame) streaming off the dragon's tail, plus a warm halo wrapping
@@ -447,6 +442,52 @@ export class RunSceneFactory {
     dragonHalo.position.set(0, 0.5, -0.1);
     dragonAura.add(dragonHalo);
     runner.add(dragonAura);
+
+    // 赤 Striker Boost nitro: twin RED afterburner flames (white-hot core in a crimson
+    // flame) + a red body glow, lit while boosting (slightly shorter than the 龍 dragon's
+    // so the legendary still outshines the starter). Replaces the old turquoise wisp.
+    const boostJetMat = new THREE.MeshBasicMaterial({
+      color: 0xff2e0a, // crimson flame
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const boostCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xfff0d8, // white-hot core
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const boostHaloMat = new THREE.MeshBasicMaterial({
+      color: 0xff4a1e,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const boostBurn = new THREE.Group();
+    boostBurn.name = "runner_boost_burn";
+    boostBurn.visible = false;
+    const boostJets: THREE.Mesh[] = [];
+    const boostCores: THREE.Mesh[] = [];
+    for (const sx of [-1, 1]) {
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.24, 2.0, 14), boostJetMat);
+      flame.rotation.x = -Math.PI / 2;
+      flame.position.set(sx * 0.34, 0.42, -2.2);
+      const core = new THREE.Mesh(new THREE.ConeGeometry(0.12, 1.4, 12), boostCoreMat);
+      core.rotation.x = -Math.PI / 2;
+      core.position.set(sx * 0.34, 0.42, -1.9);
+      boostJets.push(flame);
+      boostCores.push(core);
+      boostBurn.add(flame, core);
+    }
+    const boostHalo = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), boostHaloMat);
+    boostHalo.scale.set(0.95, 0.58, 1.55);
+    boostHalo.position.set(0, 0.5, -0.1);
+    boostBurn.add(boostHalo);
+    runner.add(boostBurn);
 
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {
       const index = biome.track.startIndex + offset;
@@ -539,6 +580,8 @@ export class RunSceneFactory {
       speedLineCoreMat.opacity = 0;
       speedLines.visible = false;
       dragonAura.visible = false;
+      boostLevel = 0;
+      boostBurn.visible = false;
       cameraController.setFovBoost(0);
       // 鬼 Schwarzes Loch: hide the vortex and reset the siphon stream.
       bhTarget = 0;
@@ -764,7 +807,8 @@ export class RunSceneFactory {
       scene: {
         setNight: (on) => setTint(on, NIGHT_SKY, 0.28, 0.32),
         setBlackHole: (on) => setBlackHole(on),
-        setHyperspeed: (on) => setHyperspeed(on)
+        setHyperspeed: (on) => setHyperspeed(on),
+        kick: () => cameraController.shake(0.24, 0.13)
       }
     };
 
@@ -776,6 +820,9 @@ export class RunSceneFactory {
       dragonJetMat.dispose();
       dragonCoreMat.dispose();
       dragonHaloMat.dispose();
+      boostJetMat.dispose();
+      boostCoreMat.dispose();
+      boostHaloMat.dispose();
       bhGlowMat.dispose();
       bhCoreMat.dispose();
       bhDiskMat.dispose();
@@ -804,12 +851,31 @@ export class RunSceneFactory {
       }
     }
 
-    function updateBoostAura(dt: number, elapsed: number): void {
-      // During 龍 Überschall the golden dragon afterburner replaces the turquoise boost ring.
-      boostAura.visible = runnerController.isBoosting() && hyperLevel < 0.01;
-      boostAura.rotation.y += dt * 4.5;
-      boostAura.rotation.z += dt * 2.4;
-      boostAura.position.y = -0.14 + Math.sin(elapsed * 14) * 0.02;
+    function updateBoostAura(dt: number, _elapsed: number): void {
+      // 赤 red nitro afterburner — shown while boosting, but NOT during 龍 Überschall
+      // (the dragon's golden afterburner takes over there).
+      const want = runnerController.isBoosting() && hyperLevel < 0.01 ? 1 : 0;
+      boostLevel = THREE.MathUtils.lerp(boostLevel, want, Math.min(1, dt * 9));
+      if (Math.abs(boostLevel - want) < 0.01) {
+        boostLevel = want;
+      }
+      boostBurn.visible = boostLevel > 0.01;
+      if (!boostBurn.visible) {
+        return;
+      }
+      boostTime += dt;
+      const flicker = 0.8 + 0.2 * Math.sin(boostTime * 40);
+      const pulse = 0.85 + 0.15 * Math.sin(boostTime * 7);
+      boostJetMat.opacity = boostLevel * 0.95 * flicker;
+      boostCoreMat.opacity = boostLevel * 0.95;
+      boostHaloMat.opacity = boostLevel * 0.3 * pulse;
+      for (const jet of boostJets) {
+        jet.scale.set(flicker, flicker, boostLevel * (1.05 + 0.5 * flicker));
+      }
+      for (const core of boostCores) {
+        core.scale.set(1, 1, boostLevel * (1.0 + 0.4 * flicker));
+      }
+      boostHalo.rotation.z += dt * 1.8;
     }
 
     function updateChaser(dt: number, _elapsed: number, isRunning: boolean): void {
