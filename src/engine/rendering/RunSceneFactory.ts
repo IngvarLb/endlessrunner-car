@@ -543,6 +543,21 @@ export class RunSceneFactory {
     let blossomTarget = 0;
     let petalTime = 0;
 
+    // 将 Nachtjagd blood moon: a big ominous red moon hangs over the night hunt,
+    // billboarded high and far ahead so it sits in the sky wherever the camera points.
+    const moonBodyMat = new THREE.MeshBasicMaterial({ color: 0xc8402a, transparent: true, opacity: 0, depthWrite: false });
+    const moonGlowMat = new THREE.MeshBasicMaterial({ color: 0xd8542c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const moon = new THREE.Group();
+    moon.name = "hunt_blood_moon";
+    moon.visible = false;
+    const moonGlow = new THREE.Mesh(new THREE.CircleGeometry(9.5, 36), moonGlowMat);
+    moonGlow.position.z = -0.2;
+    const moonBody = new THREE.Mesh(new THREE.CircleGeometry(5.5, 36), moonBodyMat);
+    moon.add(moonGlow, moonBody);
+    scene.add(moon);
+    let moonLevel = 0;
+    let moonTarget = 0;
+
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {
       const index = biome.track.startIndex + offset;
       const segment = models.createGroundSegment(biome.track.segmentLength);
@@ -644,6 +659,9 @@ export class RunSceneFactory {
       blossomTarget = 0;
       petalMat.opacity = 0;
       petals.visible = false;
+      moonLevel = 0;
+      moonTarget = 0;
+      moon.visible = false;
       cameraController.setFovBoost(0);
       // 鬼 Schwarzes Loch: hide the vortex and reset the siphon stream.
       bhTarget = 0;
@@ -711,6 +729,7 @@ export class RunSceneFactory {
       updateBoostAura(dt, elapsed);
       updateHornPulse(dt);
       updatePetals(dt);
+      updateMoon(dt);
       updateChaser(dt, elapsed, isRunning);
 
       world.position.z = -distance;
@@ -869,7 +888,7 @@ export class RunSceneFactory {
         rain: (on, level) => coinRain.setActive(on, level)
       },
       scene: {
-        setNight: (on) => setTint(on, NIGHT_SKY, 0.28, 0.32),
+        setNight: (on) => setNight(on),
         setBlackHole: (on) => setBlackHole(on),
         setHyperspeed: (on) => setHyperspeed(on),
         kick: () => cameraController.shake(0.24, 0.13),
@@ -896,6 +915,8 @@ export class RunSceneFactory {
       }
       petalMat.dispose();
       petalGeo.dispose();
+      moonBodyMat.dispose();
+      moonGlowMat.dispose();
       bhGlowMat.dispose();
       bhCoreMat.dispose();
       bhDiskMat.dispose();
@@ -977,6 +998,30 @@ export class RunSceneFactory {
         ring.mesh.position.x = pos.x;
         ring.mesh.position.z = pos.z;
       }
+    }
+
+    function setNight(on: boolean): void {
+      setTint(on, NIGHT_SKY, 0.28, 0.32); // 将 Nachtjagd — fall to night
+      moonTarget = on ? 1 : 0; // raise/lower the blood moon
+    }
+
+    function updateMoon(dt: number): void {
+      if (moonLevel !== moonTarget) {
+        moonLevel = THREE.MathUtils.lerp(moonLevel, moonTarget, Math.min(1, dt * 2.5));
+        if (Math.abs(moonLevel - moonTarget) < 0.01) {
+          moonLevel = moonTarget;
+        }
+        moonBodyMat.opacity = moonLevel;
+        moonGlowMat.opacity = moonLevel * 0.4;
+        moon.visible = moonLevel > 0.01;
+      }
+      if (!moon.visible) {
+        return;
+      }
+      // Hang high and far ahead, billboarded to face the camera (reads as a sky moon).
+      const cam = cameraController.camera;
+      moon.position.set(cam.position.x + 7, cam.position.y + 16, cam.position.z + 58);
+      moon.quaternion.copy(cam.quaternion);
     }
 
     function setBlossom(on: boolean): void {
