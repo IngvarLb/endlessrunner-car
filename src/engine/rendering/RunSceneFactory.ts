@@ -150,32 +150,73 @@ export class RunSceneFactory {
     let hyperLevel = 0; // eased 0→1 fade of the speed-line / haze intensity
     let hyperTarget = 0;
 
-    // 鬼 Schwarzes Loch: a swirling violet vortex with a dark core, parked ahead-and-up.
-    const bhGlowMat = new THREE.MeshBasicMaterial({ color: 0x5a1e9e, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const bhCoreMat = new THREE.MeshBasicMaterial({ color: 0x0a0012, transparent: true, opacity: 0, depthWrite: false });
-    const bhSwirlMat = new THREE.MeshBasicMaterial({ color: 0x9b30ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    // 鬼 Schwarzes Loch — an epic violet black hole brewing in the sky. A dark SPHERE
+    // (writes depth, so it genuinely occludes the disk's far half → it reads 3D, not a
+    // flat decal) wrapped by a tilted, swirling accretion disk; dust wisps orbit it in
+    // 3D and a funnel opens downward, sucking the cars up into it.
+    const bhCoreMat = new THREE.MeshBasicMaterial({ color: 0x050009 });
+    const bhDiskMat = new THREE.MeshBasicMaterial({ color: 0x7a2fd0, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+    const bhStreakMat = new THREE.MeshBasicMaterial({ color: 0xca8bff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const bhWispMat = new THREE.MeshBasicMaterial({ color: 0x9a4ff0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+    const bhGlowMat = new THREE.MeshBasicMaterial({ color: 0x4a1690, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
     const blackHole = new THREE.Group();
     blackHole.name = "black_hole";
     blackHole.visible = false;
     blackHole.position.set(BLACK_HOLE_POS.x, BLACK_HOLE_POS.y, BLACK_HOLE_POS.z);
-    const bhGlow = new THREE.Mesh(new THREE.CircleGeometry(2.9, 32), bhGlowMat);
-    bhGlow.position.z = -0.06;
-    const bhCore = new THREE.Mesh(new THREE.CircleGeometry(1.05, 36), bhCoreMat);
-    bhCore.position.z = -0.03;
-    const bhVortex = new THREE.Group();
-    const bhArmGeo = new THREE.PlaneGeometry(0.34, 0.1);
-    for (let i = 0; i < 30; i += 1) {
-      const arm = new THREE.Mesh(bhArmGeo, bhSwirlMat);
-      const angle = i * 0.62;
-      const radius = 1.0 + (i / 30) * 1.75;
-      arm.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
-      arm.rotation.z = angle + Math.PI / 2; // tangent to the swirl
-      arm.scale.setScalar(0.7 + (i / 30) * 0.8);
-      bhVortex.add(arm);
+
+    const bhGlow = new THREE.Mesh(new THREE.CircleGeometry(5.4, 40), bhGlowMat);
+    bhGlow.renderOrder = -2;
+    const bhCore = new THREE.Mesh(new THREE.SphereGeometry(1.25, 28, 20), bhCoreMat);
+    bhCore.renderOrder = -1;
+    blackHole.add(bhGlow, bhCore);
+
+    // Accretion disk: a tilted plane (perspective ellipse) holding a spinning ring + streaks.
+    const bhDiskTilt = new THREE.Group();
+    bhDiskTilt.rotation.x = -0.5; // lean toward the camera so the disk reads as an ellipse
+    const bhDiskSpin = new THREE.Group();
+    const bhRing = new THREE.Mesh(new THREE.RingGeometry(1.45, 3.9, 64), bhDiskMat);
+    bhRing.rotation.x = -Math.PI / 2; // lay flat in the spin group's XZ plane
+    bhDiskSpin.add(bhRing);
+    const bhStreakGeo = new THREE.PlaneGeometry(0.85, 0.11);
+    for (let i = 0; i < 44; i += 1) {
+      const s = new THREE.Mesh(bhStreakGeo, bhStreakMat);
+      const a = i * 0.72;
+      const r = 1.55 + (i / 44) * 2.3;
+      s.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+      s.rotation.set(-Math.PI / 2, 0, 0);
+      s.rotateZ(-a); // tangent to the swirl, lying in the disk plane
+      s.scale.x = 0.8 + (i / 44) * 1.5;
+      bhDiskSpin.add(s);
     }
-    blackHole.add(bhGlow, bhCore, bhVortex);
-    let bhLevel = 0; // eased 0→1 fade of the vortex
+    bhDiskTilt.add(bhDiskSpin);
+    blackHole.add(bhDiskTilt);
+
+    // Dust wisps: soft streaks on tilted orbits (3D schlieren swirling around the hole).
+    const bhWispGeo = new THREE.PlaneGeometry(1.9, 0.42);
+    const bhWisps: { mesh: THREE.Mesh; tilt: number; radius: number; phase: number; speed: number }[] = [];
+    for (let i = 0; i < 9; i += 1) {
+      const mesh = new THREE.Mesh(bhWispGeo, bhWispMat);
+      blackHole.add(mesh);
+      bhWisps.push({
+        mesh,
+        tilt: (i / 9) * Math.PI,
+        radius: 2.3 + (i % 3) * 0.75,
+        phase: i * 1.3,
+        speed: 0.45 + (i % 4) * 0.16
+      });
+    }
+
+    // Funnel: particles spiralling UP from the road into the sphere — the cars ride this in.
+    const bhFunnelGeo = new THREE.PlaneGeometry(0.5, 0.13);
+    const bhFunnel: { mesh: THREE.Mesh; phase: number; speed: number; ang: number }[] = [];
+    for (let i = 0; i < 30; i += 1) {
+      const mesh = new THREE.Mesh(bhFunnelGeo, bhStreakMat);
+      blackHole.add(mesh);
+      bhFunnel.push({ mesh, phase: i / 30, speed: 0.55 + (i % 5) * 0.1, ang: i * 1.1 });
+    }
+    let bhLevel = 0; // eased 0→1 brew-in of the whole effect
     let bhTarget = 0;
+    let bhSpin = 0; // accumulated disk rotation
     let siphonAccum = 0; // 鬼 Anzapfen continuous-stream accumulator + round-robin source index
     let siphonIdx = 0;
     // 鬼 Anzapfen mini black holes (materials/geometry; pool built once `world` exists below).
@@ -438,10 +479,13 @@ export class RunSceneFactory {
       // 鬼 Schwarzes Loch: hide the vortex and reset the siphon stream.
       bhTarget = 0;
       bhLevel = 0;
+      bhSpin = 0;
       bhGlowMat.opacity = 0;
-      bhCoreMat.opacity = 0;
-      bhSwirlMat.opacity = 0;
+      bhDiskMat.opacity = 0;
+      bhStreakMat.opacity = 0;
+      bhWispMat.opacity = 0;
       blackHole.visible = false;
+      blackHole.scale.setScalar(1);
       siphonAccum = 0;
       siphonIdx = 0;
       for (const mh of miniHoles) {
@@ -565,20 +609,39 @@ export class RunSceneFactory {
 
     function updateBlackHole(dt: number): void {
       if (bhLevel !== bhTarget) {
-        bhLevel = THREE.MathUtils.lerp(bhLevel, bhTarget, Math.min(1, dt * 4));
+        bhLevel = THREE.MathUtils.lerp(bhLevel, bhTarget, Math.min(1, dt * 3));
         if (Math.abs(bhLevel - bhTarget) < 0.01) {
           bhLevel = bhTarget;
         }
-        bhGlowMat.opacity = bhLevel * 0.4;
-        bhCoreMat.opacity = bhLevel * 0.92;
-        bhSwirlMat.opacity = bhLevel * 0.85;
+        bhGlowMat.opacity = bhLevel * 0.5;
+        bhDiskMat.opacity = bhLevel * 0.5;
+        bhStreakMat.opacity = bhLevel * 0.9;
+        bhWispMat.opacity = bhLevel * 0.5;
         blackHole.visible = bhLevel > 0.01;
+        blackHole.scale.setScalar(0.55 + bhLevel * 0.45); // brews/grows as it forms
       }
       if (!blackHole.visible) {
         return;
       }
-      bhVortex.rotation.z += dt * 2.4; // swirl
-      blackHole.lookAt(cameraController.camera.position); // always face the camera
+      const camQ = cameraController.camera.quaternion;
+      // Disk spins fast while brewing in, then settles.
+      bhSpin += dt * (1.1 + (1 - bhLevel) * 3.5);
+      bhDiskSpin.rotation.y = bhSpin;
+      // Dust wisps orbit on tilted rings (3D), billboarded so they read as soft schlieren.
+      for (const w of bhWisps) {
+        const th = w.phase + bhSpin * w.speed * 0.6;
+        const z0 = Math.sin(th) * w.radius;
+        w.mesh.position.set(Math.cos(th) * w.radius, -z0 * Math.sin(w.tilt), z0 * Math.cos(w.tilt));
+        w.mesh.quaternion.copy(camQ);
+      }
+      // Funnel particles spiral UP from the road into the sphere (the cars ride this in).
+      for (const f of bhFunnel) {
+        f.phase = (f.phase + dt * f.speed * 0.4) % 1;
+        const p = f.phase; // 0 at the bottom (toward the road), 1 at the sphere
+        f.mesh.position.set(Math.cos(f.ang + p * 9) * (1.8 * (1 - p) + 0.35), -7 + p * 7, Math.sin(f.ang + p * 9) * (1.8 * (1 - p) + 0.35));
+        f.mesh.quaternion.copy(camQ);
+      }
+      bhGlow.quaternion.copy(camQ); // billboard the halo (group has no rotation)
     }
 
     const effectContext: RunEffectContext = {
@@ -623,7 +686,9 @@ export class RunSceneFactory {
       speedLineMat.dispose();
       bhGlowMat.dispose();
       bhCoreMat.dispose();
-      bhSwirlMat.dispose();
+      bhDiskMat.dispose();
+      bhStreakMat.dispose();
+      bhWispMat.dispose();
       miniCoreMat.dispose();
       miniGlowMat.dispose();
       miniSwirlMat.dispose();
