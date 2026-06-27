@@ -328,11 +328,13 @@ export class RunSceneFactory {
       trafficDirector,
       ({ collectible, amount }) => {
         scoreSystem.addCoin(amount);
+        const laneX = laneSystem.getLaneX(collectible.lane);
+        spawnCoinSparkle(laneX, collectible.trackZ); // gold pop at the pickup
         events?.emit("coin:collected", {
           amount,
           combo: scoreSystem.getStats(pressure, weakFails).combo,
           worldPosition: {
-            x: laneSystem.getLaneX(collectible.lane),
+            x: laneX,
             y: 0.9,
             z: collectible.trackZ - distance
           }
@@ -543,6 +545,18 @@ export class RunSceneFactory {
     let blossomTarget = 0;
     let petalTime = 0;
 
+    // Coin pickup pop: a quick additive gold burst at each collected street coin.
+    // Lives in `world` so it rides the road as it scrolls past during its short life.
+    const sparkleMat = new THREE.MeshBasicMaterial({ color: 0xffe48a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const sparkleGeo = new THREE.IcosahedronGeometry(0.32, 0);
+    const sparkles: { mesh: THREE.Mesh; life: number }[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      const mesh = new THREE.Mesh(sparkleGeo, sparkleMat.clone());
+      mesh.visible = false;
+      world.add(mesh);
+      sparkles.push({ mesh, life: 0 });
+    }
+
     // 将 Nachtjagd blood moon: a big ominous red moon hangs over the night hunt,
     // billboarded high and far ahead so it sits in the sky wherever the camera points.
     const moonBodyMat = new THREE.MeshBasicMaterial({ color: 0xc8402a, transparent: true, opacity: 0, depthWrite: false });
@@ -662,6 +676,10 @@ export class RunSceneFactory {
       moonLevel = 0;
       moonTarget = 0;
       moon.visible = false;
+      for (const s of sparkles) {
+        s.life = 0;
+        s.mesh.visible = false;
+      }
       cameraController.setFovBoost(0);
       // 鬼 Schwarzes Loch: hide the vortex and reset the siphon stream.
       bhTarget = 0;
@@ -730,6 +748,7 @@ export class RunSceneFactory {
       updateHornPulse(dt);
       updatePetals(dt);
       updateMoon(dt);
+      updateCoinSparkles(dt);
       updateChaser(dt, elapsed, isRunning);
 
       world.position.z = -distance;
@@ -917,6 +936,11 @@ export class RunSceneFactory {
       petalGeo.dispose();
       moonBodyMat.dispose();
       moonGlowMat.dispose();
+      sparkleMat.dispose();
+      sparkleGeo.dispose();
+      for (const s of sparkles) {
+        (s.mesh.material as THREE.Material).dispose();
+      }
       bhGlowMat.dispose();
       bhCoreMat.dispose();
       bhDiskMat.dispose();
@@ -997,6 +1021,34 @@ export class RunSceneFactory {
         const pos = runnerController.getPosition(); // ride along with the car
         ring.mesh.position.x = pos.x;
         ring.mesh.position.z = pos.z;
+      }
+    }
+
+    function spawnCoinSparkle(x: number, trackZ: number): void {
+      const s = sparkles.find((sp) => sp.life <= 0);
+      if (!s) {
+        return;
+      }
+      s.life = 1;
+      s.mesh.visible = true;
+      s.mesh.position.set(x, 0.95, trackZ);
+      s.mesh.rotation.set(Math.PI * x, trackZ, 0); // vary orientation per pickup
+      s.mesh.scale.setScalar(0.3);
+    }
+
+    function updateCoinSparkles(dt: number): void {
+      for (const s of sparkles) {
+        if (s.life <= 0) {
+          continue;
+        }
+        s.life = Math.max(0, s.life - dt / 0.3);
+        if (s.life <= 0.01) {
+          s.mesh.visible = false;
+          continue;
+        }
+        (s.mesh.material as THREE.MeshBasicMaterial).opacity = s.life * 0.9;
+        s.mesh.scale.setScalar(0.3 + (1 - s.life) * 1.5);
+        s.mesh.rotation.y += dt * 9;
       }
     }
 

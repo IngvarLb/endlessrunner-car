@@ -1923,6 +1923,70 @@ button {
     transform: scale(1.16);
   }
 }
+/* Combo streak — coins collected since the last crash, shown as an escalating multiplier */
+.fr-hud-combo {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s, transform 0.16s var(--ease-out);
+  z-index: 7;
+}
+.fr-hud-combo.is-on {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+.fr-hud-combo-mult {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 34px;
+  line-height: 1;
+  color: #ffe08a;
+  text-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
+  transform-origin: center;
+}
+.fr-hud-combo-x {
+  font-size: 22px;
+  opacity: 0.85;
+}
+.fr-hud-combo-lab {
+  font-family: var(--font-jp);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #f4ede0;
+  opacity: 0.78;
+}
+.fr-hud-combo.is-t1 .fr-hud-combo-mult {
+  color: #ffd24a;
+  font-size: 40px;
+}
+.fr-hud-combo.is-t2 .fr-hud-combo-mult {
+  color: #ff9a2a;
+  font-size: 46px;
+}
+.fr-hud-combo.is-t3 .fr-hud-combo-mult {
+  color: #ff5a2a;
+  font-size: 52px;
+  text-shadow: 0 0 16px rgb(255 120 40 / 0.6), 0 2px 0 rgb(0 0 0 / 0.4);
+}
+.fr-hud-combo.is-bump .fr-hud-combo-mult {
+  animation: fr-combo-bump 0.2s var(--ease-out);
+}
+@keyframes fr-combo-bump {
+  0% {
+    transform: scale(1.34);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
 /* 将 ram payout — coins fly from the wreck to the counter */
 .fr-coinfly {
   position: absolute;

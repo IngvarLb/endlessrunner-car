@@ -107,6 +107,9 @@ export class GameApp {
   private setSfxInput?: HTMLInputElement;
   private hudMeta?: HTMLElement;
   private hudCoins?: HTMLElement;
+  private hudCombo?: HTMLElement;
+  private hudComboN?: HTMLElement;
+  private shownCombo = 0; // last combo value reflected in the HUD (edge-detect bumps/resets)
   private coinFlyLayer?: HTMLElement;
   private tapStart?: { x: number; y: number };
   private hudCharge?: HTMLElement;
@@ -638,6 +641,11 @@ export class GameApp {
           </div>
         </div>
 
+        <div class="fr-hud-combo" data-hud-combo aria-hidden="true">
+          <span class="fr-hud-combo-mult"><span class="fr-hud-combo-x">×</span><span data-hud-combo-n>2</span></span>
+          <span class="fr-hud-combo-lab">連 COMBO</span>
+        </div>
+
         <div class="fr-hud-toast" data-hud-toast aria-hidden="true">
           <span class="fr-hud-toast-star" data-hud-toast-star>里</span>
           <span class="fr-hud-toast-txt"><span class="fr-hud-toast-k" data-hud-toast-k>MEISTERSCHAFT</span><span class="fr-hud-toast-big" data-hud-toast-big>Stufe 2</span></span>
@@ -727,6 +735,8 @@ export class GameApp {
     this.cacheAndBindFrSettings(ui);
     this.hudMeta = ui.querySelector("[data-hud-meta]") ?? undefined;
     this.hudCoins = ui.querySelector("[data-hud-coins]") ?? undefined;
+    this.hudCombo = ui.querySelector("[data-hud-combo]") ?? undefined;
+    this.hudComboN = ui.querySelector("[data-hud-combo-n]") ?? undefined;
     this.coinFlyLayer = ui.querySelector("[data-coinfly]") ?? undefined;
     this.hudCharge = ui.querySelector("[data-hud-charge]") ?? undefined;
     this.hudChargeRing = ui.querySelector("[data-hud-charge-ring]") ?? undefined;
@@ -852,7 +862,10 @@ export class GameApp {
         audio.playGameOver();
       }
     });
-    this.events.on("coin:collected", ({ combo }) => audio.playCoin(combo));
+    this.events.on("coin:collected", ({ combo }) => {
+      audio.playCoin(combo);
+      this.bumpCoinCounter();
+    });
     this.events.on("runner:laneChanged", () => audio.playSwerve());
     this.events.on("traffic:destroyed", ({ cause }) => {
       if (cause === "ram") {
@@ -1715,6 +1728,48 @@ export class GameApp {
     if (this.hudCoins) {
       this.hudCoins.textContent = stats.coins.toLocaleString("en-US");
     }
+    this.updateComboHud(stats.combo);
+  }
+
+  /**
+   * Combo = coins collected since the last crash (a clean-run streak). Surface it as
+   * an escalating multiplier that bumps on each pickup and clears on a fail.
+   */
+  private updateComboHud(combo: number): void {
+    if (!this.hudCombo) {
+      return;
+    }
+    const SHOW_AT = 3; // only celebrate once a streak is going
+    if (combo >= SHOW_AT) {
+      if (this.hudComboN) {
+        this.hudComboN.textContent = String(combo);
+      }
+      this.hudCombo.classList.add("is-on");
+      // Escalating tiers: brighter/bigger the longer the streak.
+      this.hudCombo.classList.toggle("is-t1", combo >= 10);
+      this.hudCombo.classList.toggle("is-t2", combo >= 25);
+      this.hudCombo.classList.toggle("is-t3", combo >= 50);
+      if (combo > this.shownCombo) {
+        // re-trigger the bump animation
+        this.hudCombo.classList.remove("is-bump");
+        void this.hudCombo.offsetWidth; // reflow so the animation restarts
+        this.hudCombo.classList.add("is-bump");
+      }
+    } else {
+      this.hudCombo.classList.remove("is-on", "is-t1", "is-t2", "is-t3", "is-bump");
+    }
+    this.shownCombo = combo;
+  }
+
+  /** Pop the 金 coin chip on each pickup (re-triggers the scale animation). */
+  private bumpCoinCounter(): void {
+    const chip = this.hudCoins?.parentElement;
+    if (!chip) {
+      return;
+    }
+    chip.classList.remove("is-pop");
+    void chip.offsetWidth; // reflow so a rapid second pickup re-fires the animation
+    chip.classList.add("is-pop");
   }
 
   /** Configure the on-screen charge ring for the vehicle about to run. */
