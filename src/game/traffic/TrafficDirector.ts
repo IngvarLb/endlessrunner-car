@@ -129,8 +129,8 @@ export class TrafficDirector {
 
     // Dense from the start (few empty rows), ramping to a near-constant gauntlet.
     const r = Math.random();
-    const p0 = 0.08 - 0.06 * d; // 8% → 2% empty rows
-    const p2 = 0.4 + 0.45 * d; // 40% → 85% two-car rows
+    const p0 = 0.06 - 0.04 * d; // 6% → 2% empty rows
+    const p2 = 0.46 + 0.44 * d; // 46% → 90% two-car rows
     let blockCount = r < p0 ? 0 : r < 1 - p2 ? 1 : 2;
     // Spread caps: never two empty rows back-to-back; allow up to 3 dense rows for intensity.
     if (blockCount === 0 && this.emptyRun >= 1) blockCount = 1;

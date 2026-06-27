@@ -63,10 +63,10 @@ export type RunScene = AppScene & {
   clearSiphonVfx(): void;
 };
 
-const baseSpeed = 9.5;
+const baseSpeed = 14; // fast from the very start (was 9.5)
 const linearSpeedRampDistance = 300;
-const linearSpeedGain = 2.4;
-const maxSpeed = 18.5;
+const linearSpeedGain = 3.5;
+const maxSpeed = 26; // very fast late game (was 18.5)
 const lateRampDistance = 680;
 const introChaserDuration = 4.8;
 const lightMistakeCatchWindow = 10;
