@@ -11,6 +11,8 @@ export type RowConfig = {
   blocked: LaneIndex[];
   /** A guaranteed-reachable open lane (coins are funnelled here). */
   safe: LaneIndex;
+  /** Whether coins appear at this row — coins come in clusters with gaps, not one line. */
+  coin: boolean;
 };
 
 function shuffled<T>(items: T[]): T[] {
@@ -52,7 +54,9 @@ export class TrafficDirector {
   private corridor: LaneIndex = 0;
   private frontier = -1; // highest rowKey generated so far
   private emptyRun = 0; // consecutive empty rows (cap → avoid long barren stretches)
-  private denseRun = 0; // consecutive 2-car rows (cap → avoid a gauntlet)
+  private denseRun = 0; // consecutive 2-car rows (cap → avoid an endless gauntlet)
+  private coinOn = false; // coin cluster vs gap toggle (first row flips it on → start with coins)
+  private coinLeft = 0; // rows left in the current coin cluster/gap
 
   constructor(rowStart: number, rowGap: number) {
     this.rowStart = rowStart;
@@ -66,6 +70,24 @@ export class TrafficDirector {
     this.frontier = -1;
     this.emptyRun = 0;
     this.denseRun = 0;
+    this.coinOn = false;
+    this.coinLeft = 0;
+  }
+
+  /** Whether a coin should appear at this track position (clusters with gaps). */
+  coinAt(z: number): boolean {
+    return this.config(this.keyForZ(z)).coin;
+  }
+
+  /** Advance the coin cluster/gap toggle one row and report if this row has coins. */
+  private nextCoin(): boolean {
+    if (this.coinLeft <= 0) {
+      this.coinOn = !this.coinOn;
+      // clusters ~2–3 rows of coins, gaps ~2–3 rows without
+      this.coinLeft = 2 + Math.floor(Math.random() * 2);
+    }
+    this.coinLeft -= 1;
+    return this.coinOn;
   }
 
   /** Row index for a track position. */
@@ -87,7 +109,7 @@ export class TrafficDirector {
         this.prune(k);
       }
     }
-    return this.configs.get(key) ?? { blocked: [], safe: 0 };
+    return this.configs.get(key) ?? { blocked: [], safe: 0, coin: false };
   }
 
   /** The open/safe lane at a track position — where coins go. */
@@ -96,29 +118,29 @@ export class TrafficDirector {
   }
 
   private generate(key: number): RowConfig {
-    // A short clear runway at the very start of each run (no instant wall in your face).
-    if (key < 2) {
+    const coin = this.nextCoin();
+    // Just a 1-row clear runway at spawn (no obstacle the instant you start).
+    if (key < 1) {
       this.corridor = 0;
-      return { blocked: [], safe: 0 };
+      return { blocked: [], safe: 0, coin: true };
     }
     const distance = this.rowStart + key * this.rowGap;
     const d = Math.max(0, Math.min(1, (distance - RAMP_START) / (RAMP_FULL - RAMP_START)));
 
-    // Density weights: early runs are mostly 0–1 blocked; later up to half are 2-blocked.
+    // Dense from the start (few empty rows), ramping to a near-constant gauntlet.
     const r = Math.random();
-    const p0 = 0.3 - 0.2 * d; // 30% → 10% empty rows
-    const p2 = 0.05 + 0.45 * d; // 5% → 50% two-blocked
+    const p0 = 0.08 - 0.06 * d; // 8% → 2% empty rows
+    const p2 = 0.4 + 0.45 * d; // 40% → 85% two-car rows
     let blockCount = r < p0 ? 0 : r < 1 - p2 ? 1 : 2;
-    // Even out the spread: no more than 2 empty rows in a row, no more than 2 dense rows.
-    if (blockCount === 0 && this.emptyRun >= 2) blockCount = 1;
-    if (blockCount === 2 && this.denseRun >= 2) blockCount = 1;
+    // Spread caps: never two empty rows back-to-back; allow up to 3 dense rows for intensity.
+    if (blockCount === 0 && this.emptyRun >= 1) blockCount = 1;
+    if (blockCount === 2 && this.denseRun >= 3) blockCount = 1;
 
     const c = this.corridor;
     const adj = LANES.filter((l) => Math.abs(l - c) <= 1); // lanes the player can step to this row
-    // How often an obstacle is placed IN the corridor to force a lane switch — rises with
-    // distance, so early runs let you cruise and later ones make you weave. Always to an
-    // open neighbour, so the corridor stays connected + clear (navigable by construction).
-    const wantShift = Math.random() < 0.18 + 0.4 * d;
+    // How often an obstacle sits IN the corridor and forces a weave — frequent even early,
+    // always to an open neighbour so the corridor stays connected + clear (navigable).
+    const wantShift = Math.random() < 0.5 + 0.3 * d;
     for (; blockCount >= 0; blockCount -= 1) {
       let keepOpen: { blocked: LaneIndex[]; openAdj: LaneIndex[] } | undefined;
       let shift: { blocked: LaneIndex[]; openAdj: LaneIndex[] } | undefined;
@@ -138,12 +160,12 @@ export class TrafficDirector {
         this.corridor = pick.openAdj.includes(c) ? c : pick.openAdj[Math.floor(Math.random() * pick.openAdj.length)];
         this.emptyRun = pick.blocked.length === 0 ? this.emptyRun + 1 : 0;
         this.denseRun = pick.blocked.length >= 2 ? this.denseRun + 1 : 0;
-        return { blocked: pick.blocked, safe: this.corridor };
+        return { blocked: pick.blocked, safe: this.corridor, coin };
       }
     }
     this.emptyRun += 1; // fallback (never reached: blockCount 0 always keeps the corridor open)
     this.denseRun = 0;
-    return { blocked: [], safe: c };
+    return { blocked: [], safe: c, coin };
   }
 
   private prune(upTo: number): void {

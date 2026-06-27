@@ -42,8 +42,8 @@ export class CollectibleSystem {
       }
 
       if (relativeZ < -10) {
-        const lane = this.getNextLane(collectible.trackZ + worldLength);
-        collectible.recycle(worldLength, lane);
+        const newZ = collectible.trackZ + worldLength;
+        collectible.recycle(worldLength, this.getNextLane(newZ), this.coinShows(newZ));
       }
     }
   }
@@ -54,8 +54,13 @@ export class CollectibleSystem {
     this.laneBias = undefined;
     for (const collectible of this.collectibles) {
       collectible.reset();
-      collectible.placeAt(this.getNextLane(collectible.trackZ), collectible.trackZ);
+      collectible.placeAt(this.getNextLane(collectible.trackZ), collectible.trackZ, this.coinShows(collectible.trackZ));
     }
+  }
+
+  /** Coins cluster with gaps normally; while 藍 Freie Bahn funnels them, show a solid row. */
+  private coinShows(trackZ: number): boolean {
+    return this.laneBias !== undefined || this.director.coinAt(trackZ);
   }
 
   setLaneBias(lane: LaneIndex | undefined): void {

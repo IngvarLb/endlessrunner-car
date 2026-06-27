@@ -41,20 +41,20 @@ export class Collectible implements Collidable {
     this.mesh.visible = false;
   }
 
-  recycle(worldLength: number, lane: LaneIndex): void {
+  recycle(worldLength: number, lane: LaneIndex, show = true): void {
     this.trackZ += worldLength;
     this.lane = lane;
-    this.collected = false;
-    this.mesh.visible = true;
+    this.collected = !show; // a gap coin parks "collected" → invisible + no collider
+    this.mesh.visible = show;
     this.syncMeshPosition();
   }
 
-  /** Move to an absolute lane + trackZ and make it collectible again (used by 桜 coin rain). */
-  placeAt(lane: LaneIndex, trackZ: number): void {
+  /** Move to an absolute lane + trackZ; `show=false` parks it in a coin gap (hidden). */
+  placeAt(lane: LaneIndex, trackZ: number, show = true): void {
     this.lane = lane;
     this.trackZ = trackZ;
-    this.collected = false;
-    this.mesh.visible = true;
+    this.collected = !show;
+    this.mesh.visible = show;
     this.syncMeshPosition();
   }
 
