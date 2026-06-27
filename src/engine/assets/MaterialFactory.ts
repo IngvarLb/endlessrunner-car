@@ -21,6 +21,51 @@ export class MaterialFactory {
   readonly mapleLeafRed = this.standard(0x4f9e3a, 0.95, 0.02);
   readonly mapleLeafOrange = this.standard(0x5aa83e, 0.95, 0.02);
   readonly mapleLeafGold = this.standard(0x74b23f, 0.95, 0.02);
+
+  // ===== 電脳都市 Neon Cyber-City (blue hour) — structure (matte/metal/glass) + emissive neon =====
+  // Matte concrete / asphalt / paint
+  readonly cyberConcrete = this.standard(0x3a4049, 0.92, 0.04);
+  readonly cyberConcreteLight = this.standard(0x525a64, 0.9, 0.04);
+  readonly towerDark = this.standard(0x1c2230, 0.85, 0.06);
+  readonly rustSteel = this.standard(0x6e4a38, 0.88, 0.05);
+  readonly wetAsphalt = this.standard(0x14171d, 0.5, 0.12); // glossy black tarmac
+  readonly sidewalkGrey = this.standard(0x4a4e57, 0.9, 0.03);
+  readonly kerbWhite = this.standard(0xc6c2b4, 0.85, 0.02);
+  readonly barrierConcrete = this.standard(0x6a6f78, 0.9, 0.03);
+  readonly planterDark = this.standard(0x2c3138, 0.9, 0.03);
+  readonly busLanePaint = this.standard(0x1f6e5a, 0.8, 0.02);
+  readonly laneWhite = this.standard(0xe8e6da, 0.8, 0.02);
+  // Metallic steel (→ MeshPhong sheen)
+  readonly towerSteel = this.standard(0x2a3340, 0.5, 0.5);
+  readonly brushedSteel = this.standard(0x8b96a4, 0.45, 0.6);
+  readonly guardSteel = this.standard(0x9aa3ad, 0.45, 0.55);
+  // Glass
+  readonly darkGlass = this.standard(0x0e1a2a, 0.34, 0.08);
+  readonly tealGlass = this.standard(0x16384a, 0.32, 0.1);
+  // Emissive — lit windows
+  readonly litWindowWarm = this.emissive(0xffd27a, 1.0);
+  readonly litWindowCool = this.emissive(0xbfe6ff, 1.0);
+  // Emissive — neon tubes / kanji / hologram
+  readonly neonCyan = this.emissive(0x1ef0ff, 1.4);
+  readonly neonMagenta = this.emissive(0xff2bd0, 1.4);
+  readonly neonPink = this.emissive(0xff4f8b, 1.4);
+  readonly neonPurple = this.emissive(0x9b3bff, 1.4);
+  readonly neonBlue = this.emissive(0x2f6bff, 1.4);
+  readonly neonGreen = this.emissive(0x39ff8e, 1.4);
+  readonly neonAmber = this.emissive(0xffab1f, 1.4);
+  readonly kanjiRed = this.emissive(0xff2d4a, 1.5);
+  readonly kanjiGold = this.emissive(0xffd64a, 1.5);
+  readonly hologramBlue = this.emissive(0x5ad8ff, 1.3);
+  // Emissive — reflectors / signals / beacons
+  readonly reflectorAmber = this.emissive(0xff9a1a, 1.5);
+  readonly reflectorRed = this.emissive(0xff2233, 1.5);
+  readonly signalRed = this.emissive(0xff3322, 1.6);
+  readonly signalAmber = this.emissive(0xffb01f, 1.6);
+  readonly signalGreen = this.emissive(0x2bff7a, 1.6);
+  readonly towerBeacon = this.emissive(0xff3a2a, 1.7);
+  // Emissive — glowing vegetation
+  readonly sakuraNeon = this.emissive(0xff9ad5, 1.2);
+  readonly ginkgoNeon = this.emissive(0xffe23a, 1.2);
   readonly torii = this.standard(0xe9442e, 0.75, 0.05);
   readonly gold = this.standard(0xffc857, 0.45, 0.25);
   readonly turquoise = this.emissive(0x00e5ff, 0.35);

@@ -11,7 +11,8 @@ import { TrafficSystem } from "../../game/traffic/TrafficSystem";
 import { TrafficDirector } from "../../game/traffic/TrafficDirector";
 import { TRAFFIC_CAR_SPECS, type TrafficCarKind } from "../../game/traffic/TrafficTypes";
 import { getVehicleDefinition, type VehicleDefinition } from "../../game/vehicles/VehicleCatalog";
-import { FEUDAL_JAPAN_BIOME_CONTENT, type DecorationKind } from "../../game/world/BiomeContent";
+import { FEUDAL_JAPAN_BIOME_CONTENT, NEON_CITY_DECORATIONS, type DecorationKind } from "../../game/world/BiomeContent";
+import { BiomeManager } from "../../game/world/BiomeManager";
 import { LaneSystem } from "../../game/world/LaneSystem";
 import { MaterialFactory } from "../assets/MaterialFactory";
 import { mergeByMaterial } from "../assets/mergeByMaterial";
@@ -123,29 +124,51 @@ export class RunSceneFactory {
     let tintHemiScale = 0.28;
     let tintSunScale = 0.32;
 
-    // 紅葉 Autumn Momiji season — a slow crossfade that oscillates the world between the
-    // summer village and a blazing autumn leg by distance. It is the BASE atmosphere; the
-    // ability tints (night / black-hole / blossom / hyper) still layer on top of it.
+    // 紅葉 Autumn Momiji season — a slow crossfade that oscillates the VILLAGE between
+    // summer and a blazing autumn leg by distance. Base atmosphere; ability tints layer on top.
     let seasonLevel = 0; // 0 = summer village, 1 = autumn momiji
     let seasonTarget = 0;
-    const SEASON_LEG = 500; // metres per leg (leg 0 village, leg 1 autumn, leg 2 village …)
-    const AUTUMN_SKY = new THREE.Color(0xe9b16a); // warm hazy golden-hour amber
+    const SEASON_LEG = 500;
+    const AUTUMN_SKY = new THREE.Color(0xe9b16a);
     const SUMMER_SUN = sceneLights.sun.color.clone();
-    const AUTUMN_SUN = new THREE.Color(0xffcf8a); // low golden sun
+    const AUTUMN_SUN = new THREE.Color(0xffcf8a);
     const SUMMER_HEMI = sceneLights.hemi.color.clone();
     const AUTUMN_HEMI = new THREE.Color(0xffd9a8);
-    // Shared materials the season recolours (snapshot summer base → lerp toward autumn).
-    // Only the run scene renders these, so morphing the shared instances is safe.
+    const SUMMER_HEMI_GROUND = sceneLights.hemi.groundColor.clone();
+    // Maple-leaf materials — village-only autumn morph (maples are hidden in the city leg).
     const seasonMats: { mat: { color: THREE.Color }; summer: THREE.Color; autumn: THREE.Color }[] = [
-      { mat: materials.grass, summer: materials.grass.color.clone(), autumn: new THREE.Color(0x9c8a3c) },
       { mat: materials.mapleLeafRed, summer: materials.mapleLeafRed.color.clone(), autumn: new THREE.Color(0xc62f1c) },
       { mat: materials.mapleLeafOrange, summer: materials.mapleLeafOrange.color.clone(), autumn: new THREE.Color(0xe0701c) },
       { mat: materials.mapleLeafGold, summer: materials.mapleLeafGold.color.clone(), autumn: new THREE.Color(0xe6b022) }
     ];
-    const restoreSeasonMats = (): void => {
+
+    // 電脳都市 Macro-biome — a SECOND, slower crossfade axis (village ↔ neon city) by long
+    // distance legs. Composes UNDER season + ability tints. The run starts in the village.
+    const MACRO_LEG = 700; // metres per macro-leg (village → city → village …)
+    const biomeManager = new BiomeManager(MACRO_LEG);
+    let biomeLevel = 0; // 0 = feudal village, 1 = neon cyber-city
+    let biomeTarget = 0;
+    const CITY_SKY = new THREE.Color(0x1a2150); // deep blue-violet dusk
+    const CITY_SUN = new THREE.Color(0xff9a55); // low warm key
+    const CITY_HEMI = new THREE.Color(0x3a4a8c); // cool dusk sky bounce
+    const CITY_HEMI_GROUND = new THREE.Color(0x0c1018);
+    const CITY_HEMI_SCALE = 0.5;
+    const CITY_SUN_SCALE = 0.62;
+    // Shared road/ground materials, composed: village(+autumn for grass) → lerp toward the city.
+    const PATH_BASE = materials.path.color.clone();
+    const GRASS_SUMMER = materials.grass.color.clone();
+    const GRASS_AUTUMN = new THREE.Color(0x9c8a3c);
+    const LINE_BASE = materials.roadLine.color.clone();
+    const CITY_ASPHALT = new THREE.Color(0x14171d);
+    const CITY_SIDEWALK = new THREE.Color(0x4a4e57);
+    const CITY_LINE = new THREE.Color(0xdfe4ea);
+    const restoreWorldMats = (): void => {
       for (const s of seasonMats) {
         s.mat.color.copy(s.summer);
       }
+      materials.path.color.copy(PATH_BASE);
+      materials.grass.color.copy(GRASS_SUMMER);
+      materials.roadLine.color.copy(LINE_BASE);
     };
 
     const cameraController = new CameraController();
@@ -315,6 +338,7 @@ export class RunSceneFactory {
       baseX: number;
       baseScale: number;
       kind: DecorationKind;
+      biome: number; // 0 = village pool, 1 = neon-city pool (visible only in its macro-leg)
       tints?: TintMat[]; // per-instance weatherable materials (houses)
     };
     const decorative: DecoPiece[] = [];
@@ -678,6 +702,51 @@ export class RunSceneFactory {
     let moonLevel = 0;
     let moonTarget = 0;
 
+    // Kind → model factory (exhaustive over DecorationKind, so TS flags any unmapped kind).
+    const DECORATION_FACTORY: Record<DecorationKind, () => THREE.Group> = {
+      torii: () => models.createTorii(),
+      bambooCluster: () => models.createBambooCluster(),
+      mapleTree: () => models.createMapleTree(),
+      stoneLantern: () => models.createStoneLantern(),
+      machiyaHouse: () => models.createMachiyaHouse(),
+      minkaHouse: () => models.createMinkaHouse(),
+      nagayaRowHouse: () => models.createNagayaRowHouse(),
+      kuraStorehouse: () => models.createKuraStorehouse(),
+      cyberSlabTower: () => models.createCyberSlabTower(),
+      cyberSetbackTower: () => models.createCyberSetbackTower(),
+      cyberCapsuleTower: () => models.createCyberCapsuleTower(),
+      cyberOfficeMidrise: () => models.createCyberOfficeMidrise(),
+      neonShophouse: () => models.createNeonShophouse(),
+      pachinkoFacade: () => models.createPachinkoFacade(),
+      capsuleHotelBlock: () => models.createCapsuleHotelBlock(),
+      rooftopBillboard: () => models.createRooftopBillboard(),
+      verticalKanjiBlade: () => models.createVerticalKanjiBlade(),
+      hologramAdPanel: () => models.createHologramAdPanel(),
+      expresswaySignGantry: () => models.createExpresswaySignGantry(),
+      glassSkybridge: () => models.createGlassSkybridge(),
+      monorailPillar: () => models.createMonorailPillar(),
+      cyberStreetLamp: () => models.createCyberStreetLamp(),
+      vendingMachineBank: () => models.createVendingMachineBank(),
+      trafficSignal: () => models.createTrafficSignal(),
+      utilityPoleWires: () => models.createUtilityPoleWires(),
+      concreteSteelBarrier: () => models.createConcreteSteelBarrier(),
+      neonSakuraTree: () => models.createNeonSakuraTree(),
+      litGinkgoTree: () => models.createLitGinkgoTree(),
+      planterHedge: () => models.createPlanterHedge(),
+      broadcastTower: () => models.createBroadcastTower(),
+      distantTowerCluster: () => models.createDistantTowerCluster(),
+      reflectorStrip: () => models.createReflectorStrip(),
+      drainGrateKerb: () => models.createDrainGrateKerb(),
+      busLaneMarking: () => models.createBusLaneMarking()
+    };
+    // Tall city structures + skyline landmarks must not cast shadows.
+    const NO_SHADOW_KINDS = new Set<DecorationKind>([
+      "cyberSlabTower", "cyberSetbackTower", "cyberCapsuleTower", "cyberOfficeMidrise",
+      "neonShophouse", "pachinkoFacade", "capsuleHotelBlock", "rooftopBillboard",
+      "verticalKanjiBlade", "hologramAdPanel", "expresswaySignGantry", "glassSkybridge",
+      "monorailPillar", "broadcastTower", "distantTowerCluster"
+    ]);
+
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {
       const index = biome.track.startIndex + offset;
       // Merge road + grass + every lane dash into a few draw calls (per material).
@@ -688,14 +757,22 @@ export class RunSceneFactory {
       world.add(segment);
     }
 
-    for (const placement of biome.decorations) {
-      const decoration = createDecoration(placement.kind);
-      decoration.position.set(placement.x, 0, placement.z);
-      decoration.rotation.y = placement.rotationY ?? 0;
-      decoration.scale.setScalar(placement.scale ?? 1);
-      freezeStaticChildren(decoration);
-      addDecorative(decoration, placement.kind);
-    }
+    // Two independent decoration pools tiling the SAME content loop: the feudal village
+    // (biome 0) and the neon city (biome 1). Both exist at once; each piece is visible only
+    // while its own z sits in its macro-leg, so the world swaps seamlessly at recycle time
+    // (off-screen in the fog). The run begins in the village leg.
+    const buildPool = (placements: typeof biome.decorations, biomeIndex: number): void => {
+      for (const placement of placements) {
+        const decoration = createDecoration(placement.kind);
+        decoration.position.set(placement.x, 0, placement.z);
+        decoration.rotation.y = placement.rotationY ?? 0;
+        decoration.scale.setScalar(placement.scale ?? 1);
+        freezeStaticChildren(decoration);
+        addDecorative(decoration, placement.kind, biomeIndex);
+      }
+    };
+    buildPool(biome.decorations, 0);
+    buildPool(NEON_CITY_DECORATIONS, 1);
 
     for (let index = 0; index < biome.coins.count; index += 1) {
       const coin = models.createKoban();
@@ -781,12 +858,15 @@ export class RunSceneFactory {
       blossomTarget = 0;
       petalMat.opacity = 0;
       petals.visible = false;
-      // 紅葉 season: back to the summer village; restore the morphed shared materials.
+      // 紅葉 season + 電脳都市 macro-biome: back to the summer village; restore shared materials.
       seasonLevel = 0;
       seasonTarget = 0;
-      restoreSeasonMats();
+      biomeLevel = 0;
+      biomeTarget = 0;
+      restoreWorldMats();
       sceneLights.sun.color.copy(SUMMER_SUN);
       sceneLights.hemi.color.copy(SUMMER_HEMI);
+      sceneLights.hemi.groundColor.copy(SUMMER_HEMI_GROUND);
       for (const m of leafMats) {
         m.opacity = 0;
       }
@@ -839,8 +919,10 @@ export class RunSceneFactory {
       if (isRunning) {
         distance += activeSpeed * dt;
         scoreSystem.updateDistance(distance);
-        // 紅葉 season oscillates by distance: village (leg 0) → autumn (leg 1) → … .
-        seasonTarget = Math.floor(distance / SEASON_LEG) % 2 === 1 ? 1 : 0;
+        // 電脳都市 macro-biome oscillates by long legs: village → neon city → village … .
+        biomeTarget = biomeManager.biomeLevelForDistance(distance);
+        // 紅葉 season oscillates within the VILLAGE leg only (held at summer in the city).
+        seasonTarget = biomeTarget === 1 ? 0 : Math.floor(distance / SEASON_LEG) % 2 === 1 ? 1 : 0;
         cleanRunTimer += dt;
         pressure = Math.max(0, pressure - dt * 4);
         introChaserTimer = Math.max(0, introChaserTimer - dt);
@@ -890,10 +972,14 @@ export class RunSceneFactory {
     }
 
     function updateAtmosphere(dt: number): void {
-      // Ease the season (slow, ~few seconds) and the ability tint (fast) toward target.
+      // Ease season + macro-biome (slow) and the ability tint (fast) toward target.
       seasonLevel = THREE.MathUtils.lerp(seasonLevel, seasonTarget, Math.min(1, dt * 0.5));
       if (Math.abs(seasonLevel - seasonTarget) < 0.002) {
         seasonLevel = seasonTarget;
+      }
+      biomeLevel = THREE.MathUtils.lerp(biomeLevel, biomeTarget, Math.min(1, dt * 0.5));
+      if (Math.abs(biomeLevel - biomeTarget) < 0.002) {
+        biomeLevel = biomeTarget;
       }
       if (tintLevel !== tintTarget) {
         tintLevel = THREE.MathUtils.lerp(tintLevel, tintTarget, Math.min(1, dt * 3.5));
@@ -901,18 +987,29 @@ export class RunSceneFactory {
           tintLevel = tintTarget;
         }
       }
-      // Seasonal base atmosphere (village → autumn), then the ability tint layered over it.
-      const baseHemiI = dayHemi * THREE.MathUtils.lerp(1, 0.96, seasonLevel);
-      const baseSunI = daySun * THREE.MathUtils.lerp(1, 1.02, seasonLevel);
-      const sky = DAY_SKY.clone().lerp(AUTUMN_SKY, seasonLevel).lerp(tintSky, tintLevel);
+      // Compose in fixed order: village(+season) → macro biome (city dusk) → ability tint.
+      // Sky/fog.
+      const villageSky = DAY_SKY.clone().lerp(AUTUMN_SKY, seasonLevel);
+      const sky = villageSky.lerp(CITY_SKY, biomeLevel).lerp(tintSky, tintLevel);
       (scene.background as THREE.Color).copy(sky);
       (scene.fog as THREE.Fog).color.copy(sky);
+      // Light intensity.
+      const villageHemiI = dayHemi * THREE.MathUtils.lerp(1, 0.96, seasonLevel);
+      const villageSunI = daySun * THREE.MathUtils.lerp(1, 1.02, seasonLevel);
+      const baseHemiI = THREE.MathUtils.lerp(villageHemiI, dayHemi * CITY_HEMI_SCALE, biomeLevel);
+      const baseSunI = THREE.MathUtils.lerp(villageSunI, daySun * CITY_SUN_SCALE, biomeLevel);
       sceneLights.hemi.intensity = THREE.MathUtils.lerp(baseHemiI, baseHemiI * tintHemiScale, tintLevel);
       sceneLights.sun.intensity = THREE.MathUtils.lerp(baseSunI, baseSunI * tintSunScale, tintLevel);
-      // Golden-hour warmth on the lights in autumn (independent of the ability tint).
-      sceneLights.sun.color.copy(SUMMER_SUN).lerp(AUTUMN_SUN, seasonLevel);
-      sceneLights.hemi.color.copy(SUMMER_HEMI).lerp(AUTUMN_HEMI, seasonLevel);
-      // Recolour the shared world materials (grass + maple canopy) with the season.
+      // Light colour (golden-hour autumn → cool blue-hour city).
+      sceneLights.sun.color.copy(SUMMER_SUN).lerp(AUTUMN_SUN, seasonLevel).lerp(CITY_SUN, biomeLevel);
+      sceneLights.hemi.color.copy(SUMMER_HEMI).lerp(AUTUMN_HEMI, seasonLevel).lerp(CITY_HEMI, biomeLevel);
+      sceneLights.hemi.groundColor.copy(SUMMER_HEMI_GROUND).lerp(CITY_HEMI_GROUND, biomeLevel);
+      // Shared road/ground materials: grass village(summer→autumn) then → city sidewalk;
+      // road → wet asphalt; lines → bright. Every visible segment shares these → no seam.
+      materials.grass.color.copy(GRASS_SUMMER).lerp(GRASS_AUTUMN, seasonLevel).lerp(CITY_SIDEWALK, biomeLevel);
+      materials.path.color.copy(PATH_BASE).lerp(CITY_ASPHALT, biomeLevel);
+      materials.roadLine.color.copy(LINE_BASE).lerp(CITY_LINE, biomeLevel);
+      // Maple canopies (village-only; hidden in city) follow the season.
       for (const s of seasonMats) {
         s.mat.color.copy(s.summer).lerp(s.autumn, seasonLevel);
       }
@@ -1113,11 +1210,12 @@ export class RunSceneFactory {
       }
       petalMat.dispose();
       petalGeo.dispose();
-      // 紅葉 leaves + restore the shared materials the season morphed (so other scenes
-      // that share MaterialFactory always see the summer base).
-      restoreSeasonMats();
+      // 紅葉 leaves + restore the shared materials the season/biome morphed (so other scenes
+      // that share MaterialFactory always see the village base).
+      restoreWorldMats();
       sceneLights.sun.color.copy(SUMMER_SUN);
       sceneLights.hemi.color.copy(SUMMER_HEMI);
+      sceneLights.hemi.groundColor.copy(SUMMER_HEMI_GROUND);
       leafGeo.dispose();
       for (const m of leafMats) {
         m.dispose();
@@ -1371,8 +1469,15 @@ export class RunSceneFactory {
         if (deco.object.position.z - distance < -biome.decorationRecycleBehindDistance) {
           deco.object.position.z += contentLoopLength;
           jitterDecoration(deco); // re-roll its offset/scale each loop
+          applyBiomeVisibility(deco); // its new z may have crossed a macro-biome boundary
         }
       }
+    }
+
+    // A piece is visible only while its own absolute z sits in its macro-leg. Its z only
+    // changes at recycle (>18 m behind the camera), so every toggle happens off-screen.
+    function applyBiomeVisibility(deco: DecoPiece): void {
+      deco.object.visible = biomeManager.biomeIndexForZ(deco.object.position.z) === deco.biome;
     }
 
     function resetWorldPieces(): void {
@@ -1383,16 +1488,25 @@ export class RunSceneFactory {
       for (const deco of decorative) {
         deco.object.position.z = deco.initialZ;
         jitterDecoration(deco); // fresh scenery layout each run
+        applyBiomeVisibility(deco); // every run starts at distance 0 → village leg
       }
     }
 
-    function addDecorative(object: THREE.Object3D, kind: DecorationKind): void {
-      const piece: DecoPiece = { object, initialZ: object.position.z, baseX: object.position.x, baseScale: object.scale.x, kind };
+    function addDecorative(object: THREE.Object3D, kind: DecorationKind, biomeIndex: number): void {
+      const piece: DecoPiece = {
+        object,
+        initialZ: object.position.z,
+        baseX: object.position.x,
+        baseScale: object.scale.x,
+        kind,
+        biome: biomeIndex
+      };
       if (HOUSE_KINDS.has(kind)) {
         piece.tints = buildTints(object); // clone materials so each house can weather independently
       }
       decorative.push(piece);
       jitterDecoration(piece);
+      applyBiomeVisibility(piece);
       world.add(object);
     }
 
@@ -1463,25 +1577,15 @@ export class RunSceneFactory {
 
     function createDecoration(kind: DecorationKind): THREE.Object3D {
       // Every decoration is static low-poly — merge its dozens of boxes into a handful
-      // of draw calls (per material). Houses alone drop from ~25-46 meshes to ~5-7.
-      switch (kind) {
-        case "torii":
-          return mergeByMaterial(models.createTorii());
-        case "bambooCluster":
-          return mergeByMaterial(models.createBambooCluster());
-        case "mapleTree":
-          return mergeByMaterial(models.createMapleTree());
-        case "stoneLantern":
-          return mergeByMaterial(models.createStoneLantern());
-        case "machiyaHouse":
-          return mergeByMaterial(models.createMachiyaHouse());
-        case "minkaHouse":
-          return mergeByMaterial(models.createMinkaHouse());
-        case "nagayaRowHouse":
-          return mergeByMaterial(models.createNagayaRowHouse());
-        case "kuraStorehouse":
-          return mergeByMaterial(models.createKuraStorehouse());
+      // of draw calls (per material). Tall city structures are forced non-shadow-casting
+      // (the 40 m shadow frustum can't hold them — they'd flicker + cost for nothing).
+      const merged = mergeByMaterial(DECORATION_FACTORY[kind]());
+      if (NO_SHADOW_KINDS.has(kind)) {
+        merged.traverse((object) => {
+          (object as THREE.Mesh).castShadow = false;
+        });
       }
+      return merged;
     }
 
     function registerLightMistake(direction: -1 | 1): void {
