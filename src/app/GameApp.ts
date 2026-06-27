@@ -110,6 +110,7 @@ export class GameApp {
   private coinFlyLayer?: HTMLElement;
   private tapStart?: { x: number; y: number };
   private hudCharge?: HTMLElement;
+  private chargeWasReady = false; // edge-detect the charge-ready ding
   private hudChargeRing?: HTMLElement;
   private hudChargeKanji?: HTMLElement;
   private hudChargeTag?: HTMLElement;
@@ -409,11 +410,12 @@ export class GameApp {
             ? this.runAbilities?.onFatalHit(this.runScene.isPursued(), this.runScene.wasHitFromSide())
             : undefined;
         if (outcome?.survived) {
-          this.audio?.playBoost();
           if (outcome.pursuitSec !== undefined) {
+            this.audio?.playBoost(); // 将 powers through the wreck
             this.runScene.openPursuit(outcome.pursuitSec);
             this.showHudToast("将", "DRAUFGÄNGER", "POLIZEI!");
           } else {
+            this.audio?.playSave(); // 狐 second-life rescue chime
             this.showHudToast("狐", "ZWEITES LEBEN", "GERETTET");
           }
         } else if (this.stateMachine.canTransition("gameOver")) {
@@ -847,6 +849,18 @@ export class GameApp {
       }
     });
     this.events.on("coin:collected", ({ combo }) => audio.playCoin(combo));
+    this.events.on("runner:laneChanged", () => audio.playSwerve());
+    this.events.on("traffic:destroyed", ({ cause }) => {
+      if (cause === "ram") {
+        audio.playRam();
+      } else if (cause === "lift") {
+        audio.playLift();
+      } else if (cause === "turret") {
+        audio.playTurret();
+      } else {
+        audio.playPoof();
+      }
+    });
     this.events.on("powerup:activated", () => audio.playBoost());
     this.events.on("runner:hit", ({ hit }) => {
       if (hit.severity === "minor") {
@@ -1417,7 +1431,7 @@ export class GameApp {
     this.saveData = result.saveData;
     this.garageScene.refreshOwnership(this.unlockedVehicleIds, this.saveData.totalCoins);
     this.unlockAudio();
-    this.audio?.playMenuClick();
+    this.audio?.playPurchase(); // cha-ching on a successful upgrade
     this.lastFrGarageVehicleId = ""; // same vehicle, but level/coins changed → force re-render
     this.updateGarageUi();
   }
@@ -1708,6 +1722,7 @@ export class GameApp {
     this.hudChargeRing?.style.setProperty("--p", "0%");
     this.hudCharge?.classList.remove("is-ready");
     this.hudCharge?.classList.remove("is-active");
+    this.chargeWasReady = false;
     if (this.hudChargeTag) {
       this.hudChargeTag.textContent = "0%";
     }
@@ -1734,6 +1749,10 @@ export class GameApp {
     } else {
       const ratio = abilities.chargeRatio();
       const ready = abilities.isReady();
+      if (ready && !this.chargeWasReady) {
+        this.audio?.playChargeReady(); // ding the moment the ability charges up
+      }
+      this.chargeWasReady = ready;
       this.hudChargeRing?.style.setProperty("--p", `${(ratio * 100).toFixed(1)}%`);
       this.hudCharge?.classList.toggle("is-ready", ready);
       this.hudCharge?.classList.remove("is-active");

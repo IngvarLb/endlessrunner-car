@@ -19,6 +19,8 @@ export type GameEventMap = {
   "coin:collected": { amount: number; combo: number; worldPosition: Vec3Like };
   /** 将 ram payout: coins drop, fly to the counter, and credit on arrival. `ndc` is the drop point in clip space. */
   "coins:dropped": { amount: number; ndc: { x: number; y: number } };
+  /** A traffic car was removed — `cause` selects the SFX (poof = boost/titan, ram = 将, lift = 鬼, turret = 狐). */
+  "traffic:destroyed": { cause: "poof" | "ram" | "lift" | "turret" };
   "powerup:activated": { type: PowerUpType; duration: number };
   "powerup:expired": { type: PowerUpType };
   "chaser:pressureChanged": { value: number; reason: PressureReason };

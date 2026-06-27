@@ -363,6 +363,65 @@ export class ProceduralAudioService {
     });
   }
 
+  /** Lane change — a quick, subtle tyre whoosh (plays on every successful swerve). */
+  playSwerve(): void {
+    const now = this.ensureContext().currentTime;
+    this.playNoiseBurst(now, 0.13, 0.045, 2600, 650, "bandpass", this.sfxGain);
+  }
+
+  /** Charge meter just filled — a bright "ready!" chime. */
+  playChargeReady(): void {
+    const now = this.ensureContext().currentTime;
+    this.playTone(now, NOTE_FREQUENCIES.G4, 0.1, "triangle", 0.15, this.sfxGain, 0.004);
+    this.playTone(now + 0.09, NOTE_FREQUENCIES.C5, 0.18, "triangle", 0.18, this.sfxGain, 0.004);
+    this.playTone(now + 0.09, NOTE_FREQUENCIES.C5 * 2, 0.1, "sine", 0.06, this.sfxGain, 0.003);
+  }
+
+  /** 鬼 Schwarzes Loch: a car sucked up — a rising swoosh. */
+  playLift(): void {
+    const now = this.ensureContext().currentTime;
+    this.playSweep(now, 200, 1500, 0.3, "sine", 0.13, this.sfxGain);
+    this.playNoiseBurst(now, 0.3, 0.07, 400, 3000, "bandpass", this.sfxGain);
+  }
+
+  /** 将 Nachtjagd: ramming a car — a low crunch. */
+  playRam(): void {
+    const now = this.ensureContext().currentTime;
+    this.playSweep(now, 150, 48, 0.2, "square", 0.28, this.sfxGain);
+    this.playNoiseBurst(now, 0.18, 0.3, 220, 1400, "lowpass", this.sfxGain);
+    this.playNoiseBurst(now + 0.02, 0.1, 0.15, 1600, 4200, "bandpass", this.sfxGain);
+  }
+
+  /** 狐 Geschützturm: a turret shot — a quick laser pew. */
+  playTurret(): void {
+    const now = this.ensureContext().currentTime;
+    this.playSweep(now, 1500, 320, 0.11, "square", 0.11, this.sfxGain);
+    this.playNoiseBurst(now, 0.05, 0.05, 2200, 5200, "bandpass", this.sfxGain);
+  }
+
+  /** 赤 Boost / 狐 Titan smashing a car aside — a soft poof. */
+  playPoof(): void {
+    const now = this.ensureContext().currentTime;
+    this.playNoiseBurst(now, 0.16, 0.16, 1200, 280, "lowpass", this.sfxGain);
+    this.playSweep(now, 190, 70, 0.16, "sine", 0.13, this.sfxGain);
+  }
+
+  /** 狐 Zweites Leben spent — a warm "saved" chime. */
+  playSave(): void {
+    const now = this.ensureContext().currentTime;
+    [NOTE_FREQUENCIES.G3, NOTE_FREQUENCIES.C4, NOTE_FREQUENCIES.G4].forEach((f, i) =>
+      this.playTone(now + i * 0.07, f, 0.22, "sine", 0.15, this.sfxGain, 0.006),
+    );
+  }
+
+  /** Garage upgrade bought — a little cha-ching. */
+  playPurchase(): void {
+    const now = this.ensureContext().currentTime;
+    this.playTone(now, NOTE_FREQUENCIES.C5, 0.1, "triangle", 0.15, this.sfxGain, 0.003);
+    this.playTone(now + 0.08, NOTE_FREQUENCIES.C5 * 1.5, 0.16, "triangle", 0.15, this.sfxGain, 0.003);
+    this.playTone(now + 0.08, NOTE_FREQUENCIES.C5 * 3, 0.1, "sine", 0.05, this.sfxGain, 0.002);
+  }
+
   dispose(): void {
     this.stopMusic();
 

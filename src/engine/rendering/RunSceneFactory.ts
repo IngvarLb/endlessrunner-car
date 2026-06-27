@@ -296,8 +296,9 @@ export class RunSceneFactory {
         scoreSystem.resetCombo();
         registerStrongFail("obstacle");
       },
-      ({ car, coins }) => {
+      ({ car, coins, cause }) => {
         cameraController.shake(0.18, 0.08);
+        events?.emit("traffic:destroyed", { cause });
         if (coins > 0) {
           // 将 Nachtjagd: coins drop here and fly to the counter — credited on arrival.
           const drop = new THREE.Vector3(car.mesh.position.x, 0.9, car.trackZ - distance);
@@ -500,6 +501,8 @@ export class RunSceneFactory {
       const result = direction < 0 ? runnerController.moveLeft() : runnerController.moveRight();
       if (result.mistake) {
         registerLightMistake(direction);
+      } else if (result.moved) {
+        events?.emit("runner:laneChanged", { lane: result.lane });
       }
     };
 

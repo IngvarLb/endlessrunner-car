@@ -16,6 +16,8 @@ export type TrafficCarDestroyed = {
   car: TrafficCar;
   /** Coins to award for this kill (>0 only when rammed during 将 Nachtjagd). */
   coins: number;
+  /** What removed the car — selects the destroy SFX. */
+  cause: "poof" | "ram" | "lift" | "turret";
 };
 
 // Car-following (longitudinal) — centre-to-centre gaps in metres.
@@ -111,12 +113,12 @@ export class TrafficSystem {
           // mid-give-way (wins over isYielding, so you never phase through).
           car.hit = true;
           car.mesh.visible = false;
-          this.onDestroyed?.({ car, coins: 0 });
+          this.onDestroyed?.({ car, coins: 0, cause: "poof" });
         } else if (this.ramCoins !== undefined && side) {
           // 将 Nachtjagd: SIDE ram only → coins + a crumpled wreck (rear-ending is fatal).
           car.wreck();
           this.runner.bounceBack(); // recoil to our lane — don't slide into the wreck
-          this.onDestroyed?.({ car, coins: this.ramCoins });
+          this.onDestroyed?.({ car, coins: this.ramCoins, cause: "ram" });
         } else if (this.ramCoins === undefined && car.isYielding()) {
           // 藍 Lichthupe: the car is actively giving way — slip past it harmlessly.
         } else {
@@ -444,7 +446,7 @@ export class TrafficSystem {
     }
     if (best) {
       best.lift(target);
-      this.onDestroyed?.({ car: best, coins: this.liftCoins });
+      this.onDestroyed?.({ car: best, coins: this.liftCoins, cause: "lift" });
       return true;
     }
     return false;
@@ -545,7 +547,7 @@ export class TrafficSystem {
     }
     car.hit = true;
     car.mesh.visible = false;
-    this.onDestroyed?.({ car, coins: 0 }); // turret credits its own coins separately
+    this.onDestroyed?.({ car, coins: 0, cause: "turret" }); // turret credits its own coins separately
   }
 
   /**
