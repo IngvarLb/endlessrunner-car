@@ -29,7 +29,7 @@ const OVERTAKE_LEAD_GAP = 17; // start the pass while still well back, so it nev
 const OVERTAKE_SPEED_MARGIN = 0.25; // ...as long as it's faster than the car ahead
 const OVERTAKE_CLEAR_AHEAD = 9; // room needed ahead in the target lane to pull in
 const OVERTAKE_CLEAR_BEHIND = 4; // ...and behind
-const OVERTAKE_SIGNAL_SECONDS = 2; // blink this long before actually moving over
+const OVERTAKE_SIGNAL_SECONDS = 0.8; // brief blink before moving over (keeps the whole merge quick + visible)
 
 // Fairness — never let three lanes block within WALL_BAND metres in the player's view,
 // so there is always an open lane within reach (sometimes only after a car gives way).
@@ -47,12 +47,12 @@ const ANTICIPATE_BEHIND = 9; // ...by holding back a car this far behind the ope
 // ahead — so a half-merged car (spanning two lanes) can never appear in the player's
 // danger zone and box them in. The head start needed grows with the closing speed, so at
 // high speed merges naturally only happen on distant cars (or not at all).
-const MERGE_PLAN_SECONDS = 4.2; // blinker telegraph + the merge glide (+ margin for player acceleration)
-const MERGE_SAFE_AHEAD = 22; // metres the car is still ahead when the merge finishes (well past the danger zone)
+const MERGE_PLAN_SECONDS = 2.0; // blinker telegraph + the merge glide (+ margin for player acceleration)
+const MERGE_SAFE_AHEAD = 16; // metres the car is still ahead when the merge finishes (past the ~12 m danger zone)
 
 const DIFFICULTY_RAMP_START = 160; // metres: calm intro before any churn
 const DIFFICULTY_RAMP_FULL = 2400; // metres: flatter ramp — full difficulty only deep into a run
-const LANE_CHURN_RATE_MAX = 0.1; // per car, per second, at full difficulty (less frequent than before)
+const LANE_CHURN_RATE_MAX = 0.18; // per car, per second, at full difficulty
 
 export class TrafficSystem {
   private readonly cars: TrafficCar[] = [];
@@ -143,8 +143,8 @@ export class TrafficSystem {
    * rises, and a fairness guard keeps at least one lane open near the player.
    */
   private think(dt: number): void {
-    // A baseline so traffic feels alive from the start, a touch more as you go.
-    const churnRate = 0.06 + (LANE_CHURN_RATE_MAX - 0.06) * this.difficulty();
+    // A solid baseline so traffic visibly weaves from the start, more as you go.
+    const churnRate = 0.12 + (LANE_CHURN_RATE_MAX - 0.12) * this.difficulty();
     for (const car of this.cars) {
       if (car.hit || !car.mesh.visible) {
         continue;

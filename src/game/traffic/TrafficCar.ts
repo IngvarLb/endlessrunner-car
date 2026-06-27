@@ -5,7 +5,7 @@ import { LaneSystem } from "../world/LaneSystem";
 import type { TrafficCarKind, TrafficColliderShape } from "./TrafficTypes";
 
 // Lateral lane-change tuning (average sideways speed in m/s over the merge).
-const POLITE_MERGE_SPEED = 1.5; // casual highway lane change — slow + angled (overtake, 藍 Freie Bahn)
+const POLITE_MERGE_SPEED = 2.5; // casual highway lane change — angled but quick enough to read (overtake, 藍 Freie Bahn)
 const URGENT_MERGE_SPEED = 10; // emergency give-way (藍 Lichthupe): a quick veer out of the way
 const MAX_YAW = 0.42; // rad (~24°): cap the body angle so it never looks like driving sideways
 const BLINK_INTERVAL = 0.22; // seconds per on/off phase of the turn signal
@@ -15,10 +15,11 @@ const LIFT_DURATION = 1.4; // 鬼: seconds for a tapped car to rise into the hol
 const ACCEL = 6; // m/s² when speeding up to cruise / overtaking
 const BRAKE = 18; // m/s² when slowing to follow / avoid a rear-end
 const LANE_COOLDOWN = 1.7; // seconds between a car's own lane changes (no oscillation)
-// Cars all cruise at the SAME speed (Subway-Surfers-style predictable obstacles): no
-// catching-up, so the director's even spacing is preserved and nothing clumps.
-const CRUISE_MIN_FACTOR = 1.0;
-const CRUISE_MAX_FACTOR = 1.0;
+// Small per-car speed variety (keyed off the id, stable across recycles) so cars visibly
+// run at slightly different speeds and overtake — but only ±6%, so catch-up is slow and
+// the overtake (pull out + pass) resolves it instead of clumping.
+const CRUISE_MIN_FACTOR = 0.94;
+const CRUISE_MAX_FACTOR = 1.06;
 
 function hashTo01(value: string): number {
   let hash = 2166136261;
