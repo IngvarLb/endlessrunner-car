@@ -332,16 +332,16 @@ export class ModelFactory {
   }
 
   createRyujinHypercar(): THREE.Group {
-    // RYUJIN HYPERCAR — legend. Long low pearlescent-teal wedge, low canopy, heavy
-    // gold-leaf pin-trim and restrained teal glow lines. Loud through finish, not clutter.
-    const teal = this.materials.carRyujinPearl;
-    const gold = this.materials.gold;
-    const glow = this.materials.neonCyan;
+    // RYUJIN HYPERCAR — legend. Long low lustrous-GOLD wedge over a carbon underbody,
+    // bright chrome-gold pin-trim and warm gold glow lines. The 12k legend looks the part.
+    const goldBody = this.materials.carRyujinGold;
+    const trim = this.materials.chrome; // bright chrome highlights pop against the gold body
+    const goldGlow = this.materials.ryujinGlow;
     const g = this.buildCar({
       name: "char_ryujin_hypercar_low_poly",
-      body: teal,
+      body: goldBody,
       lower: this.materials.carbon,
-      roofMat: teal,
+      roofMat: goldBody,
       length: 2.72,
       width: 1.5,
       ride: 0.32,
@@ -355,21 +355,21 @@ export class ModelFactory {
     });
 
     const splitter = this.mesh(new THREE.BoxGeometry(1.66, 0.06, 0.26), this.materials.carbon, [0, 0.18, 1.42]);
-    const splitterGold = this.mesh(new THREE.BoxGeometry(1.3, 0.03, 0.05), gold, [0, 0.22, 1.52]);
-    const frontGlow = this.mesh(new THREE.BoxGeometry(1.0, 0.03, 0.04), glow, [0, 0.26, 1.54]);
+    const splitterTrim = this.mesh(new THREE.BoxGeometry(1.3, 0.03, 0.05), trim, [0, 0.22, 1.52]);
+    const frontGlow = this.mesh(new THREE.BoxGeometry(1.0, 0.03, 0.04), goldGlow, [0, 0.26, 1.54]);
     const diffuser = this.mesh(new THREE.BoxGeometry(1.42, 0.14, 0.26), this.materials.carbon, [0, 0.22, -1.36]);
-    const diffuserGlow = this.mesh(new THREE.BoxGeometry(0.9, 0.03, 0.04), glow, [0, 0.28, -1.48]);
+    const diffuserGlow = this.mesh(new THREE.BoxGeometry(0.9, 0.03, 0.04), goldGlow, [0, 0.28, -1.48]);
     // Low rear wing on short supports rising off the deck (no tall pylons)
-    const wing = this.mesh(new THREE.BoxGeometry(1.56, 0.06, 0.3), teal, [0, 0.82, -1.18]);
-    const wingGold = this.mesh(new THREE.BoxGeometry(1.24, 0.03, 0.05), gold, [0, 0.86, -1.08]);
-    const wingGlow = this.mesh(new THREE.BoxGeometry(1.24, 0.025, 0.04), glow, [0, 0.79, -1.3]);
-    g.add(splitter, splitterGold, frontGlow, diffuser, diffuserGlow, wing, wingGold, wingGlow);
+    const wing = this.mesh(new THREE.BoxGeometry(1.56, 0.06, 0.3), goldBody, [0, 0.82, -1.18]);
+    const wingTrim = this.mesh(new THREE.BoxGeometry(1.24, 0.03, 0.05), trim, [0, 0.86, -1.08]);
+    const wingGlow = this.mesh(new THREE.BoxGeometry(1.24, 0.025, 0.04), goldGlow, [0, 0.79, -1.3]);
+    g.add(splitter, splitterTrim, frontGlow, diffuser, diffuserGlow, wing, wingTrim, wingGlow);
 
     for (const sx of [-1, 1]) {
-      const support = this.mesh(new THREE.BoxGeometry(0.06, 0.22, 0.09), teal, [sx * 0.5, 0.71, -1.16]);
-      const goldRail = this.mesh(new THREE.BoxGeometry(0.03, 0.04, 1.9), gold, [sx * 0.73, 0.52, -0.02]);
-      const sideGlow = this.mesh(new THREE.BoxGeometry(0.035, 0.03, 1.6), glow, [sx * 0.76, 0.34, -0.02]);
-      g.add(support, goldRail, sideGlow);
+      const support = this.mesh(new THREE.BoxGeometry(0.06, 0.22, 0.09), goldBody, [sx * 0.5, 0.71, -1.16]);
+      const rail = this.mesh(new THREE.BoxGeometry(0.03, 0.04, 1.9), trim, [sx * 0.73, 0.52, -0.02]);
+      const sideGlow = this.mesh(new THREE.BoxGeometry(0.035, 0.03, 1.6), goldGlow, [sx * 0.76, 0.34, -0.02]);
+      g.add(support, rail, sideGlow);
     }
 
     this.enableShadows(g);

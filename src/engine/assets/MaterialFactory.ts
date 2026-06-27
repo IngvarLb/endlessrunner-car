@@ -35,7 +35,7 @@ export class MaterialFactory {
   readonly carKitsuneGloss = this.standard(0xff7a24, 0.3, 0.26); // sport: glossy rally orange
   readonly carShogunBlack = this.standard(0x15171a, 0.28, 0.34); // sport: gloss metallic black
   readonly carOniGloss = this.standard(0x6536c9, 0.3, 0.42); // elite: deep metallic violet
-  readonly carRyujinPearl = this.standard(0x00b7ff, 0.22, 0.5); // legend: pearlescent teal
+  readonly carRyujinGold = this.standard(0xf0c12e, 0.26, 0.42); // legend: bright lustrous gold
   readonly chrome = this.standard(0xeef2f6, 0.22, 0.85); // bright chrome trim
   readonly steelTrim = this.standard(0xb9c0c8, 0.4, 0.55); // brushed steel surrounds
   readonly oniGlow = this.emissive(0xff2a4d, 0.55); // elite: subtle single underglow strip
@@ -49,7 +49,7 @@ export class MaterialFactory {
   readonly carbon = this.standard(0x0b1118, 0.6, 0.3);
   readonly darkTrim = this.standard(0x242833, 0.66, 0.18);
   readonly neonRed = this.emissive(0xff2448, 1.25);
-  readonly neonCyan = this.emissive(0x00f0ff, 1.15);
+  readonly ryujinGlow = this.emissive(0xffe08a, 1.05); // legend: warm gold glow lines
   readonly trafficYellow = this.standard(0xffc928, 0.66, 0.08);
   readonly trafficMint = this.standard(0x2ed39c, 0.7, 0.06);
   readonly trafficOrange = this.standard(0xff7a1a, 0.66, 0.08);
