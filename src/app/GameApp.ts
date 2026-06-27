@@ -399,6 +399,8 @@ export class GameApp {
       const siphon = this.runAbilities?.siphonParams();
       if (siphon && this.runScene.isPoliceBehind()) {
         this.runScene.siphonStream(dt, siphon.coinsPerCar, siphon.cars);
+      } else if (siphon) {
+        this.runScene.clearSiphonVfx(); // police gone — hide the mini black holes
       }
 
       const gameOver = this.runScene.consumeGameOver();

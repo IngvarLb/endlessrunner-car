@@ -59,6 +59,8 @@ export type RunScene = AppScene & {
   isPoliceBehind(): boolean;
   /** 鬼 Anzapfen: continuous coin stream from the nearest cars in range to the counter. */
   siphonStream(dt: number, coinsPerCar: number, maxCars: number): void;
+  /** 鬼 Anzapfen: hide the mini black holes (no car being drained / police gone). */
+  clearSiphonVfx(): void;
 };
 
 const baseSpeed = 9.5;
@@ -75,8 +77,8 @@ const chaserHideZ = -9.5; // hide once it has slid off the bottom (just behind t
 const chaserApproachLerp = 5.2; // fast to appear
 const chaserRecedeSpeed = 0.9; // metres/second — slow, steady fall-back (takes several seconds)
 const introChaserSideOffset = 1.05;
-// 鬼 Schwarzes Loch: a fixed point ahead-and-up (scene space) that tapped cars are sucked into.
-const BLACK_HOLE_POS = { x: 0, y: 5, z: 14 };
+// 鬼 Schwarzes Loch: a fixed point high in the sky (scene space) that tapped cars are sucked UP into.
+const BLACK_HOLE_POS = { x: 0, y: 9, z: 13 };
 // 鬼 Anzapfen: only the nearest cars within this many metres ahead bleed coins.
 const SIPHON_RANGE = 38;
 
@@ -172,6 +174,14 @@ export class RunSceneFactory {
     let bhTarget = 0;
     let siphonAccum = 0; // 鬼 Anzapfen continuous-stream accumulator + round-robin source index
     let siphonIdx = 0;
+    // 鬼 Anzapfen mini black holes (materials/geometry; pool built once `world` exists below).
+    const miniCoreMat = new THREE.MeshBasicMaterial({ color: 0x0a0012, transparent: true, opacity: 0.92, depthWrite: false });
+    const miniGlowMat = new THREE.MeshBasicMaterial({ color: 0x6a28b0, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false });
+    const miniSwirlMat = new THREE.MeshBasicMaterial({ color: 0xb45cff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+    const miniCoreGeo = new THREE.CircleGeometry(0.34, 20);
+    const miniGlowGeo = new THREE.CircleGeometry(0.72, 20);
+    const miniArmGeo = new THREE.PlaneGeometry(0.13, 0.04);
+    const miniHoles: { group: THREE.Group; swirl: THREE.Group }[] = [];
     const runner = models.createVehicle(vehicle.modelKey);
     const chaser = models.createTokyoPoliceCar();
     const boostAura = models.createShieldPowerUp();
@@ -188,6 +198,28 @@ export class RunSceneFactory {
     const trackLoopLength = biome.track.segmentLength * biome.track.segmentCount;
     const contentLoopLength = biome.contentLoopLength;
     const world = new THREE.Group();
+    // 鬼 Anzapfen: pool of 4 mini black holes (mastery cap), parented to `world` so they
+    // scroll with the cars they hover above.
+    for (let h = 0; h < 4; h += 1) {
+      const group = new THREE.Group();
+      group.visible = false;
+      const glow = new THREE.Mesh(miniGlowGeo, miniGlowMat);
+      glow.position.z = -0.04;
+      const core = new THREE.Mesh(miniCoreGeo, miniCoreMat);
+      core.position.z = -0.02;
+      const swirl = new THREE.Group();
+      for (let i = 0; i < 8; i += 1) {
+        const arm = new THREE.Mesh(miniArmGeo, miniSwirlMat);
+        const a = i * 0.78;
+        const r = 0.34 + (i / 8) * 0.34;
+        arm.position.set(Math.cos(a) * r, Math.sin(a) * r, 0);
+        arm.rotation.z = a + Math.PI / 2;
+        swirl.add(arm);
+      }
+      group.add(glow, core, swirl);
+      world.add(group);
+      miniHoles.push({ group, swirl });
+    }
     const groundSegments: TrackPiece[] = [];
     const decorative: TrackPiece[] = [];
 
@@ -401,6 +433,9 @@ export class RunSceneFactory {
       blackHole.visible = false;
       siphonAccum = 0;
       siphonIdx = 0;
+      for (const mh of miniHoles) {
+        mh.group.visible = false;
+      }
     };
 
     const moveLane = (direction: -1 | 1): void => {
@@ -578,6 +613,9 @@ export class RunSceneFactory {
       bhGlowMat.dispose();
       bhCoreMat.dispose();
       bhSwirlMat.dispose();
+      miniCoreMat.dispose();
+      miniGlowMat.dispose();
+      miniSwirlMat.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();
@@ -853,21 +891,41 @@ export class RunSceneFactory {
       isPoliceBehind: () => lightMistakeWindowTimer > 0 || daredevilPursuit > 0,
       siphonStream: (dt: number, coinsPerCar: number, maxCars: number) => {
         const cars = trafficSystem.nearestCars(maxCars, SIPHON_RANGE);
+        // A small black hole hovers over each drained car (spins, faces the camera);
+        // unused pool slots are hidden.
+        for (let i = 0; i < miniHoles.length; i += 1) {
+          const mh = miniHoles[i];
+          const car = cars[i];
+          if (car) {
+            mh.group.visible = true;
+            mh.group.position.set(car.mesh.position.x, 1.7, car.trackZ);
+            mh.group.lookAt(cameraController.camera.position);
+            mh.swirl.rotation.z += dt * 4;
+          } else {
+            mh.group.visible = false;
+          }
+        }
         if (cars.length === 0) {
           siphonAccum = 0;
           return;
         }
         // Steady drip: total rate = coinsPerCar × cars-in-range, emitted as single coins
-        // round-robin from the nearest cars, so it reads as a continuous stream.
+        // round-robin from the nearest cars (from the mini hole above them), so it reads
+        // as a continuous stream.
         siphonAccum += coinsPerCar * cars.length * dt;
         let guard = 8; // frame safety cap
         while (siphonAccum >= 1 && guard-- > 0) {
           siphonAccum -= 1;
           const car = cars[siphonIdx % cars.length];
           siphonIdx += 1;
-          const drop = new THREE.Vector3(car.mesh.position.x, 0.9, car.trackZ - distance);
+          const drop = new THREE.Vector3(car.mesh.position.x, 1.7, car.trackZ - distance);
           drop.project(cameraController.camera);
           events?.emit("coins:dropped", { amount: 1, ndc: { x: drop.x, y: drop.y } });
+        }
+      },
+      clearSiphonVfx: () => {
+        for (const mh of miniHoles) {
+          mh.group.visible = false;
         }
       },
       creditCoins: (amount: number) => {
