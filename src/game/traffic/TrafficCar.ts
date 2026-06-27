@@ -78,6 +78,9 @@ export class TrafficCar implements Collidable {
   private readonly smokePuffs: THREE.Object3D[] = [];
   private lifted = false; // 鬼 Schwarzes Loch: tapped car rises into the hole
   private liftTime = 0;
+  private liftTarget?: { x: number; y: number; z: number }; // hole position (scene space)
+  private liftStartX = 0; // where the car was when tapped (lane x)
+  private liftScreenZ = 0; // its screen-space z at the tap (trackZ - distance), kept fixed as the world scrolls
   private readonly blinkerPosX?: THREE.Object3D;
   private readonly blinkerNegX?: THREE.Object3D;
 
@@ -111,14 +114,30 @@ export class TrafficCar implements Collidable {
 
   update(dt: number, isRunning: boolean): void {
     if (this.lifted) {
-      // 鬼: tapped car tumbles up into the black hole and shrinks away; you drive under.
+      // 鬼: the tapped car is sucked into the black hole — it curves toward the hole,
+      // spirals, and shrinks to a point as it's swallowed.
       if (isRunning) {
         this.liftTime += dt;
       }
       const p = Math.min(1, this.liftTime / LIFT_DURATION);
-      this.mesh.position.set(this.visualX, p * 3.8, this.trackZ);
-      this.mesh.rotation.set(p * 1.3, this.liftTime * 4.5, p * 0.9);
-      this.mesh.scale.setScalar(1 - p * 0.75);
+      if (this.liftTarget) {
+        const ease = p * p; // accelerate as it falls in
+        const t = this.liftTarget;
+        // Path runs in screen space (both ends fixed on screen); + distance maps it back
+        // into the scrolling world group so the car tracks the on-screen hole.
+        this.mesh.position.set(
+          this.liftStartX + (t.x - this.liftStartX) * ease,
+          t.y * ease,
+          this.liftScreenZ + (t.z - this.liftScreenZ) * ease + this.getDistance()
+        );
+        this.mesh.rotation.set(p * 2.4, this.liftTime * 7, p * 1.8); // spiral spin
+        this.mesh.scale.setScalar(Math.max(0, 1 - p * 0.95)); // shrink to a point
+      } else {
+        // Fallback (no hole position): rise straight up and fade.
+        this.mesh.position.set(this.visualX, p * 3.8, this.trackZ);
+        this.mesh.rotation.set(p * 1.3, this.liftTime * 4.5, p * 0.9);
+        this.mesh.scale.setScalar(1 - p * 0.75);
+      }
       if (p >= 1) {
         this.mesh.visible = false; // swallowed
       }
@@ -316,8 +335,8 @@ export class TrafficCar implements Collidable {
     return !this.hit && this.laneCooldown <= 0 && this.mergeDuration === 0 && this.signalTimer <= 0;
   }
 
-  /** 鬼 Schwarzes Loch: tapped — rise into the hole and vanish (you drive under it). */
-  lift(): void {
+  /** 鬼 Schwarzes Loch: tapped — get sucked into the hole at `target` (scene space) and vanish. */
+  lift(target?: { x: number; y: number; z: number }): void {
     if (this.hit) {
       return;
     }
@@ -329,6 +348,9 @@ export class TrafficCar implements Collidable {
     this.signalTimer = 0;
     this.signalLane = null;
     this.setBlinkers(false, false);
+    this.liftTarget = target;
+    this.liftStartX = this.visualX;
+    this.liftScreenZ = this.trackZ - this.getDistance();
   }
 
   isLifted(): boolean {
@@ -431,6 +453,9 @@ export class TrafficCar implements Collidable {
     this.smokeTime = 0;
     this.lifted = false;
     this.liftTime = 0;
+    this.liftTarget = undefined;
+    this.liftStartX = 0;
+    this.liftScreenZ = 0;
     for (const puff of this.smokePuffs) {
       puff.visible = false;
     }

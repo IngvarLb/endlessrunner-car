@@ -57,8 +57,8 @@ export type RunScene = AppScene & {
   tapLift(ndcX: number, ndcY: number): void;
   /** True while the police are right behind you (a catch window is open). */
   isPoliceBehind(): boolean;
-  /** 鬼 Anzapfen: drip `coinsPerCar` coins from up to `cars` nearby cars to the counter. */
-  siphonCoins(coinsPerCar: number, cars: number): void;
+  /** 鬼 Anzapfen: continuous coin stream from the nearest cars in range to the counter. */
+  siphonStream(dt: number, coinsPerCar: number, maxCars: number): void;
 };
 
 const baseSpeed = 9.5;
@@ -75,6 +75,10 @@ const chaserHideZ = -9.5; // hide once it has slid off the bottom (just behind t
 const chaserApproachLerp = 5.2; // fast to appear
 const chaserRecedeSpeed = 0.9; // metres/second — slow, steady fall-back (takes several seconds)
 const introChaserSideOffset = 1.05;
+// 鬼 Schwarzes Loch: a fixed point ahead-and-up (scene space) that tapped cars are sucked into.
+const BLACK_HOLE_POS = { x: 0, y: 5, z: 14 };
+// 鬼 Anzapfen: only the nearest cars within this many metres ahead bleed coins.
+const SIPHON_RANGE = 38;
 
 type TrackPiece = {
   object: THREE.Object3D;
@@ -139,6 +143,35 @@ export class RunSceneFactory {
     }
     let hyperLevel = 0; // eased 0→1 fade of the speed-line / haze intensity
     let hyperTarget = 0;
+
+    // 鬼 Schwarzes Loch: a swirling violet vortex with a dark core, parked ahead-and-up.
+    const bhGlowMat = new THREE.MeshBasicMaterial({ color: 0x5a1e9e, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const bhCoreMat = new THREE.MeshBasicMaterial({ color: 0x0a0012, transparent: true, opacity: 0, depthWrite: false });
+    const bhSwirlMat = new THREE.MeshBasicMaterial({ color: 0x9b30ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const blackHole = new THREE.Group();
+    blackHole.name = "black_hole";
+    blackHole.visible = false;
+    blackHole.position.set(BLACK_HOLE_POS.x, BLACK_HOLE_POS.y, BLACK_HOLE_POS.z);
+    const bhGlow = new THREE.Mesh(new THREE.CircleGeometry(2.9, 32), bhGlowMat);
+    bhGlow.position.z = -0.06;
+    const bhCore = new THREE.Mesh(new THREE.CircleGeometry(1.05, 36), bhCoreMat);
+    bhCore.position.z = -0.03;
+    const bhVortex = new THREE.Group();
+    const bhArmGeo = new THREE.PlaneGeometry(0.34, 0.1);
+    for (let i = 0; i < 30; i += 1) {
+      const arm = new THREE.Mesh(bhArmGeo, bhSwirlMat);
+      const angle = i * 0.62;
+      const radius = 1.0 + (i / 30) * 1.75;
+      arm.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+      arm.rotation.z = angle + Math.PI / 2; // tangent to the swirl
+      arm.scale.setScalar(0.7 + (i / 30) * 0.8);
+      bhVortex.add(arm);
+    }
+    blackHole.add(bhGlow, bhCore, bhVortex);
+    let bhLevel = 0; // eased 0→1 fade of the vortex
+    let bhTarget = 0;
+    let siphonAccum = 0; // 鬼 Anzapfen continuous-stream accumulator + round-robin source index
+    let siphonIdx = 0;
     const runner = models.createVehicle(vehicle.modelKey);
     const chaser = models.createTokyoPoliceCar();
     const boostAura = models.createShieldPowerUp();
@@ -261,7 +294,7 @@ export class RunSceneFactory {
     });
 
     world.name = "playable_feudal_japan_world";
-    scene.add(world, runner, chaser, speedLines);
+    scene.add(world, runner, chaser, speedLines, blackHole);
     runner.add(boostAura);
     collisionSystem.register(runnerController);
 
@@ -359,6 +392,15 @@ export class RunSceneFactory {
       speedLineMat.opacity = 0;
       speedLines.visible = false;
       cameraController.setFovBoost(0);
+      // 鬼 Schwarzes Loch: hide the vortex and reset the siphon stream.
+      bhTarget = 0;
+      bhLevel = 0;
+      bhGlowMat.opacity = 0;
+      bhCoreMat.opacity = 0;
+      bhSwirlMat.opacity = 0;
+      blackHole.visible = false;
+      siphonAccum = 0;
+      siphonIdx = 0;
     };
 
     const moveLane = (direction: -1 | 1): void => {
@@ -412,6 +454,7 @@ export class RunSceneFactory {
       cameraController.update(dt, elapsed, state, isRunning ? runnerController.getPosition().x : 0);
       updateTint(dt);
       updateSpeedLines(dt);
+      updateBlackHole(dt);
     };
 
     function setTint(on: boolean, sky: THREE.Color, hemiScale: number, sunScale: number): void {
@@ -469,6 +512,29 @@ export class RunSceneFactory {
       }
     }
 
+    function setBlackHole(on: boolean): void {
+      setTint(on, BLACKHOLE_SKY, 0.2, 0.26);
+      bhTarget = on ? 1 : 0;
+    }
+
+    function updateBlackHole(dt: number): void {
+      if (bhLevel !== bhTarget) {
+        bhLevel = THREE.MathUtils.lerp(bhLevel, bhTarget, Math.min(1, dt * 4));
+        if (Math.abs(bhLevel - bhTarget) < 0.01) {
+          bhLevel = bhTarget;
+        }
+        bhGlowMat.opacity = bhLevel * 0.4;
+        bhCoreMat.opacity = bhLevel * 0.92;
+        bhSwirlMat.opacity = bhLevel * 0.85;
+        blackHole.visible = bhLevel > 0.01;
+      }
+      if (!blackHole.visible) {
+        return;
+      }
+      bhVortex.rotation.z += dt * 2.4; // swirl
+      blackHole.lookAt(cameraController.camera.position); // always face the camera
+    }
+
     const effectContext: RunEffectContext = {
       runner: {
         boost: (durationSec: number) => runnerController.applyAbilityBoost(durationSec),
@@ -500,7 +566,7 @@ export class RunSceneFactory {
       },
       scene: {
         setNight: (on) => setTint(on, NIGHT_SKY, 0.28, 0.32),
-        setBlackHole: (on) => setTint(on, BLACKHOLE_SKY, 0.2, 0.26),
+        setBlackHole: (on) => setBlackHole(on),
         setHyperspeed: (on) => setHyperspeed(on)
       }
     };
@@ -509,6 +575,9 @@ export class RunSceneFactory {
       coinRain.dispose();
       turret.dispose();
       speedLineMat.dispose();
+      bhGlowMat.dispose();
+      bhCoreMat.dispose();
+      bhSwirlMat.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();
@@ -779,14 +848,26 @@ export class RunSceneFactory {
       wasHitFromSide: () => lastHitWasSide,
       tapLift: (ndcX: number, ndcY: number) => {
         tapRaycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraController.camera);
-        trafficSystem.tryLift(tapRaycaster);
+        trafficSystem.tryLift(tapRaycaster, BLACK_HOLE_POS); // tapped car flies into the hole
       },
       isPoliceBehind: () => lightMistakeWindowTimer > 0 || daredevilPursuit > 0,
-      siphonCoins: (coinsPerCar: number, cars: number) => {
-        for (const car of trafficSystem.nearestCars(cars, 42)) {
+      siphonStream: (dt: number, coinsPerCar: number, maxCars: number) => {
+        const cars = trafficSystem.nearestCars(maxCars, SIPHON_RANGE);
+        if (cars.length === 0) {
+          siphonAccum = 0;
+          return;
+        }
+        // Steady drip: total rate = coinsPerCar × cars-in-range, emitted as single coins
+        // round-robin from the nearest cars, so it reads as a continuous stream.
+        siphonAccum += coinsPerCar * cars.length * dt;
+        let guard = 8; // frame safety cap
+        while (siphonAccum >= 1 && guard-- > 0) {
+          siphonAccum -= 1;
+          const car = cars[siphonIdx % cars.length];
+          siphonIdx += 1;
           const drop = new THREE.Vector3(car.mesh.position.x, 0.9, car.trackZ - distance);
           drop.project(cameraController.camera);
-          events?.emit("coins:dropped", { amount: coinsPerCar, ndc: { x: drop.x, y: drop.y } });
+          events?.emit("coins:dropped", { amount: 1, ndc: { x: drop.x, y: drop.y } });
         }
       },
       creditCoins: (amount: number) => {

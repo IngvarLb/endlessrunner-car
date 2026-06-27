@@ -389,7 +389,7 @@ export class TrafficSystem {
    * 鬼 Schwarzes Loch: lift the live car under `raycaster` (the tap), pay its coins, and
    * float it up into the hole. Returns true if a car was lifted.
    */
-  tryLift(raycaster: THREE.Raycaster): boolean {
+  tryLift(raycaster: THREE.Raycaster, target?: { x: number; y: number; z: number }): boolean {
     if (this.liftCoins === undefined) {
       return false;
     }
@@ -411,7 +411,7 @@ export class TrafficSystem {
       }
     }
     if (best) {
-      best.lift();
+      best.lift(target);
       this.onDestroyed?.({ car: best, coins: this.liftCoins });
       return true;
     }

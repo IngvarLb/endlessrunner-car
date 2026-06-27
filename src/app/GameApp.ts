@@ -109,7 +109,6 @@ export class GameApp {
   private hudCoins?: HTMLElement;
   private coinFlyLayer?: HTMLElement;
   private tapStart?: { x: number; y: number };
-  private siphonAccum = 0; // 鬼 Anzapfen per-second tick
   private hudCharge?: HTMLElement;
   private hudChargeRing?: HTMLElement;
   private hudChargeKanji?: HTMLElement;
@@ -395,16 +394,11 @@ export class GameApp {
     if (this.activeScene === this.runScene && state === "running" && this.runScene) {
       this.runAbilities?.update(dt, this.runScene.getEffectContext());
 
-      // 鬼 Anzapfen: while the police are right behind you, nearby cars drip coins each second.
+      // 鬼 Anzapfen: while the police are right behind you, the nearest cars in range
+      // bleed a continuous coin stream to the counter (rate scales with mastery).
       const siphon = this.runAbilities?.siphonParams();
       if (siphon && this.runScene.isPoliceBehind()) {
-        this.siphonAccum += dt;
-        while (this.siphonAccum >= 1) {
-          this.siphonAccum -= 1;
-          this.runScene.siphonCoins(siphon.coinsPerCar, siphon.cars);
-        }
-      } else {
-        this.siphonAccum = 0;
+        this.runScene.siphonStream(dt, siphon.coinsPerCar, siphon.cars);
       }
 
       const gameOver = this.runScene.consumeGameOver();
@@ -823,13 +817,13 @@ export class GameApp {
     const endX = coinRect.left + coinRect.width / 2 - rect.left;
     const endY = coinRect.top + coinRect.height / 2 - rect.top;
 
-    const count = Math.min(6, Math.max(3, Math.round(amount / 2)));
+    // One coin for a single-coin drip (鬼 Anzapfen stream); a small fan for bigger drops.
+    const count = Math.min(8, Math.max(1, Math.round(amount / 2)));
     const flyMs = 520;
     const stagger = 45;
     for (let i = 0; i < count; i += 1) {
       const coin = document.createElement("div");
       coin.className = "fr-coinfly-coin";
-      coin.textContent = "金";
       coin.style.left = `${startX + (Math.random() * 34 - 17)}px`;
       coin.style.top = `${startY + (Math.random() * 34 - 17)}px`;
       layer.appendChild(coin);

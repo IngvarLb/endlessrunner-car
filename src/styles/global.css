@@ -1933,19 +1933,13 @@ button {
 }
 .fr-coinfly-coin {
   position: absolute;
-  width: 20px;
-  height: 20px;
-  margin: -10px 0 0 -10px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffe7a3, var(--color-gold) 70%);
-  border: 1px solid rgb(120 80 18 / 0.7);
-  box-shadow: 0 0 9px rgb(214 178 94 / 0.6);
-  display: grid;
-  place-items: center;
-  font-family: var(--font-jp);
-  font-weight: 900;
-  font-size: 11px;
-  color: #6a4910;
+  width: 17px;
+  height: 17px;
+  margin: -8.5px 0 0 -8.5px;
+  /* match the in-game koban: an octagonal bright-gold disc (0xffc857), no glyph */
+  background: radial-gradient(circle at 36% 30%, #fff1c6 8%, #ffc857 58%, #d8972c 100%);
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+  box-shadow: 0 0 8px rgb(255 200 87 / 0.65);
   transition: left 0.52s cubic-bezier(0.4, 0, 0.2, 1), top 0.52s cubic-bezier(0.5, 0, 0.4, 1),
     opacity 0.52s linear;
 }
