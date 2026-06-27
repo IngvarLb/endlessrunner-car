@@ -41,8 +41,18 @@ export type WeakFailOutcome = { type: "absorbed" } | { type: "coins"; amount: nu
  */
 export type FatalOutcome = { survived: boolean; pursuitSec?: number };
 
-/** Generic HUD view of a recharging passive (赤 buffer, 藍 high-beam, 狐 extra life). */
-export type PassiveState = { kanji: string; name: string; ready: boolean; rechargeRatio: number };
+/**
+ * HUD view of the passive for the mini charge-ring. Recharging passives (赤 buffer,
+ * 藍 high-beam, 狐 extra life) fill `rechargeRatio` 0→1 and flip `ready`; always-on
+ * passives (桜/将/鬼/龍) report `alwaysOn` with a full, ready ring.
+ */
+export type PassiveState = {
+  kanji: string;
+  name: string;
+  ready: boolean;
+  rechargeRatio: number;
+  alwaysOn: boolean;
+};
 
 export class RunAbilityController {
   readonly vehicleId: string;
@@ -306,8 +316,9 @@ export class RunAbilityController {
   }
 
   /**
-   * Unified recharge state for the bottom-left HUD indicator. Returns undefined
-   * for vehicles whose passive doesn't recharge over distance (e.g. 桜 Sparbüchse).
+   * Passive state for the HUD mini charge-ring. Recharging passives (赤/藍/狐) report
+   * their fill + ready flag; always-on passives (桜/将/鬼/龍) report a full, ready ring
+   * with `alwaysOn` so the HUD can label them "active" instead of a percentage.
    */
   passiveState(): PassiveState | undefined {
     if (!this.passive) {
@@ -315,11 +326,12 @@ export class RunAbilityController {
     }
     const need = passiveValue(this.passive, this.masteryLevel());
     const ratio = (meters: number): number => (need > 0 ? Math.min(1, meters / need) : 1);
-    const view = (ready: boolean, rechargeRatio: number): PassiveState => ({
+    const view = (ready: boolean, rechargeRatio: number, alwaysOn = false): PassiveState => ({
       kanji: this.passive!.kanji,
       name: this.passive!.name,
       ready,
-      rechargeRatio
+      rechargeRatio,
+      alwaysOn
     });
     if (this.hasCrumple) {
       return view(this.crumpleBuffer > 0, this.crumpleBuffer > 0 ? 1 : ratio(this.crumpleMeters));
@@ -330,7 +342,9 @@ export class RunAbilityController {
     if (this.hasSecondLife) {
       return view(this.extraLives > 0, this.extraLives > 0 ? 1 : ratio(this.metersSinceLife));
     }
-    return undefined;
+    // 桜 Sparbüchse · 将 Draufgänger · 鬼 Anzapfen · 龍 Zu schnell — no recharge cycle:
+    // a full, ready ring signals the passive is permanently active.
+    return view(true, 1, true);
   }
 
   /**

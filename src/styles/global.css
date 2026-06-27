@@ -1923,70 +1923,7 @@ button {
     transform: scale(1.16);
   }
 }
-/* Combo streak — coins collected since the last crash, shown as an escalating multiplier */
-.fr-hud-combo {
-  position: absolute;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%) scale(0.7);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.16s, transform 0.16s var(--ease-out);
-  z-index: 7;
-}
-.fr-hud-combo.is-on {
-  opacity: 1;
-  transform: translateX(-50%) scale(1);
-}
-.fr-hud-combo-mult {
-  font-family: var(--font-body);
-  font-weight: 900;
-  font-size: 34px;
-  line-height: 1;
-  color: #ffe08a;
-  text-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
-  transform-origin: center;
-}
-.fr-hud-combo-x {
-  font-size: 22px;
-  opacity: 0.85;
-}
-.fr-hud-combo-lab {
-  font-family: var(--font-jp);
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 2px;
-  color: #f4ede0;
-  opacity: 0.78;
-}
-.fr-hud-combo.is-t1 .fr-hud-combo-mult {
-  color: #ffd24a;
-  font-size: 40px;
-}
-.fr-hud-combo.is-t2 .fr-hud-combo-mult {
-  color: #ff9a2a;
-  font-size: 46px;
-}
-.fr-hud-combo.is-t3 .fr-hud-combo-mult {
-  color: #ff5a2a;
-  font-size: 52px;
-  text-shadow: 0 0 16px rgb(255 120 40 / 0.6), 0 2px 0 rgb(0 0 0 / 0.4);
-}
-.fr-hud-combo.is-bump .fr-hud-combo-mult {
-  animation: fr-combo-bump 0.2s var(--ease-out);
-}
-@keyframes fr-combo-bump {
-  0% {
-    transform: scale(1.34);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
+/* (combo streak counter removed — it only ever counted up, so it carried no signal) */
 /* 将 ram payout — coins fly from the wreck to the counter */
 .fr-coinfly {
   position: absolute;
@@ -2027,6 +1964,9 @@ button {
   position: absolute;
   right: clamp(16px, 3vw, 40px);
   bottom: calc(clamp(16px, 3vw, 30px) + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(10px, 2.2vw, 16px);
   pointer-events: none;
 }
 .fr-charge {
@@ -2119,97 +2059,46 @@ button {
   }
 }
 
-/* ===== Passive recharge indicator — bottom-left of the run HUD =====
-   赤 Knautschzone, 藍 Lichthupe, 狐 Zweites Leben. The fill bar shows how close the
-   passive is to being ready again; when ready the chip glows + "bereit" shows. */
-.fr-hud-passive {
-  position: absolute;
-  left: clamp(16px, 3vw, 40px);
-  bottom: calc(clamp(16px, 3vw, 30px) + env(safe-area-inset-bottom));
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 11px 7px 8px;
-  background: rgb(20 14 22 / 0.62);
-  border: 1px solid var(--color-border-ondark);
+/* ===== Passive mini charge-ring — sits just left of the main ring =====
+   Same construction as .fr-charge, scaled down. Recharging passives (赤/藍/狐) fill
+   0→100% and glow ready; always-on passives (桜/将/鬼/龍) sit full with a "常" tag. */
+.fr-charge--passive {
+  --p: 0%;
+  width: 48px;
+  height: 48px;
+  pointer-events: none;
   opacity: 0;
   transform: translateY(4px);
-  pointer-events: none;
   transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
-.fr-hud-passive.is-show {
-  opacity: 1;
+.fr-charge--passive.is-show {
+  opacity: 0.96;
   transform: translateY(0);
 }
-.fr-hud-passive-k {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgb(8 6 10 / 0.6);
-  border: 1px solid var(--color-border-ondark);
+.fr-charge--passive .fr-charge-core {
+  inset: 5px;
+}
+.fr-charge--passive .fr-charge-kanji {
+  font-size: 18px;
+}
+.fr-charge--passive .fr-charge-tag {
+  bottom: -6px;
+  padding: 1px 5px;
+  font-size: 9px;
+}
+/* ready: full ring snaps to the car accent + a soft glow (no pulse — calmer than the Main) */
+.fr-charge--passive.is-ready .fr-charge-ring {
+  background: conic-gradient(var(--cc) 100%, var(--cc) 0);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--cc) 45%, transparent);
+}
+.fr-charge--passive.is-ready .fr-charge-kanji {
+  color: #ffe6c8;
+}
+.fr-charge--passive.is-ready .fr-charge-tag {
+  background: var(--cc);
+  border-color: var(--cc);
+  color: #fff;
   font-family: var(--font-jp);
-  font-weight: 900;
-  font-size: 15px;
-  line-height: 1;
-  color: #f4ede0;
-}
-.fr-hud-passive-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 84px;
-}
-.fr-hud-passive-nm {
-  font-family: var(--font-ui, inherit);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgb(244 237 224 / 0.78);
-  white-space: nowrap;
-}
-.fr-hud-passive-bar {
-  position: relative;
-  height: 5px;
-  border-radius: 999px;
-  background: rgb(244 237 224 / 0.14);
-  overflow: hidden;
-}
-.fr-hud-passive-fill {
-  --p: 0%;
-  position: absolute;
-  inset: 0;
-  width: var(--p);
-  border-radius: 999px;
-  background: rgb(244 237 224 / 0.5);
-  transition: width var(--dur-fast) linear, background var(--dur-fast) linear;
-}
-.fr-hud-passive-rdy {
-  font-family: var(--font-jp);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--color-gold);
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-/* ready: chip + bar snap to gold and glow, "bereit" label appears */
-.fr-hud-passive.is-ready {
-  border-color: rgb(214 178 94 / 0.7);
-  box-shadow: 0 0 16px rgb(214 178 94 / 0.32);
-}
-.fr-hud-passive.is-ready .fr-hud-passive-k {
-  background: var(--color-gold);
-  border-color: var(--color-gold);
-  color: #20140e;
-}
-.fr-hud-passive.is-ready .fr-hud-passive-fill {
-  background: var(--color-gold);
-}
-.fr-hud-passive.is-ready .fr-hud-passive-rdy {
-  opacity: 1;
 }
 
 /* ===== Mastery level-up toast ===== */

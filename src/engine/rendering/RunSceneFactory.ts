@@ -503,6 +503,48 @@ export class RunSceneFactory {
     boostBurn.add(boostHalo);
     runner.add(boostBurn);
 
+    // Speed-reactive taillight streaks: two red light-smears that trail the rear of the
+    // car, growing longer + brighter the faster you go. A pure visual speed cue (every
+    // car), independent of any ability — overdrives during boost / 龍 Überschall.
+    const streakTexture = (() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 4;
+      canvas.height = 64;
+      const ctx = canvas.getContext("2d")!;
+      const grad = ctx.createLinearGradient(0, 0, 0, 64);
+      grad.addColorStop(0, "rgba(255,255,255,1)"); // bright at the taillight (car) end
+      grad.addColorStop(0.4, "rgba(255,255,255,0.5)");
+      grad.addColorStop(1, "rgba(255,255,255,0)"); // smears out to nothing at the tail
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 4, 64);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    })();
+    // Normal alpha blend (NOT additive): additive red washes out over the bright daytime
+    // road. A saturated opaque red that fades along its length paints a real smear.
+    const streakMat = new THREE.MeshBasicMaterial({
+      map: streakTexture,
+      color: 0xff1828, // taillight red
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const STREAK_LEN = 2.6;
+    const tailStreaks = new THREE.Group();
+    tailStreaks.name = "runner_tail_streaks";
+    tailStreaks.visible = false;
+    for (const sx of [-1, 1]) {
+      const geo = new THREE.PlaneGeometry(0.34, STREAK_LEN);
+      geo.translate(0, -STREAK_LEN / 2, 0); // pivot at the bright edge; geometry extends −Y
+      const mesh = new THREE.Mesh(geo, streakMat);
+      mesh.rotation.x = Math.PI / 2; // lie flat in XZ so the trail runs backward (−Z)
+      mesh.position.set(sx * 0.36, 0.34, -1.05); // at taillight height, just behind the rear
+      tailStreaks.add(mesh);
+    }
+    runner.add(tailStreaks);
+
     // 藍 Freie Bahn horn blast: expanding indigo shockwave rings that radiate from the
     // car as the horn sounds (cars part before it). Each ring fades over ~0.55 s.
     const hornRingMat = new THREE.MeshBasicMaterial({
@@ -758,6 +800,7 @@ export class RunSceneFactory {
       trafficSystem.update(dt, isRunning, contentLoopLength);
       turret.update(dt, isRunning);
       updateBoostAura(dt, elapsed);
+      updateTailStreaks(activeSpeed, isRunning);
       updateHornPulse(dt);
       updatePetals(dt);
       updateMoon(dt);
@@ -793,6 +836,24 @@ export class RunSceneFactory {
       const sky = DAY_SKY.clone().lerp(tintSky, tintLevel);
       (scene.background as THREE.Color).copy(sky);
       (scene.fog as THREE.Fog).color.copy(sky);
+    }
+
+    function updateTailStreaks(speed: number, running: boolean): void {
+      // Below ~13 m/s: no streaks. Ramps in toward maxSpeed and overdrives past it
+      // (boost / 龍 Überschall push speed above max → longer, brighter smears).
+      const s = running ? THREE.MathUtils.clamp((speed - 13) / (maxSpeed - 13), 0, 1.6) : 0;
+      if (s <= 0.02) {
+        tailStreaks.visible = false;
+        return;
+      }
+      tailStreaks.visible = true;
+      streakMat.opacity = Math.min(0.8, 0.12 + s * 0.55);
+      const len = 0.4 + s * 0.85; // length multiplier on the 2.6 m base
+      const wide = 0.8 + s * 0.5;
+      for (const mesh of tailStreaks.children as THREE.Mesh[]) {
+        mesh.scale.y = len; // geometry length axis (trail length)
+        mesh.scale.x = wide; // width
+      }
     }
 
     function setHyperspeed(on: boolean): void {

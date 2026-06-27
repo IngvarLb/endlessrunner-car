@@ -8,7 +8,7 @@ import type { ChargeTier } from "./AbilityTypes";
 export const CHARGE_TIER_COST: Record<ChargeTier, number> = {
   low: 80,
   midLow: 120,
-  mid: 42, // 桜 + 鬼 (both distance-charged, loop-protected) — fills quickly
+  mid: 130, // 桜 + 鬼 — now charge from coins + meters like everyone else (was 42, distance-only)
   midHigh: 125, // 狐 Kitsune
   high: 190 // 将 Nachtjagd + 龍 Überschall (both long, strong mains)
 };

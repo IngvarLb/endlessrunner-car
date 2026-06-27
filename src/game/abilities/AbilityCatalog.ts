@@ -78,7 +78,7 @@ const mains: Record<string, MainAbilityDef> = {
     params: { ramCoins: 10 }
   },
   // 鬼 Schwarzes Loch — tapped cars are lifted, stream coins into the hole → account. 10s → 20s.
-  // Distance-charged (loop-protected); "mid" (42) instead of "midHigh" (125) = ~3× faster charge.
+  // Charges from coins + meters like every car; "mid" (130) ≈ midHigh (loop-safe via active-freeze).
   "oni-interceptor": {
     id: "black-hole",
     name: "Schwarzes Loch",
@@ -185,9 +185,6 @@ const passives: Record<string, PassiveAbilityDef> = {
   }
 };
 
-/** Vehicles that must NOT charge from their own coins (loop protection). */
-const selfCoinChargeBlocked = new Set<string>(["sakura-roadster", "oni-interceptor"]);
-
 export function hasAbilities(vehicleId: string): boolean {
   return vehicleId in mains && vehicleId in passives;
 }
@@ -206,7 +203,12 @@ export function getVehicleAbilities(vehicleId: string): VehicleAbilities | undef
   return main && passive ? { main, passive } : undefined;
 }
 
-/** True when this vehicle's Main is coin-generating and must charge via distance instead. */
-export function chargesFromOwnCoins(vehicleId: string): boolean {
-  return !selfCoinChargeBlocked.has(vehicleId);
+/**
+ * Every vehicle charges its Main uniformly: a meter trickle (the base) plus each
+ * collected coin (the accelerator). Coin-generating Mains (桜 Blütenregen, 鬼
+ * Schwarzes Loch) can't loop, because the charge meter is frozen while any Main
+ * effect is active — the coins they produce land during that frozen window.
+ */
+export function chargesFromOwnCoins(_vehicleId: string): boolean {
+  return true;
 }

@@ -107,9 +107,6 @@ export class GameApp {
   private setSfxInput?: HTMLInputElement;
   private hudMeta?: HTMLElement;
   private hudCoins?: HTMLElement;
-  private hudCombo?: HTMLElement;
-  private hudComboN?: HTMLElement;
-  private shownCombo = 0; // last combo value reflected in the HUD (edge-detect bumps/resets)
   private coinFlyLayer?: HTMLElement;
   private tapStart?: { x: number; y: number };
   private hudCharge?: HTMLElement;
@@ -126,8 +123,8 @@ export class GameApp {
   private countdownNum?: HTMLElement;
   private hudPassive?: HTMLElement;
   private hudPassiveKanji?: HTMLElement;
-  private hudPassiveName?: HTMLElement;
-  private hudPassiveFill?: HTMLElement;
+  private hudPassiveRing?: HTMLElement;
+  private hudPassiveTag?: HTMLElement;
   private goMeta?: HTMLElement;
   private goCoins?: HTMLElement;
   private goScore?: HTMLElement;
@@ -672,31 +669,22 @@ export class GameApp {
           </div>
         </div>
 
-        <div class="fr-hud-combo" data-hud-combo aria-hidden="true">
-          <span class="fr-hud-combo-mult"><span class="fr-hud-combo-x">×</span><span data-hud-combo-n>2</span></span>
-          <span class="fr-hud-combo-lab">連 COMBO</span>
-        </div>
-
         <div class="fr-hud-toast" data-hud-toast aria-hidden="true">
           <span class="fr-hud-toast-star" data-hud-toast-star>里</span>
           <span class="fr-hud-toast-txt"><span class="fr-hud-toast-k" data-hud-toast-k>MEISTERSCHAFT</span><span class="fr-hud-toast-big" data-hud-toast-big>Stufe 2</span></span>
         </div>
 
         <div class="fr-hud-bottom">
+          <div class="fr-charge fr-charge--passive" data-hud-passive aria-hidden="true">
+            <span class="fr-charge-ring" data-hud-passive-ring></span>
+            <span class="fr-charge-core"><span class="fr-charge-kanji" data-hud-passive-k>耐</span></span>
+            <span class="fr-charge-tag" data-hud-passive-tag>匠</span>
+          </div>
           <button class="fr-charge fr-charge-action" type="button" data-hud-charge aria-label="Fähigkeit aktivieren">
             <span class="fr-charge-ring" data-hud-charge-ring></span>
             <span class="fr-charge-core"><span class="fr-charge-kanji" data-hud-charge-kanji>赤</span></span>
             <span class="fr-charge-tag" data-hud-charge-tag>0%</span>
           </button>
-        </div>
-
-        <div class="fr-hud-passive" data-hud-passive aria-hidden="true">
-          <span class="fr-hud-passive-k" data-hud-passive-k>耐</span>
-          <span class="fr-hud-passive-body">
-            <span class="fr-hud-passive-nm" data-hud-passive-nm>Passiv</span>
-            <span class="fr-hud-passive-bar"><i class="fr-hud-passive-fill" data-hud-passive-fill></i></span>
-          </span>
-          <span class="fr-hud-passive-rdy" data-hud-passive-rdy>bereit</span>
         </div>
       </section>
       <div class="fr-countdown" data-fr-countdown aria-hidden="true">
@@ -766,8 +754,6 @@ export class GameApp {
     this.cacheAndBindFrSettings(ui);
     this.hudMeta = ui.querySelector("[data-hud-meta]") ?? undefined;
     this.hudCoins = ui.querySelector("[data-hud-coins]") ?? undefined;
-    this.hudCombo = ui.querySelector("[data-hud-combo]") ?? undefined;
-    this.hudComboN = ui.querySelector("[data-hud-combo-n]") ?? undefined;
     this.coinFlyLayer = ui.querySelector("[data-coinfly]") ?? undefined;
     this.hudCharge = ui.querySelector("[data-hud-charge]") ?? undefined;
     this.hudChargeRing = ui.querySelector("[data-hud-charge-ring]") ?? undefined;
@@ -781,8 +767,8 @@ export class GameApp {
     this.countdownNum = ui.querySelector("[data-fr-countdown-num]") ?? undefined;
     this.hudPassive = ui.querySelector("[data-hud-passive]") ?? undefined;
     this.hudPassiveKanji = ui.querySelector("[data-hud-passive-k]") ?? undefined;
-    this.hudPassiveName = ui.querySelector("[data-hud-passive-nm]") ?? undefined;
-    this.hudPassiveFill = ui.querySelector("[data-hud-passive-fill]") ?? undefined;
+    this.hudPassiveRing = ui.querySelector("[data-hud-passive-ring]") ?? undefined;
+    this.hudPassiveTag = ui.querySelector("[data-hud-passive-tag]") ?? undefined;
     this.goMeta = ui.querySelector("[data-go-meta]") ?? undefined;
     this.goCoins = ui.querySelector("[data-go-coins]") ?? undefined;
     this.goScore = ui.querySelector("[data-go-score]") ?? undefined;
@@ -1759,37 +1745,6 @@ export class GameApp {
     if (this.hudCoins) {
       this.hudCoins.textContent = stats.coins.toLocaleString("en-US");
     }
-    this.updateComboHud(stats.combo);
-  }
-
-  /**
-   * Combo = coins collected since the last crash (a clean-run streak). Surface it as
-   * an escalating multiplier that bumps on each pickup and clears on a fail.
-   */
-  private updateComboHud(combo: number): void {
-    if (!this.hudCombo) {
-      return;
-    }
-    const SHOW_AT = 3; // only celebrate once a streak is going
-    if (combo >= SHOW_AT) {
-      if (this.hudComboN) {
-        this.hudComboN.textContent = String(combo);
-      }
-      this.hudCombo.classList.add("is-on");
-      // Escalating tiers: brighter/bigger the longer the streak.
-      this.hudCombo.classList.toggle("is-t1", combo >= 10);
-      this.hudCombo.classList.toggle("is-t2", combo >= 25);
-      this.hudCombo.classList.toggle("is-t3", combo >= 50);
-      if (combo > this.shownCombo) {
-        // re-trigger the bump animation
-        this.hudCombo.classList.remove("is-bump");
-        void this.hudCombo.offsetWidth; // reflow so the animation restarts
-        this.hudCombo.classList.add("is-bump");
-      }
-    } else {
-      this.hudCombo.classList.remove("is-on", "is-t1", "is-t2", "is-t3", "is-bump");
-    }
-    this.shownCombo = combo;
   }
 
   /** Pop the 金 coin chip on each pickup (re-triggers the scale animation). */
@@ -1803,7 +1758,7 @@ export class GameApp {
     chip.classList.add("is-pop");
   }
 
-  /** Configure the on-screen charge ring for the vehicle about to run. */
+  /** Configure the on-screen charge ring (+ passive mini-ring) for the vehicle about to run. */
   private resetChargeHud(vehicle: VehicleDefinition): void {
     if (this.hudChargeKanji) {
       this.hudChargeKanji.textContent = vehicle.kanji;
@@ -1815,6 +1770,19 @@ export class GameApp {
     this.chargeWasReady = false;
     if (this.hudChargeTag) {
       this.hudChargeTag.textContent = "0%";
+    }
+
+    // Passive mini-ring (left of the main ring): same design, smaller. Seed its kanji
+    // + accent so it matches the car before the first frame updates it.
+    const passive = getPassiveAbility(vehicle.id);
+    if (this.hudPassiveKanji) {
+      this.hudPassiveKanji.textContent = passive?.kanji ?? "";
+    }
+    this.hudPassive?.style.setProperty("--cc", vehicle.paint);
+    this.hudPassiveRing?.style.setProperty("--p", "0%");
+    this.hudPassive?.classList.remove("is-ready", "is-show");
+    if (this.hudPassiveTag) {
+      this.hudPassiveTag.textContent = "匠";
     }
   }
 
@@ -1851,8 +1819,8 @@ export class GameApp {
       }
     }
 
-    // Bottom-left passive-recharge indicator (赤 buffer, 藍 high-beam, 狐 extra life).
-    // Hidden for vehicles whose passive doesn't recharge (e.g. 桜 Sparbüchse).
+    // Passive mini charge-ring (left of the main ring): recharging passives (赤/藍/狐)
+    // fill 0→100% and glow ready; always-on passives (桜/将/鬼/龍) sit full + "常" (active).
     const passive = abilities.passiveState();
     if (this.hudPassive) {
       if (passive) {
@@ -1861,10 +1829,14 @@ export class GameApp {
         if (this.hudPassiveKanji) {
           this.hudPassiveKanji.textContent = passive.kanji;
         }
-        if (this.hudPassiveName) {
-          this.hudPassiveName.textContent = passive.name;
+        this.hudPassiveRing?.style.setProperty("--p", `${(passive.rechargeRatio * 100).toFixed(1)}%`);
+        if (this.hudPassiveTag) {
+          this.hudPassiveTag.textContent = passive.alwaysOn
+            ? "常"
+            : passive.ready
+              ? "備"
+              : `${Math.round(passive.rechargeRatio * 100)}%`;
         }
-        this.hudPassiveFill?.style.setProperty("--p", `${Math.round(passive.rechargeRatio * 100)}%`);
       } else {
         this.hudPassive.classList.remove("is-show");
       }
