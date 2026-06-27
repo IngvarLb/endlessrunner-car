@@ -28,6 +28,8 @@ type Projectile = {
   target?: TrafficCar;
 };
 
+type Flash = { mesh: THREE.Mesh; life: number };
+
 export class TurretSystem {
   private readonly root = new THREE.Group();
   private readonly body = new THREE.Group(); // swivels to aim
@@ -35,6 +37,18 @@ export class TurretSystem {
   private readonly projectiles: Projectile[] = [];
   private readonly muzzleWorld = new THREE.Vector3();
   private readonly targetWorld = new THREE.Vector3();
+
+  // 狐 VFX: a muzzle flash, a target reticle on the locked car, and impact bursts.
+  private readonly muzzleFlashMat = new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  private readonly tracerMat = new THREE.MeshBasicMaterial({ color: 0xffb024, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+  private readonly reticleMat = new THREE.MeshBasicMaterial({ color: 0xff8a1e, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  private readonly flashMat = new THREE.MeshBasicMaterial({ color: 0xffc24a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  private muzzleFlash!: THREE.Mesh;
+  private readonly reticle = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.07, 8, 20), this.reticleMat);
+  private readonly impacts: Flash[] = [];
+  private muzzleFlashLife = 0;
+  private reticleLevel = 0;
+  private reticleSpin = 0;
 
   private active = false;
   private rise = 0;
@@ -51,10 +65,10 @@ export class TurretSystem {
     this.root.visible = false;
     scene.add(this.root);
 
-    const tracerGeo = new THREE.BoxGeometry(0.09, 0.09, 0.75);
-    const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffd23f });
+    // Glowing tracer rounds (additive so they read as energy bolts).
+    const tracerGeo = new THREE.BoxGeometry(0.12, 0.12, 1.0);
     for (let i = 0; i < 14; i += 1) {
-      const mesh = new THREE.Mesh(tracerGeo, tracerMat);
+      const mesh = new THREE.Mesh(tracerGeo, this.tracerMat);
       mesh.visible = false;
       scene.add(mesh);
       this.projectiles.push({
@@ -65,6 +79,20 @@ export class TurretSystem {
         travelled: 0,
         duration: 0
       });
+    }
+
+    // Target reticle — a spinning ring that locks onto the engaged car.
+    this.reticle.rotation.x = Math.PI / 2;
+    this.reticle.visible = false;
+    scene.add(this.reticle);
+
+    // Impact bursts at each kill (own material clone each, so they fade independently).
+    const flashGeo = new THREE.SphereGeometry(0.5, 10, 8);
+    for (let i = 0; i < 6; i += 1) {
+      const mesh = new THREE.Mesh(flashGeo, this.flashMat.clone());
+      mesh.visible = false;
+      scene.add(mesh);
+      this.impacts.push({ mesh, life: 0 });
     }
   }
 
@@ -82,11 +110,13 @@ export class TurretSystem {
     const runnerPos = this.runner.getPosition();
     this.root.position.set(runnerPos.x, ROOF_Y - (1 - this.rise) * RISE_HIDE, runnerPos.z);
 
+    let lockedCar: TrafficCar | undefined;
     if (deployed && isRunning) {
       const car = this.traffic.nearestCarAhead(RANGE);
       if (car) {
         car.mesh.getWorldPosition(this.targetWorld);
         this.aimY = Math.atan2(this.targetWorld.x - this.root.position.x, this.targetWorld.z - this.root.position.z);
+        lockedCar = car;
       }
       this.body.rotation.y = approachAngle(this.body.rotation.y, this.aimY, dt * 9);
 
@@ -97,7 +127,59 @@ export class TurretSystem {
       }
     }
 
+    this.updateVfx(dt, lockedCar);
     this.updateProjectiles(dt);
+  }
+
+  /** Muzzle flash decay, target reticle lock, and impact-burst fades. */
+  private updateVfx(dt: number, lockedCar: TrafficCar | undefined): void {
+    // Muzzle flash: quick pop that scales down and fades.
+    this.muzzleFlashLife = Math.max(0, this.muzzleFlashLife - dt / 0.07);
+    this.muzzleFlash.visible = this.muzzleFlashLife > 0.01;
+    if (this.muzzleFlash.visible) {
+      this.muzzleFlashMat.opacity = this.muzzleFlashLife;
+      this.muzzleFlash.scale.setScalar(0.7 + this.muzzleFlashLife * 0.9);
+    }
+
+    // Reticle: ease in over the locked car, spin, billboard-flat above it.
+    const want = lockedCar && !lockedCar.hit ? 1 : 0;
+    this.reticleLevel = THREE.MathUtils.lerp(this.reticleLevel, want, Math.min(1, dt * 12));
+    this.reticle.visible = this.reticleLevel > 0.02;
+    if (this.reticle.visible) {
+      if (lockedCar) {
+        lockedCar.mesh.getWorldPosition(this.targetWorld);
+        this.reticle.position.set(this.targetWorld.x, this.targetWorld.y + 0.6, this.targetWorld.z);
+      }
+      this.reticleSpin += dt * 3.2;
+      this.reticle.rotation.z = this.reticleSpin;
+      this.reticleMat.opacity = this.reticleLevel * 0.85;
+      this.reticle.scale.setScalar(0.85 + this.reticleLevel * 0.25);
+    }
+
+    // Impact bursts: expand + fade.
+    for (const f of this.impacts) {
+      if (f.life <= 0) {
+        continue;
+      }
+      f.life = Math.max(0, f.life - dt / 0.2);
+      if (f.life <= 0.01) {
+        f.mesh.visible = false;
+        continue;
+      }
+      (f.mesh.material as THREE.MeshBasicMaterial).opacity = f.life * 0.9;
+      f.mesh.scale.setScalar(0.5 + (1 - f.life) * 1.6);
+    }
+  }
+
+  private spawnImpact(at: THREE.Vector3): void {
+    const f = this.impacts.find((x) => x.life <= 0);
+    if (!f) {
+      return;
+    }
+    f.life = 1;
+    f.mesh.visible = true;
+    f.mesh.position.copy(at);
+    f.mesh.scale.setScalar(0.5);
   }
 
   reset(): void {
@@ -105,9 +187,17 @@ export class TurretSystem {
     this.rise = 0;
     this.fireTimer = 0;
     this.root.visible = false;
+    this.muzzleFlashLife = 0;
+    this.muzzleFlash.visible = false;
+    this.reticleLevel = 0;
+    this.reticle.visible = false;
     for (const p of this.projectiles) {
       p.active = false;
       p.mesh.visible = false;
+    }
+    for (const f of this.impacts) {
+      f.life = 0;
+      f.mesh.visible = false;
     }
   }
 
@@ -121,8 +211,15 @@ export class TurretSystem {
     });
     for (const p of this.projectiles) {
       p.mesh.geometry.dispose();
-      (p.mesh.material as THREE.Material).dispose?.();
     }
+    this.tracerMat.dispose();
+    this.reticle.geometry.dispose();
+    this.reticleMat.dispose();
+    for (const f of this.impacts) {
+      f.mesh.geometry.dispose();
+      (f.mesh.material as THREE.Material).dispose?.();
+    }
+    this.flashMat.dispose();
   }
 
   private fire(car: TrafficCar): void {
@@ -141,6 +238,7 @@ export class TurretSystem {
     projectile.mesh.visible = true;
     projectile.mesh.position.copy(this.muzzleWorld);
     projectile.mesh.lookAt(this.targetWorld);
+    this.muzzleFlashLife = 1; // pop the muzzle flash
   }
 
   private updateProjectiles(dt: number): void {
@@ -154,6 +252,8 @@ export class TurretSystem {
         p.active = false;
         p.mesh.visible = false;
         if (p.target && !p.target.hit) {
+          p.target.mesh.getWorldPosition(this.targetWorld);
+          this.spawnImpact(this.targetWorld);
           this.traffic.destroyCar(p.target);
           this.onKill(COINS_PER_KILL);
         }
@@ -187,6 +287,12 @@ export class TurretSystem {
 
     this.muzzle.position.set(0, 0.28, 0.66);
     this.body.add(this.muzzle);
+
+    // Muzzle flash — a small additive burst at the barrel tip, popped on each shot.
+    this.muzzleFlash = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), this.muzzleFlashMat);
+    this.muzzleFlash.position.set(0, 0.28, 0.72);
+    this.muzzleFlash.visible = false;
+    this.body.add(this.muzzleFlash);
 
     this.body.position.y = 0.04;
     this.root.add(this.body);
