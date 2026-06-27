@@ -282,7 +282,17 @@ export class RunSceneFactory {
       miniHoles.push({ group, swirl });
     }
     const groundSegments: TrackPiece[] = [];
-    const decorative: { object: THREE.Object3D; initialZ: number; baseX: number; baseScale: number }[] = [];
+    type TintMat = { mat: THREE.MeshStandardMaterial; base: THREE.Color };
+    type DecoPiece = {
+      object: THREE.Object3D;
+      initialZ: number;
+      baseX: number;
+      baseScale: number;
+      kind: DecorationKind;
+      tints?: TintMat[]; // per-instance weatherable materials (houses)
+    };
+    const decorative: DecoPiece[] = [];
+    const HOUSE_KINDS = new Set<DecorationKind>(["machiyaHouse", "minkaHouse", "nagayaRowHouse", "kuraStorehouse"]);
 
     let distance = 0;
     let pressure = 0;
@@ -587,7 +597,7 @@ export class RunSceneFactory {
       decoration.rotation.y = placement.rotationY ?? 0;
       decoration.scale.setScalar(placement.scale ?? 1);
       freezeStaticChildren(decoration);
-      addDecorative(decoration);
+      addDecorative(decoration, placement.kind);
     }
 
     for (let index = 0; index < biome.coins.count; index += 1) {
@@ -941,6 +951,9 @@ export class RunSceneFactory {
       for (const s of sparkles) {
         (s.mesh.material as THREE.Material).dispose();
       }
+      for (const deco of decorative) {
+        deco.tints?.forEach((t) => t.mat.dispose()); // cloned per-house weathering materials
+      }
       bhGlowMat.dispose();
       bhCoreMat.dispose();
       bhDiskMat.dispose();
@@ -1195,19 +1208,67 @@ export class RunSceneFactory {
       }
     }
 
-    function addDecorative(object: THREE.Object3D): void {
-      const piece = { object, initialZ: object.position.z, baseX: object.position.x, baseScale: object.scale.x };
+    function addDecorative(object: THREE.Object3D, kind: DecorationKind): void {
+      const piece: DecoPiece = { object, initialZ: object.position.z, baseX: object.position.x, baseScale: object.scale.x, kind };
+      if (HOUSE_KINDS.has(kind)) {
+        piece.tints = buildTints(object); // clone materials so each house can weather independently
+      }
       decorative.push(piece);
       jitterDecoration(piece);
       world.add(object);
     }
 
-    // Per-run / per-recycle scenery variety: nudge each prop outward off the road and
-    // vary its scale, so the roadside never reads as an obvious repeating loop.
-    function jitterDecoration(piece: { object: THREE.Object3D; baseX: number; baseScale: number }): void {
+    // Clone every (deduped) material on a decoration so it owns its colours, keeping the
+    // original tone as a base to re-tint from. No geometry/material churn at recycle time.
+    function buildTints(object: THREE.Object3D): TintMat[] {
+      const seen = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+      const tints: TintMat[] = [];
+      object.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) {
+          return;
+        }
+        const remap = (m: THREE.Material): THREE.Material => {
+          let cloned = seen.get(m);
+          if (!cloned) {
+            cloned = (m as THREE.MeshStandardMaterial).clone();
+            seen.set(m, cloned);
+            tints.push({ mat: cloned, base: cloned.color.clone() });
+          }
+          return cloned;
+        };
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(remap) : remap(mesh.material);
+      });
+      return tints;
+    }
+
+    // Per-instance weathering: shift the whole building a touch warmer/cooler and
+    // lighter/darker, so two of the same house kind never look identical.
+    function applyTint(tints: TintMat[]): void {
+      const bright = 0.74 + Math.random() * 0.42;
+      const warm = 0.9 + Math.random() * 0.22;
+      const cool = 0.9 + Math.random() * 0.18;
+      for (const t of tints) {
+        t.mat.color.copy(t.base);
+        t.mat.color.r *= bright * warm;
+        t.mat.color.g *= bright;
+        t.mat.color.b *= bright * cool;
+      }
+    }
+
+    // Per-run / per-recycle scenery variety: nudge each prop outward off the road, vary
+    // its scale, spin the bamboo, and re-weather houses — so the roadside never reads as
+    // an obvious repeating loop.
+    function jitterDecoration(piece: DecoPiece): void {
       const dir = Math.sign(piece.baseX); // 0 for centred props (torii) — leave them put
       piece.object.position.x = piece.baseX + dir * Math.random() * 0.7;
       piece.object.scale.setScalar(piece.baseScale * (0.85 + Math.random() * 0.3));
+      if (piece.kind === "bambooCluster") {
+        piece.object.rotation.y = Math.random() * Math.PI * 2; // bamboo reads fine at any spin
+      }
+      if (piece.tints) {
+        applyTint(piece.tints);
+      }
     }
 
     function freezeStaticChildren(object: THREE.Object3D): void {
