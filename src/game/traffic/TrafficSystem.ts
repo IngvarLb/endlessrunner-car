@@ -41,6 +41,13 @@ const WALL_BAND = 8;
 const WALL_BRAKE_SECONDS = 1.2;
 const ANTICIPATE_FAR = 30; // pre-empt a wall this far out, while it's still only two-wide
 const ANTICIPATE_BEHIND = 9; // ...by holding back a car this far behind the open lane's band
+// Player-relative escape: the static generator + wall guards only guarantee SOME lane is
+// open + the corridor is threadable — not that an open lane is reachable from the PLAYER's
+// actual lane. If the player drifts to an outer lane and the next band blocks {their lane +
+// the middle}, the only open lane is two steps away through the blocked middle = a wall.
+// We watch the player's own reachable set and open the middle stepping-stone early.
+const ESCAPE_HORIZON = 50; // act on a box this far ahead (early enough to clear the centre in time)
+const ESCAPE_SWERVE_MIN = 22; // far enough to swerve the centre car out cleanly; else just brake it
 
 // Difficulty ramp — NPCs make discretionary lane changes (on top of overtaking) that
 // get more frequent the further you drive. Each is still blinker-telegraphed and
@@ -164,6 +171,86 @@ export class TrafficSystem {
       this.cancelStaleSignals();
     }
     this.ensureNoWall();
+    this.ensurePlayerEscape();
+  }
+
+  /**
+   * Player-relative escape guard. Every other guard is corridor-relative or
+   * "some-lane-is-open"-relative; none checks the PLAYER's actual lane. If the player has
+   * drifted into an outer lane and the nearest band blocks {their lane + the middle}, the
+   * only open lane is two steps away through the blocked middle — impassable. Here we open
+   * the middle stepping-stone (universally reachable from any lane) BEFORE the player gets
+   * there: swerve the centre car into the open lane when there's room, else brake it back.
+   */
+  private ensurePlayerEscape(): void {
+    const distance = this.getDistance();
+    const lanes = this.laneSystem.lanes;
+    const ahead = this.cars
+      .filter((car) => {
+        if (car.hit || !car.mesh.visible) {
+          return false;
+        }
+        const rel = car.trackZ - distance;
+        return rel > WALL_NEAR && rel < ESCAPE_HORIZON;
+      })
+      .sort((a, b) => a.trackZ - b.trackZ);
+    if (ahead.length === 0) {
+      return;
+    }
+    // Group cars into bands (cars within ~a car-length count as one row).
+    const bands: { cars: TrafficCar[]; blocked: Set<LaneIndex>; z: number }[] = [];
+    for (const car of ahead) {
+      const last = bands[bands.length - 1];
+      if (last && car.trackZ - last.z <= 6) {
+        last.cars.push(car);
+        for (const lane of car.occupiedLanes()) {
+          last.blocked.add(lane);
+        }
+      } else {
+        bands.push({ cars: [car], blocked: new Set(car.occupiedLanes()), z: car.trackZ });
+      }
+    }
+    // Thread a SINGLE player forward from their committed lane — ≤1 lane step per band,
+    // only onto open lanes. The first band this reachable set can't enter is a genuine box
+    // (not a corridor- or union-relative guess). Detecting it across ALL bands in the
+    // horizon — not just the nearest — is what lets us open it EARLY enough to swerve.
+    let reachable = new Set<LaneIndex>([this.runner.getLane()]);
+    for (const band of bands) {
+      if (band.blocked.size >= lanes.length) {
+        return; // full 3-lane wall — ensureNoWall owns that case
+      }
+      const next = new Set<LaneIndex>();
+      for (const from of reachable) {
+        for (const lane of lanes) {
+          if (Math.abs(lane - from) <= 1 && !band.blocked.has(lane)) {
+            next.add(lane);
+          }
+        }
+      }
+      if (next.size > 0) {
+        reachable = next;
+        continue; // still threadable — keep looking ahead
+      }
+      // Boxed at this band. The middle (0) must be blocked here (else it'd be reachable from
+      // any lane), so open it: swerve the centre car into a clear outer lane, else brake it back.
+      const stepCar = band.cars.filter((car) => car.lane === 0).sort((a, b) => a.trackZ - b.trackZ)[0];
+      if (!stepCar) {
+        return;
+      }
+      const open = lanes.find((lane) => lane !== 0 && !band.blocked.has(lane));
+      const farEnough = stepCar.trackZ - distance > ESCAPE_SWERVE_MIN;
+      const canSwerve =
+        open !== undefined &&
+        farEnough &&
+        stepCar.canChangeLane() &&
+        this.laneClear(open, stepCar.trackZ, OVERTAKE_CLEAR_AHEAD, OVERTAKE_CLEAR_BEHIND, stepCar);
+      if (canSwerve && open !== undefined) {
+        stepCar.mergeToLane(open); // open the universally-reachable middle stepping stone
+      } else {
+        stepCar.requestBrake(WALL_BRAKE_SECONDS);
+      }
+      return;
+    }
   }
 
   /** 0 at the start, ramping to 1 by DIFFICULTY_RAMP_FULL metres. */

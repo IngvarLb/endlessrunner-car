@@ -142,21 +142,23 @@ export class TrafficDirector {
     // always to an open neighbour so the corridor stays connected + clear (navigable).
     const wantShift = Math.random() < 0.5 + 0.3 * d;
     for (; blockCount >= 0; blockCount -= 1) {
-      let keepOpen: { blocked: LaneIndex[]; openAdj: LaneIndex[] } | undefined;
-      let shift: { blocked: LaneIndex[]; openAdj: LaneIndex[] } | undefined;
+      const valid: { blocked: LaneIndex[]; openAdj: LaneIndex[]; shifts: boolean; middleOpen: boolean }[] = [];
       for (const blocked of laneSubsets(blockCount)) {
         const openAdj = adj.filter((l) => !blocked.includes(l));
         if (openAdj.length === 0) {
           continue; // would trap the corridor — reject
         }
-        if (blocked.includes(c)) {
-          shift ??= { blocked, openAdj }; // blocks the corridor → forces a step to a neighbour
-        } else {
-          keepOpen ??= { blocked, openAdj }; // leaves the corridor lane open
-        }
+        valid.push({ blocked, openAdj, shifts: blocked.includes(c), middleOpen: !blocked.includes(0) });
       }
-      const pick = wantShift && shift ? shift : keepOpen ?? shift;
-      if (pick) {
+      if (valid.length > 0) {
+        // Honour the shift intent first, then PREFER keeping the centre lane (0) open — it's
+        // reachable from any lane, so it keeps the player from getting boxed in an outer lane.
+        valid.sort(
+          (a, b) =>
+            Number(b.shifts === wantShift) - Number(a.shifts === wantShift) ||
+            Number(b.middleOpen) - Number(a.middleOpen)
+        );
+        const pick = valid[0];
         this.corridor = pick.openAdj.includes(c) ? c : pick.openAdj[Math.floor(Math.random() * pick.openAdj.length)];
         this.emptyRun = pick.blocked.length === 0 ? this.emptyRun + 1 : 0;
         this.denseRun = pick.blocked.length >= 2 ? this.denseRun + 1 : 0;
