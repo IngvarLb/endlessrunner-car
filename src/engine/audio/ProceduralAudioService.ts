@@ -104,6 +104,16 @@ export class ProceduralAudioService {
   private nextStepIndex = 0;
   private activeMusicNodes = new Set<ScheduledNode>();
   private activeSfxNodes = new Set<ScheduledNode>();
+  // Continuous engine/wind drone whose pitch + brightness track the player's speed.
+  private engine: {
+    osc1: OscillatorNode;
+    osc2: OscillatorNode;
+    noise: AudioBufferSourceNode;
+    lp: BiquadFilterNode;
+    wind: GainNode;
+    gain: GainNode;
+  } | null = null;
+  private runIntensity = 0.4;
 
   constructor(settings: Partial<ProceduralAudioSettings> = {}) {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
@@ -129,6 +139,11 @@ export class ProceduralAudioService {
     this.updateMusicModeGain();
     this.scheduleMusic();
     this.musicTimer = setInterval(() => this.scheduleMusic(), LOOKAHEAD_MS);
+    if (mode === "run") {
+      this.startEngine();
+    } else {
+      this.stopEngine();
+    }
   }
 
   stopMusic(): void {
@@ -147,6 +162,7 @@ export class ProceduralAudioService {
     this.isMusicRunning = false;
     this.isMusicPaused = false;
     this.nextStepIndex = 0;
+    this.stopEngine();
   }
 
   pauseMusic(): void {
@@ -160,6 +176,7 @@ export class ProceduralAudioService {
     }
 
     this.isMusicPaused = true;
+    this.stopEngine();
   }
 
   resumeMusic(): void {
@@ -171,6 +188,96 @@ export class ProceduralAudioService {
     this.isMusicPaused = false;
     this.nextStepTime = context.currentTime + 0.05;
     this.musicTimer = setInterval(() => this.scheduleMusic(), LOOKAHEAD_MS);
+    if (this.musicMode === "run") {
+      this.startEngine();
+    }
+  }
+
+  /** Drive the engine/wind pitch + brightness from the player's speed (0 = base, ~1.6 = boosted). */
+  setRunIntensity(value: number): void {
+    this.runIntensity = Math.min(1.8, Math.max(0, Number.isFinite(value) ? value : 0));
+    this.applyEngineIntensity();
+  }
+
+  private startEngine(): void {
+    if (this.engine) {
+      return;
+    }
+    const ctx = this.ensureContext();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.0001;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 600;
+    const osc1 = ctx.createOscillator();
+    osc1.type = "sawtooth";
+    const o1g = ctx.createGain();
+    o1g.gain.value = 0.5;
+    const osc2 = ctx.createOscillator();
+    osc2.type = "sine";
+    const o2g = ctx.createGain();
+    o2g.gain.value = 0.6;
+    const noise = ctx.createBufferSource();
+    noise.buffer = this.getNoiseBuffer(ctx);
+    noise.loop = true;
+    const nf = ctx.createBiquadFilter();
+    nf.type = "bandpass";
+    nf.frequency.value = 1400;
+    nf.Q.value = 0.5;
+    const wind = ctx.createGain();
+    wind.gain.value = 0.02;
+
+    osc1.connect(lp);
+    lp.connect(o1g);
+    o1g.connect(gain);
+    osc2.connect(o2g);
+    o2g.connect(gain);
+    noise.connect(nf);
+    nf.connect(wind);
+    wind.connect(gain);
+    gain.connect(this.sfxGain ?? ctx.destination);
+
+    osc1.start();
+    osc2.start();
+    noise.start();
+    this.engine = { osc1, osc2, noise, lp, wind, gain };
+    this.applyEngineIntensity();
+  }
+
+  private stopEngine(): void {
+    const engine = this.engine;
+    if (!engine) {
+      return;
+    }
+    this.engine = null;
+    const ctx = this.context;
+    const now = ctx ? ctx.currentTime : 0;
+    engine.gain.gain.setTargetAtTime(0.0001, now, 0.12);
+    const stopAt = now + 0.4;
+    for (const node of [engine.osc1, engine.osc2, engine.noise]) {
+      try {
+        node.stop(stopAt);
+        node.onended = () => node.disconnect();
+      } catch {
+        // already stopped
+      }
+    }
+  }
+
+  private applyEngineIntensity(): void {
+    const engine = this.engine;
+    const ctx = this.context;
+    if (!engine || !ctx) {
+      return;
+    }
+    const v = this.runIntensity;
+    const t = ctx.currentTime;
+    const base = 46 + v * 70; // ~46 Hz idle → ~170 Hz flat-out/boost
+    engine.osc1.frequency.setTargetAtTime(base, t, 0.08);
+    engine.osc2.frequency.setTargetAtTime(base * 0.5, t, 0.08);
+    engine.lp.frequency.setTargetAtTime(420 + v * 2100, t, 0.1); // opens up with speed
+    engine.wind.gain.setTargetAtTime(0.012 + v * 0.055, t, 0.12); // wind rises with speed
+    engine.gain.gain.setTargetAtTime(0.06 + v * 0.05, t, 0.12);
   }
 
   setSettings(settings: Partial<ProceduralAudioSettings>): void {
@@ -178,11 +285,13 @@ export class ProceduralAudioService {
     this.applySettings();
   }
 
-  playCoin(): void {
+  playCoin(combo = 0): void {
     const context = this.ensureContext();
     const now = context.currentTime;
-    this.playTone(now, 880, 0.08, "sine", 0.17, this.sfxGain, 0.01);
-    this.playTone(now + 0.055, 1320, 0.1, "triangle", 0.14, this.sfxGain, 0.005);
+    const step = Math.min(Math.max(0, combo), 16);
+    const f = 820 * Math.pow(2, step / 16); // pitch climbs up to an octave as the combo grows
+    this.playTone(now, f, 0.07, "sine", 0.16, this.sfxGain, 0.008);
+    this.playTone(now + 0.05, f * 1.5, 0.09, "triangle", 0.12, this.sfxGain, 0.004);
   }
 
   playBoost(): void {
@@ -233,6 +342,25 @@ export class ProceduralAudioService {
 
     this.playTone(now, 880, 0.13, "sine", 0.23, this.sfxGain, 0.004);
     this.playTone(now, 1760, 0.05, "triangle", 0.07, this.sfxGain, 0.002);
+  }
+
+  playGameOver(): void {
+    const context = this.ensureContext();
+    const now = context.currentTime;
+
+    this.playSweep(now, 330, 70, 0.7, "sawtooth", 0.22, this.sfxGain);
+    this.playSweep(now + 0.04, 247, 55, 0.8, "sine", 0.18, this.sfxGain);
+    this.playNoiseBurst(now, 0.55, 0.13, 900, 110, "lowpass", this.sfxGain);
+  }
+
+  playLevelUp(): void {
+    const context = this.ensureContext();
+    const now = context.currentTime;
+    const arpeggio = [NOTE_FREQUENCIES.C4, NOTE_FREQUENCIES.G4, NOTE_FREQUENCIES.C5];
+    arpeggio.forEach((frequency, index) => {
+      this.playTone(now + index * 0.08, frequency, 0.2, "triangle", 0.16, this.sfxGain, 0.004);
+      this.playTone(now + index * 0.08, frequency * 2, 0.12, "sine", 0.06, this.sfxGain, 0.003);
+    });
   }
 
   dispose(): void {

@@ -40,6 +40,8 @@ export type RunScene = AppScene & {
   moveLane(direction: -1 | 1): void;
   activateBoost(): void;
   getRunStats(): RunStats;
+  /** Current speed as a ratio of max (≈0.5 at the start, 1 at flat-out, >1 while boosted) — drives the engine sound. */
+  getSpeedRatio(): number;
   consumeGameOver(): GameOverInfo | undefined;
   /** Capability bridge for ability effects (see RunAbilityController). */
   getEffectContext(): RunEffectContext;
@@ -950,6 +952,7 @@ export class RunSceneFactory {
       moveLane,
       activateBoost,
       getRunStats,
+      getSpeedRatio: () => (getRunSpeed() * runnerController.getSpeedMultiplier()) / maxSpeed,
       consumeGameOver,
       getEffectContext: () => effectContext,
       setPassiveHooks: (hooks: PassiveHooks) => {

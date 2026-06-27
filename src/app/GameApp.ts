@@ -389,6 +389,7 @@ export class GameApp {
 
     if (this.activeScene === this.runScene && state === "running" && this.runScene) {
       this.runAbilities?.update(dt, this.runScene.getEffectContext());
+      this.audio?.setRunIntensity(this.runScene.getSpeedRatio()); // engine pitch tracks speed
 
       // 鬼 Anzapfen: while the police are right behind you, the nearest cars in range
       // bleed a continuous coin stream to the counter (rate scales with mastery).
@@ -841,9 +842,11 @@ export class GameApp {
       this.syncAudioForState(next);
       if (next === "countdown") {
         audio.playCountdown();
+      } else if (next === "gameOver") {
+        audio.playGameOver();
       }
     });
-    this.events.on("coin:collected", () => audio.playCoin());
+    this.events.on("coin:collected", ({ combo }) => audio.playCoin(combo));
     this.events.on("powerup:activated", () => audio.playBoost());
     this.events.on("runner:hit", ({ hit }) => {
       if (hit.severity === "minor") {
@@ -1781,6 +1784,7 @@ export class GameApp {
 
   private showMasteryToast(level: number): void {
     this.showHudToast("里", "MEISTERSCHAFT", `Stufe ${level}`);
+    this.audio?.playLevelUp();
   }
 
   private showHudToast(star: string, label: string, big: string): void {
