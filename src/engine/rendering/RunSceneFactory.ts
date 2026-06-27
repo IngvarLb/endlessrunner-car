@@ -1,15 +1,15 @@
 import * as THREE from "three";
 import type { GameEvents } from "../../app/GameEvents";
-import type { GameConfig, LaneIndex } from "../../app/GameConfig";
+import type { GameConfig } from "../../app/GameConfig";
 import type { GameState } from "../../game/state/GameStateTypes";
 import { CollisionSystem } from "../physics/CollisionSystem";
 import { CollectibleSystem } from "../../game/collectibles/CollectibleSystem";
 import { CoinRainSystem } from "../../game/collectibles/CoinRainSystem";
 import { ScoreSystem, type RunStats } from "../../game/progression/ScoreSystem";
 import { RunnerController } from "../../game/runner/RunnerController";
-import { validateTrafficRows } from "../../game/traffic/TrafficFairness";
 import { TrafficSystem } from "../../game/traffic/TrafficSystem";
-import { TRAFFIC_CAR_SPECS } from "../../game/traffic/TrafficTypes";
+import { TrafficDirector } from "../../game/traffic/TrafficDirector";
+import { TRAFFIC_CAR_SPECS, type TrafficCarKind } from "../../game/traffic/TrafficTypes";
 import { getVehicleDefinition, type VehicleDefinition } from "../../game/vehicles/VehicleCatalog";
 import { FEUDAL_JAPAN_BIOME_CONTENT, type DecorationKind } from "../../game/world/BiomeContent";
 import { LaneSystem } from "../../game/world/LaneSystem";
@@ -81,6 +81,10 @@ const introChaserSideOffset = 1.05;
 const BLACK_HOLE_POS = { x: 0, y: 9, z: 13 };
 // 鬼 Anzapfen: only the nearest cars within this many metres ahead bleed coins.
 const SIPHON_RANGE = 38;
+// Procedural traffic: obstacle rows sit ROW_GAP apart starting at ROW_START; one full
+// loop is contentLoopLength / ROW_GAP rows, each with up to 2 cars.
+const ROW_START = 18;
+const ROW_GAP = 12;
 
 type TrackPiece = {
   object: THREE.Object3D;
@@ -193,10 +197,11 @@ export class RunSceneFactory {
       bounds: vehicle.run.bounds
     });
     const scoreSystem = new ScoreSystem();
-    const lanes = laneSystem.lanes;
     const biome = FEUDAL_JAPAN_BIOME_CONTENT;
     const trackLoopLength = biome.track.segmentLength * biome.track.segmentCount;
     const contentLoopLength = biome.contentLoopLength;
+    const rowCount = Math.round(contentLoopLength / ROW_GAP); // rows per loop (e.g. 10)
+    const trafficDirector = new TrafficDirector(ROW_START, ROW_GAP);
     const world = new THREE.Group();
     // 鬼 Anzapfen: pool of 4 mini black holes (mastery cap), parented to `world` so they
     // scroll with the cars they hover above.
@@ -221,7 +226,7 @@ export class RunSceneFactory {
       miniHoles.push({ group, swirl });
     }
     const groundSegments: TrackPiece[] = [];
-    const decorative: TrackPiece[] = [];
+    const decorative: { object: THREE.Object3D; initialZ: number; baseX: number; baseScale: number }[] = [];
 
     let distance = 0;
     let pressure = 0;
@@ -236,13 +241,12 @@ export class RunSceneFactory {
     let chaserReceding = false;
     let passiveHooks: PassiveHooks | undefined;
 
-    validateTrafficRows(biome.trafficRows, contentLoopLength);
-
     const trafficSystem = new TrafficSystem(
       runnerController,
       laneSystem,
       collisionSystem,
       () => distance,
+      trafficDirector,
       ({ side }) => {
         lastHitWasSide = side;
         scoreSystem.resetCombo();
@@ -263,6 +267,7 @@ export class RunSceneFactory {
       laneSystem,
       collisionSystem,
       () => distance,
+      trafficDirector,
       ({ collectible, amount }) => {
         scoreSystem.addCoin(amount);
         events?.emit("coin:collected", {
@@ -361,32 +366,37 @@ export class RunSceneFactory {
     for (let index = 0; index < biome.coins.count; index += 1) {
       const coin = models.createKoban();
       const trackZ = biome.coins.startZ + index * biome.coins.spacing;
-      const coinLane = getCoinLane(index, trackZ);
       collectibleSystem.add({
         id: `coin-${trackZ}`,
         mesh: coin,
-        lane: coinLane,
+        lane: trafficDirector.safeLaneForZ(trackZ), // placeholder; reset re-lanes per run
         trackZ
       });
       world.add(coin);
     }
 
-    for (const row of biome.trafficRows) {
-      row.cars.forEach((definition, carIndex) => {
-        const mesh = models.createTrafficCar(definition.kind);
-        const spec = TRAFFIC_CAR_SPECS[definition.kind];
+    // Procedural traffic pool: `rowCount` rows × 2 slots, kinds mixed across the pool.
+    // The director decides each slot's lane (or hides it) per run and per recycle.
+    const TRAFFIC_KINDS: TrafficCarKind[] = ["traffic-kei-hatch", "traffic-city-sedan", "traffic-box-van"];
+    for (let key = 0; key < rowCount; key += 1) {
+      const rowZ = ROW_START + key * ROW_GAP;
+      for (let slot = 0; slot < 2; slot += 1) {
+        const kind = TRAFFIC_KINDS[(key + slot) % TRAFFIC_KINDS.length];
+        const mesh = models.createTrafficCar(kind);
+        const spec = TRAFFIC_CAR_SPECS[kind];
         trafficSystem.add({
-          id: `traffic-${row.trackZ}-${definition.lane}-${carIndex}`,
-          kind: definition.kind,
+          id: `traffic-${key}-${slot}`,
+          kind,
           mesh,
-          lane: definition.lane,
-          trackZ: row.trackZ,
-          speed: definition.speed ?? spec.speed,
+          lane: slot === 0 ? -1 : 1, // placeholder; the director sets the real lane on reset
+          trackZ: rowZ,
+          speed: spec.speed,
           collider: spec.collider,
-          patternId: `row-${row.trackZ}`
+          patternId: `row-${key}`,
+          slotIndex: slot
         });
         world.add(mesh);
-      });
+      }
     }
 
     const resetRun = (): void => {
@@ -403,6 +413,7 @@ export class RunSceneFactory {
       chaserWanted = false;
       chaserReceding = false;
       world.position.z = 0;
+      trafficDirector.reset(); // fresh procedural sequence — every run different
       resetWorldPieces();
       runnerController.reset();
       collectibleSystem.reset();
@@ -713,6 +724,7 @@ export class RunSceneFactory {
       for (const deco of decorative) {
         if (deco.object.position.z - distance < -biome.decorationRecycleBehindDistance) {
           deco.object.position.z += contentLoopLength;
+          jitterDecoration(deco); // re-roll its offset/scale each loop
         }
       }
     }
@@ -724,12 +736,23 @@ export class RunSceneFactory {
 
       for (const deco of decorative) {
         deco.object.position.z = deco.initialZ;
+        jitterDecoration(deco); // fresh scenery layout each run
       }
     }
 
     function addDecorative(object: THREE.Object3D): void {
-      decorative.push({ object, initialZ: object.position.z });
+      const piece = { object, initialZ: object.position.z, baseX: object.position.x, baseScale: object.scale.x };
+      decorative.push(piece);
+      jitterDecoration(piece);
       world.add(object);
+    }
+
+    // Per-run / per-recycle scenery variety: nudge each prop outward off the road and
+    // vary its scale, so the roadside never reads as an obvious repeating loop.
+    function jitterDecoration(piece: { object: THREE.Object3D; baseX: number; baseScale: number }): void {
+      const dir = Math.sign(piece.baseX); // 0 for centred props (torii) — leave them put
+      piece.object.position.x = piece.baseX + dir * Math.random() * 0.7;
+      piece.object.scale.setScalar(piece.baseScale * (0.85 + Math.random() * 0.3));
     }
 
     function freezeStaticChildren(object: THREE.Object3D): void {
@@ -851,18 +874,6 @@ export class RunSceneFactory {
       const pending = gameOverInfo;
       gameOverInfo = undefined;
       return pending;
-    }
-
-    function getCoinLane(index: number, trackZ: number): LaneIndex {
-      const defaultLane = lanes[index % lanes.length];
-      const nearbyRow = biome.trafficRows.find((row) => Math.abs(row.trackZ - trackZ) < 4);
-
-      if (!nearbyRow) {
-        return defaultLane;
-      }
-
-      const blockedLanes = new Set<LaneIndex>(nearbyRow.cars.map((car) => car.lane));
-      return blockedLanes.has(defaultLane) ? nearbyRow.safeLane : defaultLane;
     }
 
     return {

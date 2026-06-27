@@ -4,6 +4,7 @@ import { CollisionSystem } from "../../engine/physics/CollisionSystem";
 import { RunnerController } from "../runner/RunnerController";
 import { LaneSystem } from "../world/LaneSystem";
 import { TrafficCar, type TrafficCarDefinition } from "./TrafficCar";
+import { TrafficDirector } from "./TrafficDirector";
 
 export type TrafficCarHit = {
   car: TrafficCar;
@@ -60,6 +61,7 @@ export class TrafficSystem {
     private readonly laneSystem: LaneSystem,
     private readonly collisionSystem: CollisionSystem,
     private readonly getDistance: () => number,
+    private readonly director: TrafficDirector,
     private readonly onHit: (hit: TrafficCarHit) => void,
     private readonly onDestroyed?: (destroyed: TrafficCarDestroyed) => void
   ) {}
@@ -112,7 +114,8 @@ export class TrafficSystem {
       }
 
       if (car.trackZ - this.getDistance() < -14) {
-        car.recycle(worldLength);
+        const cfg = this.director.config(this.director.keyForZ(car.trackZ + worldLength));
+        car.recycle(worldLength, cfg.blocked[car.slotIndex]);
       }
     }
   }
@@ -365,9 +368,11 @@ export class TrafficSystem {
   }
 
   reset(): void {
+    // The scene resets the director first; re-place every car per the new sequence.
     this.shieldedLane = undefined;
     for (const car of this.cars) {
-      car.reset();
+      const cfg = this.director.config(this.director.keyForZ(car.initialTrackZ));
+      car.reset(cfg.blocked[car.slotIndex]);
     }
   }
 

@@ -37,6 +37,8 @@ export type TrafficCarDefinition = {
   speed: number;
   collider: TrafficColliderShape;
   patternId: string;
+  /** This car's index within its row (0/1) — the director assigns it blocked[slotIndex]. */
+  slotIndex: number;
 };
 
 export class TrafficCar implements Collidable {
@@ -48,6 +50,7 @@ export class TrafficCar implements Collidable {
   readonly cruiseSpeed: number;
   readonly colliderShape: TrafficColliderShape;
   readonly patternId: string;
+  readonly slotIndex: number;
   readonly initialLane: LaneIndex;
   lane: LaneIndex;
   trackZ: number;
@@ -101,6 +104,7 @@ export class TrafficCar implements Collidable {
     this.speed = this.cruiseSpeed;
     this.colliderShape = definition.collider;
     this.patternId = definition.patternId;
+    this.slotIndex = definition.slotIndex;
     this.blinkerPosX = this.mesh.getObjectByName("blinker_px") ?? undefined;
     this.blinkerNegX = this.mesh.getObjectByName("blinker_nx") ?? undefined;
     for (const name of ["smoke0", "smoke1", "smoke2", "smoke3"]) {
@@ -373,22 +377,27 @@ export class TrafficCar implements Collidable {
     this.smokeTime = 0;
   }
 
-  recycle(worldLength: number): void {
+  /**
+   * Wrap to the next loop. The director decides the lane: a LaneIndex places the car
+   * there (active), `undefined` parks it hidden (this slot has no car this row).
+   */
+  recycle(worldLength: number, lane: LaneIndex | undefined): void {
     this.trackZ += worldLength;
-    this.lane = this.initialLane; // restore normal lane spread (e.g. after 藍 moved it aside)
     this.hit = false;
     this.speed = this.cruiseSpeed;
-    this.mesh.visible = true;
+    this.lane = lane ?? this.initialLane;
     this.syncMeshPosition();
+    this.mesh.visible = lane !== undefined;
   }
 
-  reset(): void {
+  /** Run start: place at the start position in the director's lane, or hidden. */
+  reset(lane: LaneIndex | undefined): void {
     this.trackZ = this.initialTrackZ;
-    this.lane = this.initialLane;
     this.hit = false;
     this.speed = this.cruiseSpeed;
-    this.mesh.visible = true;
+    this.lane = lane ?? this.initialLane;
     this.syncMeshPosition();
+    this.mesh.visible = lane !== undefined;
   }
 
   private updateSmoke(dt: number): void {

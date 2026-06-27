@@ -2,6 +2,7 @@ import type { LaneIndex } from "../../app/GameConfig";
 import { CollisionSystem } from "../../engine/physics/CollisionSystem";
 import { RunnerController } from "../runner/RunnerController";
 import { LaneSystem } from "../world/LaneSystem";
+import { TrafficDirector } from "../traffic/TrafficDirector";
 import { Collectible, type CollectibleDefinition } from "./Collectible";
 
 export type CollectibleCollected = {
@@ -19,6 +20,7 @@ export class CollectibleSystem {
     private readonly laneSystem: LaneSystem,
     private readonly collisionSystem: CollisionSystem,
     private readonly getDistance: () => number,
+    private readonly director: TrafficDirector,
     private readonly onCollected: (event: CollectibleCollected) => void
   ) {}
 
@@ -47,9 +49,12 @@ export class CollectibleSystem {
   }
 
   reset(): void {
+    // The director was reset by the scene first — re-lane every coin onto the new
+    // run's safe path so coins are procedural too.
     this.laneBias = undefined;
     for (const collectible of this.collectibles) {
       collectible.reset();
+      collectible.placeAt(this.getNextLane(collectible.trackZ), collectible.trackZ);
     }
   }
 
@@ -85,7 +90,6 @@ export class CollectibleSystem {
     if (this.laneBias !== undefined) {
       return this.laneBias;
     }
-    const lanes = this.laneSystem.lanes;
-    return lanes[Math.abs(Math.floor(trackZ / 9)) % lanes.length];
+    return this.director.safeLaneForZ(trackZ); // coins ride the procedural safe path
   }
 }
