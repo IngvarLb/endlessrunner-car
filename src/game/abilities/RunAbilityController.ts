@@ -37,9 +37,14 @@ export type WeakFailOutcome = { type: "absorbed" } | { type: "coins"; amount: nu
 /**
  * What a fatal car hit does. `survived` keeps the run going; `pursuitSec`, if set,
  * opens a police pursuit for that many seconds (将 Draufgänger): you survive the
- * crash but must drive clean to shake them.
+ * crash but must drive clean to shake them. `reason` names the passive that saved
+ * you so the HUD can show the right rescue toast.
  */
-export type FatalOutcome = { survived: boolean; pursuitSec?: number };
+export type FatalOutcome = {
+  survived: boolean;
+  pursuitSec?: number;
+  reason?: "secondLife" | "crumple";
+};
 
 /**
  * HUD view of the passive for the mini charge-ring. Recharging passives (赤 buffer,
@@ -349,14 +354,21 @@ export class RunAbilityController {
 
   /**
    * A fatal car hit happened (`pursued` = a 将 police chase is already on). 狐 spends
-   * an extra life to survive; 将 survives the crash but opens a pursuit (unless already
-   * being chased — then it's caught). Otherwise it's game over.
+   * an extra life to survive; 赤 spends its crumple buffer to walk away from the crash
+   * (then recharges over distance); 将 survives the crash but opens a pursuit (unless
+   * already being chased — then it's caught). Otherwise it's game over.
    */
   onFatalHit(pursued: boolean, side: boolean): FatalOutcome {
     if (this.extraLives > 0) {
       this.extraLives -= 1;
       this.metersSinceLife = 0;
-      return { survived: true };
+      return { survived: true, reason: "secondLife" };
+    }
+    // 赤 Knautschzone: the crumple buffer eats a crash (any direction), then recharges.
+    if (this.hasCrumple && this.crumpleBuffer > 0) {
+      this.crumpleBuffer -= 1;
+      this.crumpleMeters = 0;
+      return { survived: true, reason: "crumple" };
     }
     // 将 Draufgänger only survives SIDE hits — a rear-end is a fatal mistake.
     if (this.hasDaredevil && this.passive && side) {

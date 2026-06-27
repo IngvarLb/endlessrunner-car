@@ -418,6 +418,9 @@ export class GameApp {
             this.audio?.playBoost(); // 将 powers through the wreck
             this.runScene.openPursuit(outcome.pursuitSec);
             this.showHudToast("将", "DRAUFGÄNGER", "POLIZEI!");
+          } else if (outcome.reason === "crumple") {
+            this.audio?.playSave(); // 赤 Knautschzone absorbs the crash
+            this.showHudToast("赤", "KNAUTSCHZONE", "ABGEFANGEN");
           } else {
             this.audio?.playSave(); // 狐 second-life rescue chime
             this.showHudToast("狐", "ZWEITES LEBEN", "GERETTET");
