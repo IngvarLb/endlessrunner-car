@@ -15,9 +15,10 @@ const LIFT_DURATION = 1.4; // 鬼: seconds for a tapped car to rise into the hol
 const ACCEL = 6; // m/s² when speeding up to cruise / overtaking
 const BRAKE = 18; // m/s² when slowing to follow / avoid a rear-end
 const LANE_COOLDOWN = 1.7; // seconds between a car's own lane changes (no oscillation)
-// Per-car cruise speed = base × this range, keyed off the id so it's stable across recycles.
-const CRUISE_MIN_FACTOR = 0.9;
-const CRUISE_MAX_FACTOR = 1.2;
+// Cars all cruise at the SAME speed (Subway-Surfers-style predictable obstacles): no
+// catching-up, so the director's even spacing is preserved and nothing clumps.
+const CRUISE_MIN_FACTOR = 1.0;
+const CRUISE_MAX_FACTOR = 1.0;
 
 function hashTo01(value: string): number {
   let hash = 2166136261;

@@ -55,6 +55,13 @@ export class TrafficSystem {
   private ramCoins?: number;
   /** While set, a tapped car can be lifted for this many coins (鬼 Schwarzes Loch). */
   private liftCoins?: number;
+  /**
+   * Subway-Surfers-style traffic: cars hold the director's fair lanes — no autonomous
+   * overtaking or lane churn — so the guaranteed-navigable, evenly-spaced layout actually
+   * survives at runtime. (Flip to re-enable dynamic lane changes; fairness then relies on
+   * the runtime wall guard instead of the director's plan.)
+   */
+  private readonly autonomousLaneChanges = false;
 
   constructor(
     private readonly runner: RunnerController,
@@ -133,14 +140,16 @@ export class TrafficSystem {
       }
       car.driveToward(this.followingTarget(car), dt);
     }
-    for (const car of this.cars) {
-      if (car.hit || !car.mesh.visible) {
-        continue;
+    if (this.autonomousLaneChanges) {
+      for (const car of this.cars) {
+        if (car.hit || !car.mesh.visible) {
+          continue;
+        }
+        this.considerOvertake(car);
+        this.considerLaneChurn(car, dt, churnRate);
       }
-      this.considerOvertake(car);
-      this.considerLaneChurn(car, dt, churnRate);
+      this.cancelStaleSignals();
     }
-    this.cancelStaleSignals();
     this.ensureNoWall();
   }
 

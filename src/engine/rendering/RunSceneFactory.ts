@@ -84,7 +84,7 @@ const SIPHON_RANGE = 38;
 // Procedural traffic: obstacle rows sit ROW_GAP apart starting at ROW_START; one full
 // loop is contentLoopLength / ROW_GAP rows, each with up to 2 cars.
 const ROW_START = 18;
-const ROW_GAP = 12;
+const ROW_GAP = 15;
 
 type TrackPiece = {
   object: THREE.Object3D;
