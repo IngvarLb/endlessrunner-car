@@ -2353,7 +2353,7 @@ export class ModelFactory {
 
     const steel = this.materials.brushedSteel;
     const guard = this.materials.guardSteel;
-    const beamY = 5.5;
+    const beamY = 9.5; // high clearance so the chase camera passes cleanly underneath
 
     // ---- Two lattice legs at x = ±3.4 ----
     for (const side of [-1, 1]) {
@@ -2371,8 +2371,9 @@ export class ModelFactory {
       }
 
       // Lattice diagonals zig-zagging up the leg (in the X/Y plane, faceted)
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 16; i += 1) {
         const segY = 0.5 + i * 0.62;
+        if (segY > beamY) break;
         const brace = this.mesh(new THREE.BoxGeometry(0.085, 0.78, 0.5), steel, [legX, segY, 0]);
         brace.rotation.x = (i % 2 === 0 ? 1 : -1) * 0.62;
         group.add(brace);
@@ -2477,7 +2478,7 @@ export class ModelFactory {
     const group = new THREE.Group();
     group.name = "deco_glass_skybridge";
 
-    const bridgeY = 4.5;        // deck centre height — player drives beneath
+    const bridgeY = 9.0;        // high deck — chase camera passes cleanly beneath the span + arch
     const tubeW = 7.2;          // glass corridor span (x)
     const tubeH = 2.0;          // corridor height
     const tubeD = 1.7;          // corridor depth (z)
