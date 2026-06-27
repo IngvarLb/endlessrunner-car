@@ -77,22 +77,29 @@ export class MaterialFactory {
     }
   }
 
-  private standard(color: number, roughness: number, metalness: number): THREE.MeshStandardMaterial {
-    return new THREE.MeshStandardMaterial({
-      color,
-      roughness,
-      metalness,
-      flatShading: true
-    });
+  /**
+   * Stylised low-poly doesn't need PBR. Matte materials become the much cheaper
+   * (per-fragment-light-free) MeshLambertMaterial; the few metallic accents become a
+   * cheap MeshPhongMaterial so they keep a sheen. Both are a fraction of the fragment
+   * cost of MeshStandardMaterial — big GPU/thermal saving, near-identical look.
+   */
+  private standard(color: number, roughness: number, metalness: number): THREE.Material & { color: THREE.Color } {
+    if (metalness >= 0.35) {
+      return new THREE.MeshPhongMaterial({
+        color,
+        specular: 0x70757c,
+        shininess: Math.max(8, (1 - roughness) * 140),
+        flatShading: true
+      });
+    }
+    return new THREE.MeshLambertMaterial({ color, flatShading: true });
   }
 
-  private emissive(color: number, intensity: number): THREE.MeshStandardMaterial {
-    return new THREE.MeshStandardMaterial({
+  private emissive(color: number, intensity: number): THREE.Material & { color: THREE.Color } {
+    return new THREE.MeshLambertMaterial({
       color,
       emissive: color,
       emissiveIntensity: intensity,
-      roughness: 0.55,
-      metalness: 0.05,
       flatShading: true
     });
   }
