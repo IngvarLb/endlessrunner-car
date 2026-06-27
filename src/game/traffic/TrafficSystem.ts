@@ -43,6 +43,13 @@ const ANTICIPATE_BEHIND = 9; // ...by holding back a car this far behind the ope
 // Difficulty ramp — NPCs make discretionary lane changes (on top of overtaking) that
 // get more frequent the further you drive. Each is still blinker-telegraphed and
 // gap/wall-checked, so there's always a readable, fair escape.
+// A lane change is only started when it will FULLY COMPLETE while the car is still well
+// ahead — so a half-merged car (spanning two lanes) can never appear in the player's
+// danger zone and box them in. The head start needed grows with the closing speed, so at
+// high speed merges naturally only happen on distant cars (or not at all).
+const MERGE_PLAN_SECONDS = 4.2; // blinker telegraph + the merge glide (+ margin for player acceleration)
+const MERGE_SAFE_AHEAD = 22; // metres the car is still ahead when the merge finishes (well past the danger zone)
+
 const DIFFICULTY_RAMP_START = 160; // metres: calm intro before any churn
 const DIFFICULTY_RAMP_FULL = 2400; // metres: flatter ramp — full difficulty only deep into a run
 const LANE_CHURN_RATE_MAX = 0.1; // per car, per second, at full difficulty (less frequent than before)
@@ -56,18 +63,21 @@ export class TrafficSystem {
   /** While set, a tapped car can be lifted for this many coins (鬼 Schwarzes Loch). */
   private liftCoins?: number;
   /**
-   * Subway-Surfers-style traffic: cars hold the director's fair lanes — no autonomous
-   * overtaking or lane churn — so the guaranteed-navigable, evenly-spaced layout actually
-   * survives at runtime. (Flip to re-enable dynamic lane changes; fairness then relies on
-   * the runtime wall guard instead of the director's plan.)
+   * Living traffic: cars make telegraphed lane changes (blinker → smooth merge) on top of
+   * the director's evenly-spaced layout. SAFE because (a) base speed is uniform so cars
+   * never catch up and clump, and (b) every merge is gap-checked (target lane clear) and
+   * wall-checked (never closes the 3rd lane near the player), with the runtime wall guard
+   * (ensureNoWall) braking as a backstop. The only speed change is a brief brake to avoid
+   * a rear-end / open a lane — not systematic variation.
    */
-  private readonly autonomousLaneChanges = false;
+  private readonly autonomousLaneChanges = true;
 
   constructor(
     private readonly runner: RunnerController,
     private readonly laneSystem: LaneSystem,
     private readonly collisionSystem: CollisionSystem,
     private readonly getDistance: () => number,
+    private readonly getPlayerSpeed: () => number,
     private readonly director: TrafficDirector,
     private readonly onHit: (hit: TrafficCarHit) => void,
     private readonly onDestroyed?: (destroyed: TrafficCarDestroyed) => void
@@ -133,7 +143,8 @@ export class TrafficSystem {
    * rises, and a fairness guard keeps at least one lane open near the player.
    */
   private think(dt: number): void {
-    const churnRate = LANE_CHURN_RATE_MAX * this.difficulty();
+    // A baseline so traffic feels alive from the start, a touch more as you go.
+    const churnRate = 0.06 + (LANE_CHURN_RATE_MAX - 0.06) * this.difficulty();
     for (const car of this.cars) {
       if (car.hit || !car.mesh.visible) {
         continue;
@@ -164,8 +175,15 @@ export class TrafficSystem {
    * the more often NPCs switch lanes, adding pressure. Still blinker-telegraphed and
    * gap/wall-checked, so the player always gets warning and a fair gap.
    */
+  /** A merge is only allowed if it completes while the car is still safely far ahead. */
+  private mergeIsSafe(car: TrafficCar): boolean {
+    const rel = car.trackZ - this.getDistance();
+    const closing = Math.max(2, this.getPlayerSpeed() - car.speed);
+    return rel - closing * MERGE_PLAN_SECONDS > MERGE_SAFE_AHEAD;
+  }
+
   private considerLaneChurn(car: TrafficCar, dt: number, ratePerSecond: number): void {
-    if (ratePerSecond <= 0 || !car.canChangeLane() || Math.random() >= ratePerSecond * dt) {
+    if (ratePerSecond <= 0 || !car.canChangeLane() || !this.mergeIsSafe(car) || Math.random() >= ratePerSecond * dt) {
       return;
     }
     const to = this.clearAdjacentLane(car, OVERTAKE_CLEAR_AHEAD, OVERTAKE_CLEAR_BEHIND);
@@ -218,7 +236,7 @@ export class TrafficSystem {
    * so a faster car never just stacks up behind a slower one.
    */
   private considerOvertake(car: TrafficCar): void {
-    if (!car.canChangeLane()) {
+    if (!car.canChangeLane() || !this.mergeIsSafe(car)) {
       return;
     }
     const lead = this.leadInLane(car.lane, car.trackZ, car);

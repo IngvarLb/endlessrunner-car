@@ -287,6 +287,7 @@ export class RunSceneFactory {
       laneSystem,
       collisionSystem,
       () => distance,
+      () => getRunSpeed() * runnerController.getSpeedMultiplier(),
       trafficDirector,
       ({ side }) => {
         lastHitWasSide = side;
