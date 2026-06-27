@@ -48,6 +48,8 @@ export type RunEffectContext = {
     kick(): void;
     /** 藍 Freie Bahn: emit an expanding horn shockwave ring from the car. */
     hornPulse(): void;
+    /** 桜 Blütenregen: a soft pink sky tint + drifting sakura petals (and back). */
+    setBlossom(on: boolean): void;
   };
   coins: {
     /** Funnel recycled coins into `lane` (or restore the default spread with undefined). */

@@ -112,6 +112,7 @@ export class RunSceneFactory {
     const NIGHT_SKY = new THREE.Color(0x141a38); // 将 Nachtjagd
     const BLACKHOLE_SKY = new THREE.Color(0x1c0b30); // 鬼 Schwarzes Loch (deep violet)
     const HYPER_SKY = new THREE.Color(0xffe1a6); // 龍 Überschall (bright golden supersonic haze — the dragon's realm)
+    const SAKURA_SKY = new THREE.Color(0xffd6e6); // 桜 Blütenregen (soft sakura-pink atmosphere)
     const dayHemi = sceneLights.hemi.intensity;
     const daySun = sceneLights.sun.intensity;
     // Scene tint (将 night / 鬼 black hole): lerp lights + sky/fog toward a mood and back.
@@ -508,6 +509,40 @@ export class RunSceneFactory {
       hornRings.push({ mesh, life: 0 });
     }
 
+    // 桜 Blütenregen petals: a soft pink blossom-fall drifting through the whole view,
+    // anchored to the camera so it fills the frame wherever you look. Ambiance only —
+    // the collectible pink coins are separate (CoinRainSystem).
+    const petalMat = new THREE.MeshBasicMaterial({
+      color: 0xf7a8c8,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const petalGeo = new THREE.PlaneGeometry(0.2, 0.13);
+    const petals = new THREE.Group();
+    petals.name = "sakura_petals";
+    petals.visible = false;
+    const petalData: { mesh: THREE.Mesh; sway: number; phase: number; fall: number; spin: number }[] = [];
+    const seedPetal = (d: { mesh: THREE.Mesh; sway: number; phase: number; fall: number; spin: number }, y: number): void => {
+      d.sway = 0.6 + Math.random() * 1.2;
+      d.phase = Math.random() * Math.PI * 2;
+      d.fall = 1.6 + Math.random() * 1.8;
+      d.spin = (Math.random() - 0.5) * 4;
+      d.mesh.position.set((Math.random() * 2 - 1) * 6, y, -3 - Math.random() * 13);
+      d.mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    };
+    for (let i = 0; i < 56; i += 1) {
+      const d = { mesh: new THREE.Mesh(petalGeo, petalMat), sway: 0, phase: 0, fall: 0, spin: 0 };
+      seedPetal(d, -3 + Math.random() * 9);
+      petals.add(d.mesh);
+      petalData.push(d);
+    }
+    scene.add(petals);
+    let blossomLevel = 0;
+    let blossomTarget = 0;
+    let petalTime = 0;
+
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {
       const index = biome.track.startIndex + offset;
       const segment = models.createGroundSegment(biome.track.segmentLength);
@@ -605,6 +640,10 @@ export class RunSceneFactory {
         ring.life = 0;
         ring.mesh.visible = false;
       }
+      blossomLevel = 0;
+      blossomTarget = 0;
+      petalMat.opacity = 0;
+      petals.visible = false;
       cameraController.setFovBoost(0);
       // 鬼 Schwarzes Loch: hide the vortex and reset the siphon stream.
       bhTarget = 0;
@@ -671,6 +710,7 @@ export class RunSceneFactory {
       turret.update(dt, isRunning);
       updateBoostAura(dt, elapsed);
       updateHornPulse(dt);
+      updatePetals(dt);
       updateChaser(dt, elapsed, isRunning);
 
       world.position.z = -distance;
@@ -833,7 +873,8 @@ export class RunSceneFactory {
         setBlackHole: (on) => setBlackHole(on),
         setHyperspeed: (on) => setHyperspeed(on),
         kick: () => cameraController.shake(0.24, 0.13),
-        hornPulse: () => triggerHornPulse()
+        hornPulse: () => triggerHornPulse(),
+        setBlossom: (on) => setBlossom(on)
       }
     };
 
@@ -853,6 +894,8 @@ export class RunSceneFactory {
       for (const ring of hornRings) {
         (ring.mesh.material as THREE.Material).dispose();
       }
+      petalMat.dispose();
+      petalGeo.dispose();
       bhGlowMat.dispose();
       bhCoreMat.dispose();
       bhDiskMat.dispose();
@@ -933,6 +976,39 @@ export class RunSceneFactory {
         const pos = runnerController.getPosition(); // ride along with the car
         ring.mesh.position.x = pos.x;
         ring.mesh.position.z = pos.z;
+      }
+    }
+
+    function setBlossom(on: boolean): void {
+      setTint(on, SAKURA_SKY, 0.92, 0.96); // soft pink atmosphere (barely darkened)
+      blossomTarget = on ? 1 : 0;
+    }
+
+    function updatePetals(dt: number): void {
+      if (blossomLevel !== blossomTarget) {
+        blossomLevel = THREE.MathUtils.lerp(blossomLevel, blossomTarget, Math.min(1, dt * 3));
+        if (Math.abs(blossomLevel - blossomTarget) < 0.01) {
+          blossomLevel = blossomTarget;
+        }
+        petalMat.opacity = blossomLevel * 0.95;
+        petals.visible = blossomLevel > 0.01;
+      }
+      if (!petals.visible) {
+        return;
+      }
+      petalTime += dt;
+      // Anchor the field to the camera so petals fill the view wherever it points.
+      petals.position.copy(cameraController.camera.position);
+      petals.quaternion.copy(cameraController.camera.quaternion);
+      for (const d of petalData) {
+        const m = d.mesh;
+        m.position.y -= d.fall * dt;
+        m.position.x += Math.sin(petalTime * d.sway + d.phase) * dt * 0.7;
+        m.rotation.z += d.spin * dt;
+        m.rotation.x += d.spin * 0.5 * dt;
+        if (m.position.y < -3.5) {
+          seedPetal(d, 6); // recycle to the top of the field
+        }
       }
     }
 

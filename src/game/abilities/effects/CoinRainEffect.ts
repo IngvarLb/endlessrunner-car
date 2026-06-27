@@ -12,6 +12,7 @@ export class CoinRainEffect implements RunEffect {
 
   start(ctx: RunEffectContext, opts: { durationSec: number; level: number }): void {
     ctx.coins.rain(true, opts.level);
+    ctx.scene.setBlossom(true); // pink sky + drifting petals
   }
 
   update(): void {
@@ -20,5 +21,6 @@ export class CoinRainEffect implements RunEffect {
 
   end(ctx: RunEffectContext): void {
     ctx.coins.rain(false, 0);
+    ctx.scene.setBlossom(false);
   }
 }
