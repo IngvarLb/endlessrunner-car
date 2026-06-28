@@ -74,25 +74,6 @@ const NOTE_FREQUENCIES: Record<string, number> = {
   C5: 523.25,
 };
 
-const BASS_PATTERN: Array<string | null> = [
-  "D1",
-  null,
-  null,
-  "D1",
-  null,
-  null,
-  "A1",
-  null,
-  "C2",
-  null,
-  "A1",
-  null,
-  null,
-  "G1",
-  null,
-  null,
-];
-
 const PLUCK_PATTERN: Array<string | null> = [
   "D4",
   null,
@@ -173,6 +154,116 @@ const LEAD_ONSETS = [0, 2, 3, 6, 8, 10, 11, 14];
 
 type LeadPhrase = Map<number, { freq: number; vel: number }>;
 
+// --- Per-biome themes (Phase 4) ---
+// Every theme locks to the same 96 BPM / 16-step grid, so leg-boundary crossfades are pure
+// gain ramps with no retiming. What differs is the *world*: scale + tonic, swing/feel, drum kit,
+// lead timbre, bass style, pad/noise-bed texture, and the chord-root progression. That divergence
+// is what makes the neon city sound nothing like the misty valley.
+type DrumKit = "boombap" | "brushed" | "electronic" | "taiko";
+type LeadStyle = "koto" | "rhodes" | "supersaw" | "shakuhachi";
+type BassStyle = "round" | "funk" | "drone";
+type PadStyle = "warmSaw" | "minTriangle" | "neonPWM" | "mistTriangle";
+type NoiseBedKind = "vinyl" | "rain" | "wind" | "none";
+
+interface BiomeTheme {
+  key: string;
+  tonicHz: number;
+  scale: number[]; // semitone offsets from the tonic (the lead/bass pitch set)
+  swing: number;
+  drumVariants: DrumGrid[];
+  kit: DrumKit;
+  bassSteps: number[]; // which 16th steps the bass articulates
+  bassStyle: BassStyle;
+  leadStyle: LeadStyle;
+  padStyle: PadStyle;
+  padLevel: number;
+  padRoots: number[]; // chord-root scale degrees, cycled every chordBars
+  chordBars: number;
+  noiseBed: NoiseBedKind;
+}
+
+const NEON_DRUMS: DrumGrid[] = [
+  { kick: [0, 4, 8, 12], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 14], openHat: [14] },
+  { kick: [0, 4, 8, 12], snare: [4, 12], hat: [2, 3, 6, 7, 10, 11, 14, 15], openHat: [] },
+  { kick: [0, 4, 7, 8, 12], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 13, 14], openHat: [15] },
+];
+
+const FOREST_DRUMS: DrumGrid[] = [
+  { kick: [0], snare: [8], hat: [0, 4, 8, 12], openHat: [] },
+  { kick: [0, 10], snare: [8], hat: [0, 4, 8, 12, 14], openHat: [] },
+];
+
+const BIOME_THEMES: BiomeTheme[] = [
+  {
+    key: "village",
+    tonicHz: RUN_TONIC_HZ,
+    scale: RUN_SCALE, // D yo — bright, no minor 2nd
+    swing: DEFAULT_SWING,
+    drumVariants: RUN_DRUM_VARIANTS,
+    kit: "boombap",
+    bassSteps: [0, 6, 10],
+    bassStyle: "round",
+    leadStyle: "koto",
+    padStyle: "warmSaw",
+    padLevel: 0.07,
+    padRoots: [0, 3, 0, 4],
+    chordBars: 2,
+    noiseBed: "vinyl",
+  },
+  {
+    key: "village_autumn",
+    tonicHz: NOTE_FREQUENCIES.D4,
+    scale: [0, 1, 5, 7, 10], // D in-sen — the ♭2/♭7 ache; same tonic so the season-flip glides
+    swing: 0.18,
+    drumVariants: RUN_DRUM_VARIANTS,
+    kit: "brushed",
+    bassSteps: [0, 6, 10],
+    bassStyle: "round",
+    leadStyle: "rhodes",
+    padStyle: "minTriangle",
+    padLevel: 0.08,
+    padRoots: [0, 3, 4, 0],
+    chordBars: 2,
+    noiseBed: "rain",
+  },
+  {
+    key: "neon",
+    tonicHz: 369.99, // F#4 — bright synthwave register
+    scale: [0, 3, 5, 7, 10], // F# minor pentatonic
+    swing: 0,
+    drumVariants: NEON_DRUMS,
+    kit: "electronic",
+    bassSteps: [0, 3, 6, 7, 10, 13, 14],
+    bassStyle: "funk",
+    leadStyle: "supersaw",
+    padStyle: "neonPWM",
+    padLevel: 0.06,
+    padRoots: [0, 1, 3, 0],
+    chordBars: 2,
+    noiseBed: "none",
+  },
+  {
+    key: "forest",
+    tonicHz: 220.0, // A3 — calm mid register
+    scale: [0, 2, 5, 7, 10], // A yo-leaning modal (A–B–D–E–G)
+    swing: 0.12,
+    drumVariants: FOREST_DRUMS,
+    kit: "taiko",
+    bassSteps: [0],
+    bassStyle: "drone",
+    leadStyle: "shakuhachi",
+    padStyle: "mistTriangle",
+    padLevel: 0.09,
+    padRoots: [0, 0, 2, 4],
+    chordBars: 4,
+    noiseBed: "wind",
+  },
+];
+
+const BIOME_THEME_BY_KEY: Record<string, BiomeTheme> = Object.fromEntries(
+  BIOME_THEMES.map((theme) => [theme.key, theme]),
+);
+
 interface ArrangerState {
   barCounter: number;
   sectionIdx: number;
@@ -183,6 +274,23 @@ interface ArrangerState {
   isFillBar: boolean;
   phraseHalf: number; // which bar (0/1) of the current 2-bar lead phrase
   leadPhrase: LeadPhrase; // precomputed lead notes for the 2-bar phrase, keyed by 0..31 step
+  chordIdx: number; // index into the active theme's padRoots progression
+  chordRoot: number; // current chord-root scale degree (drives bass + pad)
+}
+
+interface PadVoice {
+  oscillators: OscillatorNode[];
+  ratios: number[];
+  gain: GainNode;
+  filter: BiquadFilterNode;
+  level: number;
+}
+
+interface NoiseBedVoice {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  filters: BiquadFilterNode[];
+  level: number;
 }
 
 export class ProceduralAudioService {
@@ -242,6 +350,13 @@ export class ProceduralAudioService {
     L7: false,
   };
   private musicVoiceCount = 0;
+  // Active biome theme (scale/tonic/kit/lead/pad/chords). The run cycles through these per leg.
+  private theme: BiomeTheme = BIOME_THEMES[0];
+  private currentBiomeKey = "village";
+  private pendingBiomeKey: string | null = null;
+  // Persistent texture voices, built once per active biome and crossfaded at leg boundaries.
+  private padVoice: PadVoice | null = null;
+  private noiseBedVoice: NoiseBedVoice | null = null;
   // Run-mode song-form cursor; advanced once per bar at the bar boundary.
   private arranger: ArrangerState = {
     barCounter: 0,
@@ -253,6 +368,8 @@ export class ProceduralAudioService {
     isFillBar: false,
     phraseHalf: 0,
     leadPhrase: new Map(),
+    chordIdx: 0,
+    chordRoot: 0,
   };
 
   constructor(settings: Partial<ProceduralAudioSettings> = {}) {
@@ -281,6 +398,8 @@ export class ProceduralAudioService {
     if (mode === "run") {
       this.musicIntensityTarget = 0;
       this.musicIntensitySmoothed = 0;
+      const theme = BIOME_THEME_BY_KEY[this.currentBiomeKey] ?? BIOME_THEMES[0];
+      this.pendingBiomeKey = null;
       this.arranger = {
         barCounter: 0,
         sectionIdx: 0,
@@ -291,10 +410,14 @@ export class ProceduralAudioService {
         isFillBar: false,
         phraseHalf: 0,
         leadPhrase: new Map(),
+        chordIdx: 0,
+        chordRoot: theme.padRoots[0] ?? 0,
       };
+      this.activateBiome(theme.key, true);
     } else {
       this.musicIntensityTarget = mode === "menu" ? 0.5 : 0.45;
       this.musicIntensitySmoothed = this.musicIntensityTarget;
+      this.theme = BIOME_THEMES[0]; // menu/garage use the village feel (swing/koto), no biome textures
     }
     this.updateMusicModeGain();
     this.scheduleMusic();
@@ -325,6 +448,15 @@ export class ProceduralAudioService {
     this.isMusicPaused = false;
     this.nextStepIndex = 0;
     this.stopEngine();
+
+    if (this.padVoice) {
+      this.fadeOutPad(this.padVoice);
+      this.padVoice = null;
+    }
+    if (this.noiseBedVoice) {
+      this.fadeOutNoiseBed(this.noiseBedVoice);
+      this.noiseBedVoice = null;
+    }
   }
 
   pauseMusic(): void {
@@ -810,6 +942,15 @@ export class ProceduralAudioService {
    *  in a catch-up tick without causing the very lateness it guards against. */
   private advanceBar(): void {
     const arr = this.arranger;
+
+    // Apply a queued biome change on the bar boundary — a beat-locked crossfade.
+    let biomeChanged = false;
+    if (this.pendingBiomeKey && this.pendingBiomeKey !== this.currentBiomeKey) {
+      this.activateBiome(this.pendingBiomeKey, false);
+      biomeChanged = true;
+    }
+    this.pendingBiomeKey = null;
+
     arr.barCounter += 1;
     arr.sectionBar += 1;
     let section = RUN_SECTIONS[arr.sectionIdx];
@@ -822,12 +963,22 @@ export class ProceduralAudioService {
     arr.intensityFloor = section.intensityFloor;
     arr.isFillBar = arr.sectionBar === section.bars - 1;
     // Rotate the groove variant per bar — usually the home variant, occasionally a cousin.
-    arr.variantIdx = Math.random() < 0.62 ? 0 : 1 + Math.floor(Math.random() * (RUN_DRUM_VARIANTS.length - 1));
+    arr.variantIdx =
+      Math.random() < 0.62 ? 0 : 1 + Math.floor(Math.random() * Math.max(1, this.theme.drumVariants.length - 1));
 
-    // Lead phrasing: regenerate a fresh 2-bar question/answer phrase at the start of each pair.
+    // Chord progression → bass root + pad retune.
+    const chordIdx = Math.floor((arr.barCounter - 1) / this.theme.chordBars) % this.theme.padRoots.length;
+    if (chordIdx !== arr.chordIdx) {
+      arr.chordIdx = chordIdx;
+      arr.chordRoot = this.theme.padRoots[chordIdx];
+      this.retunePad();
+    }
+
+    // Lead phrasing: regenerate a fresh 2-bar question/answer phrase at the start of each pair,
+    // or immediately on a biome change so the new timbre never plays the old key's notes.
     const firstOfPair = arr.barCounter % 2 === 1;
-    arr.phraseHalf = firstOfPair ? 0 : 1;
-    if (firstOfPair) {
+    arr.phraseHalf = firstOfPair || biomeChanged ? 0 : 1;
+    if (firstOfPair || biomeChanged) {
       arr.leadPhrase = this.generateLeadPhrase();
     }
   }
@@ -835,7 +986,9 @@ export class ProceduralAudioService {
   /** Theme-driven run step: drum grid + section drum-mode (bridge drop / intro half) + fills. */
   private scheduleRunStep(localStep: number, time: number): void {
     const arr = this.arranger;
-    const grid = RUN_DRUM_VARIANTS[arr.variantIdx];
+    const theme = this.theme;
+    const grid = theme.drumVariants[arr.variantIdx % theme.drumVariants.length];
+    const kit = theme.kit;
     const swung = time + this.swingOffset(localStep);
     const onZero = localStep === 0;
     const drumsOut = arr.drumsMode === "out";
@@ -844,15 +997,15 @@ export class ProceduralAudioService {
     if (!drumsOut) {
       const kickHit = drumsHalf ? localStep === 0 || localStep === 8 : grid.kick.includes(localStep);
       if (kickHit) {
-        this.scheduleKick(this.clampStart(swung + 0.018 + this.tri(0.006)));
+        this.scheduleKick(this.clampStart(swung + 0.018 + this.tri(0.006)), kit);
       }
 
       const snareHit = drumsHalf ? localStep === 12 : grid.snare.includes(localStep);
       if (snareHit) {
         const early = onZero ? 0 : 0.006;
-        this.scheduleSnare(this.clampStart(swung - early + this.tri(0.006)), this.humanVel(1));
+        this.scheduleSnare(this.clampStart(swung - early + this.tri(0.006)), this.humanVel(1), kit);
       } else if (!drumsHalf && (localStep === 3 || localStep === 7 || localStep === 11) && Math.random() < 0.12) {
-        this.scheduleSnare(this.clampStart(swung + this.tri(0.006)), 0.3); // ghost
+        this.scheduleSnare(this.clampStart(swung + this.tri(0.006)), 0.3, kit); // ghost
       }
 
       const hatHit = drumsHalf ? localStep % 4 === 0 : grid.hat.includes(localStep);
@@ -876,33 +1029,41 @@ export class ProceduralAudioService {
       }
     }
 
-    // Bass continues through the bridge as a sparse pedal (downbeats only when drums are out).
-    if (localStep % 2 === 0) {
-      const bassNote = BASS_PATTERN[localStep];
-      if (bassNote && (!drumsOut || localStep === 0 || localStep === 8)) {
-        this.scheduleBass(
-          this.clampStart(swung + this.tri(0.004)),
-          NOTE_FREQUENCIES[bassNote],
-          localStep === 10 ? NOTE_FREQUENCIES.G1 : undefined,
-        );
-      }
+    // Bass follows the chord root (sub register). Keeps a downbeat pedal through the bridge.
+    if (theme.bassSteps.includes(localStep) && (!drumsOut || localStep === 0)) {
+      this.scheduleBassVoice(
+        this.clampStart(swung + this.tri(0.004)),
+        this.bassFreqForRoot(arr.chordRoot),
+        theme.bassStyle,
+        localStep,
+      );
     }
 
-    // Generative lead (L4): play this step's precomputed note from the current 2-bar phrase.
+    // Generative lead (L4): play this step's precomputed note in the biome's lead timbre.
     if (this.layerLive("L4")) {
       const note = arr.leadPhrase.get(arr.phraseHalf * STEPS_PER_BAR + localStep);
       if (note) {
-        this.schedulePluck(this.clampStart(swung + this.tri(0.012)), note.freq, note.vel * this.humanVel(1));
+        this.scheduleLead(this.clampStart(swung + this.tri(0.012)), note.freq, note.vel * this.humanVel(1), theme.leadStyle);
         // Octave grace-note sparkle at high intensity (L6).
         if (this.layerLive("L6") && Math.random() < 0.1) {
-          this.schedulePluck(
+          this.scheduleLead(
             this.clampStart(swung + SIXTEENTH_SECONDS / 2 + this.tri(0.012)),
             note.freq * 2,
             note.vel * 0.4,
+            theme.leadStyle,
           );
         }
       }
     }
+  }
+
+  /** Chord-root scale degree → a bass frequency, dropped into the sub register (~55–110 Hz). */
+  private bassFreqForRoot(rootDegree: number): number {
+    let f = this.degreeToFreq(rootDegree);
+    while (f > 110) {
+      f /= 2;
+    }
+    return f;
   }
 
   /** Menu/garage: the calmer, non-arranged groove (humanised), unchanged in feel. */
@@ -934,7 +1095,7 @@ export class ProceduralAudioService {
     const lead = SECTION_LEAD[RUN_SECTIONS[arr.sectionIdx].name];
     const intensity = Math.max(this.musicIntensitySmoothed, arr.intensityFloor);
     const density = Math.min(0.95, (0.4 + 0.5 * intensity) * lead.densityMul);
-    const shift = lead.degreeShift + lead.octave * RUN_SCALE.length;
+    const shift = lead.degreeShift + lead.octave * this.theme.scale.length;
 
     let degree = 2; // start a little above the root
     for (let half = 0; half < 2; half += 1) {
@@ -991,12 +1152,13 @@ export class ProceduralAudioService {
     return next;
   }
 
-  /** Pentatonic scale-degree (any integer, octave-wrapping) → frequency from the run tonic. */
+  /** Scale-degree (any integer, octave-wrapping) → frequency from the active theme's tonic + scale. */
   private degreeToFreq(degree: number): number {
-    const len = RUN_SCALE.length;
+    const scale = this.theme.scale;
+    const len = scale.length;
     const idx = ((degree % len) + len) % len;
     const octave = Math.floor(degree / len);
-    return RUN_TONIC_HZ * Math.pow(2, (RUN_SCALE[idx] + 12 * octave) / 12);
+    return this.theme.tonicHz * Math.pow(2, (scale[idx] + 12 * octave) / 12);
   }
 
   private shouldPlayKick(localStep: number, bar: number): boolean {
@@ -1063,30 +1225,122 @@ export class ProceduralAudioService {
     }
   }
 
-  private scheduleKick(time: number): void {
+  private scheduleKick(time: number, kit: DrumKit = "boombap"): void {
     const context = this.ensureContext();
     const destination = this.layerDestination("L0");
     const oscillator = context.createOscillator();
     const gain = context.createGain();
-
     oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(132, time);
-    oscillator.frequency.exponentialRampToValueAtTime(47, time + 0.09);
-    oscillator.frequency.exponentialRampToValueAtTime(34, time + 0.22);
+
+    let peak = 0.62;
+    let end = 0.28;
+    let stop = 0.3;
+    if (kit === "brushed") {
+      peak = 0.5;
+      end = 0.3;
+      stop = 0.32;
+      oscillator.frequency.setValueAtTime(110, time);
+      oscillator.frequency.exponentialRampToValueAtTime(44, time + 0.1);
+      oscillator.frequency.exponentialRampToValueAtTime(33, time + 0.24);
+    } else if (kit === "electronic") {
+      peak = 0.6;
+      end = 0.2;
+      stop = 0.22;
+      oscillator.frequency.setValueAtTime(150, time);
+      oscillator.frequency.exponentialRampToValueAtTime(50, time + 0.05);
+      oscillator.frequency.exponentialRampToValueAtTime(40, time + 0.18);
+    } else if (kit === "taiko") {
+      peak = 0.55;
+      end = 0.34;
+      stop = 0.36;
+      oscillator.frequency.setValueAtTime(95, time);
+      oscillator.frequency.exponentialRampToValueAtTime(52, time + 0.07);
+    } else {
+      oscillator.frequency.setValueAtTime(132, time);
+      oscillator.frequency.exponentialRampToValueAtTime(47, time + 0.09);
+      oscillator.frequency.exponentialRampToValueAtTime(34, time + 0.22);
+    }
 
     gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.exponentialRampToValueAtTime(0.62, time + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.28);
-
+    gain.gain.exponentialRampToValueAtTime(peak, time + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + end);
     oscillator.connect(gain);
     gain.connect(destination);
+
+    const sources: Array<{ node: AudioScheduledSourceNode; stop: number }> = [{ node: oscillator, stop: time + stop }];
+    const chain: AudioNode[] = [gain];
+
+    // Electronic click / taiko thwack — a brief filtered-noise transient layered on the body.
+    if (kit === "electronic" || kit === "taiko") {
+      const noise = context.createBufferSource();
+      noise.buffer = this.getNoiseBuffer(context);
+      const hp = context.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = kit === "taiko" ? 1500 : 3500;
+      const ng = context.createGain();
+      ng.gain.setValueAtTime(kit === "taiko" ? 0.15 : 0.12, time);
+      ng.gain.exponentialRampToValueAtTime(0.0001, time + (kit === "taiko" ? 0.05 : 0.02));
+      noise.connect(hp);
+      hp.connect(ng);
+      ng.connect(destination);
+      sources.push({ node: noise, stop: time + 0.06 });
+      chain.push(hp, ng);
+    }
+
     this.duckOnKick(time); // sidechain the melodic bus under the kick (pump + headroom)
-    this.trackChain([{ node: oscillator, stop: time + 0.3 }], [gain], time, "music");
+    this.trackChain(sources, chain, time, "music");
   }
 
-  private scheduleSnare(time: number, velocity = 1): void {
+  private scheduleSnare(time: number, velocity = 1, kit: DrumKit = "boombap"): void {
     const context = this.ensureContext();
     const destination = this.layerDestination("L1");
+
+    // Per-kit snare character: boombap (dusty), brushed (soft/long), electronic (clap), taiko ("ka" rim).
+    let bodyF0 = 182;
+    let bodyF1 = 145;
+    let bodyVol = 0.18;
+    let bodyDecay = 0.16;
+    let bodyStop = 0.18;
+    let noiseHz = 1800;
+    let noiseQ = 0.7;
+    let noiseVol = 0.22;
+    let noiseDecay = 0.14;
+    let noiseStop = 0.16;
+    if (kit === "brushed") {
+      bodyF0 = 150;
+      bodyF1 = 120;
+      bodyVol = 0.1;
+      bodyDecay = 0.2;
+      bodyStop = 0.22;
+      noiseHz = 1300;
+      noiseQ = 1;
+      noiseVol = 0.16;
+      noiseDecay = 0.22;
+      noiseStop = 0.24;
+    } else if (kit === "electronic") {
+      bodyF0 = 200;
+      bodyF1 = 160;
+      bodyVol = 0.06;
+      bodyDecay = 0.08;
+      bodyStop = 0.1;
+      noiseHz = 2000;
+      noiseQ = 1.2;
+      noiseVol = 0.24;
+      noiseDecay = 0.16;
+      noiseStop = 0.18;
+    } else if (kit === "taiko") {
+      bodyF0 = 300;
+      bodyF1 = 200;
+      bodyVol = 0.05;
+      bodyDecay = 0.05;
+      bodyStop = 0.07;
+      noiseHz = 1200;
+      noiseQ = 1.5;
+      noiseVol = 0.12;
+      noiseDecay = 0.06;
+      noiseStop = 0.08;
+    }
+
     const body = context.createOscillator();
     const bodyGain = context.createGain();
     const noise = context.createBufferSource();
@@ -1094,17 +1348,17 @@ export class ProceduralAudioService {
     const noiseGain = context.createGain();
 
     body.type = "triangle";
-    body.frequency.setValueAtTime(182, time);
-    body.frequency.exponentialRampToValueAtTime(145, time + 0.09);
-    bodyGain.gain.setValueAtTime(0.18 * velocity, time);
-    bodyGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
+    body.frequency.setValueAtTime(bodyF0, time);
+    body.frequency.exponentialRampToValueAtTime(bodyF1, time + 0.09);
+    bodyGain.gain.setValueAtTime(Math.max(bodyVol * velocity, 0.0001), time);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, time + bodyDecay);
 
     noise.buffer = this.getNoiseBuffer(context);
     noiseFilter.type = "bandpass";
-    noiseFilter.frequency.setValueAtTime(1800, time);
-    noiseFilter.Q.value = 0.7;
-    noiseGain.gain.setValueAtTime(0.22 * velocity, time);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.14);
+    noiseFilter.frequency.setValueAtTime(noiseHz, time);
+    noiseFilter.Q.value = noiseQ;
+    noiseGain.gain.setValueAtTime(Math.max(noiseVol * velocity, 0.0001), time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + noiseDecay);
 
     body.connect(bodyGain);
     bodyGain.connect(destination);
@@ -1114,8 +1368,8 @@ export class ProceduralAudioService {
 
     this.trackChain(
       [
-        { node: body, stop: time + 0.18 },
-        { node: noise, stop: time + 0.16 },
+        { node: body, stop: time + bodyStop },
+        { node: noise, stop: time + noiseStop },
       ],
       [bodyGain, noiseFilter, noiseGain],
       time,
@@ -1207,6 +1461,437 @@ export class ProceduralAudioService {
     filter.connect(gain);
     gain.connect(destination);
     this.trackChain([{ node: oscillator, stop: time + 0.18 }], [filter, gain], time, "music");
+  }
+
+  // ---- Lead-timbre builders (Phase 4) — dispatched per biome ----
+
+  private scheduleLead(time: number, frequency: number, velocity: number, style: LeadStyle): void {
+    if (style === "rhodes") {
+      this.scheduleRhodes(time, frequency, velocity);
+    } else if (style === "supersaw") {
+      this.scheduleSupersaw(time, frequency, velocity);
+    } else if (style === "shakuhachi") {
+      this.scheduleShakuhachi(time, frequency, velocity);
+    } else {
+      this.schedulePluck(time, frequency, velocity); // koto/shamisen
+    }
+  }
+
+  /** Autumn Rhodes: a sine fundamental + a quieter octave "tine", soft attack, lowpassed warmth. */
+  private scheduleRhodes(time: number, frequency: number, velocity: number): void {
+    const context = this.ensureContext();
+    const destination = this.layerDestination("L4");
+    const fund = context.createOscillator();
+    const tine = context.createOscillator();
+    const fundGain = context.createGain();
+    const tineGain = context.createGain();
+    const lp = context.createBiquadFilter();
+    const v = Math.max(velocity, 0.0001);
+
+    fund.type = "sine";
+    fund.frequency.setValueAtTime(frequency, time);
+    tine.type = "sine";
+    tine.frequency.setValueAtTime(frequency * 2, time);
+    tine.detune.setValueAtTime(4, time);
+    lp.type = "lowpass";
+    lp.frequency.value = 3000;
+
+    fundGain.gain.setValueAtTime(0.0001, time);
+    fundGain.gain.exponentialRampToValueAtTime(v, time + 0.008);
+    fundGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.5);
+    tineGain.gain.setValueAtTime(0.0001, time);
+    tineGain.gain.exponentialRampToValueAtTime(v * 0.3, time + 0.006);
+    tineGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.15);
+
+    fund.connect(fundGain);
+    fundGain.connect(lp);
+    tine.connect(tineGain);
+    tineGain.connect(lp);
+    lp.connect(destination);
+    this.trackChain(
+      [
+        { node: fund, stop: time + 0.52 },
+        { node: tine, stop: time + 0.17 },
+      ],
+      [fundGain, tineGain, lp],
+      time,
+      "music",
+    );
+  }
+
+  /** Neon supersaw: detuned saws through a quick filter-bloom — bright synthwave lead. */
+  private scheduleSupersaw(time: number, frequency: number, velocity: number): void {
+    const context = this.ensureContext();
+    const destination = this.layerDestination("L4");
+    const lp = context.createBiquadFilter();
+    const gain = context.createGain();
+    const v = Math.max(velocity, 0.0001);
+
+    lp.type = "lowpass";
+    lp.Q.value = 1;
+    lp.frequency.setValueAtTime(1800, time);
+    lp.frequency.exponentialRampToValueAtTime(3200, time + 0.04);
+    lp.frequency.exponentialRampToValueAtTime(2000, time + 0.25);
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(v * 0.4, time + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.26);
+
+    const detunes = [-12, -5, 5, 12];
+    const sources: Array<{ node: AudioScheduledSourceNode; stop: number }> = [];
+    for (const d of detunes) {
+      const osc = context.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(frequency, time);
+      osc.detune.setValueAtTime(d, time);
+      osc.connect(lp);
+      sources.push({ node: osc, stop: time + 0.28 });
+    }
+    lp.connect(gain);
+    gain.connect(destination);
+    this.trackChain(sources, [lp, gain], time, "music");
+  }
+
+  /** Forest shakuhachi: two detuned triangles + breath noise, soft attack, long reverb-like tail. */
+  private scheduleShakuhachi(time: number, frequency: number, velocity: number): void {
+    const context = this.ensureContext();
+    const destination = this.layerDestination("L4");
+    const t1 = context.createOscillator();
+    const t2 = context.createOscillator();
+    const tone = context.createGain();
+    const lp = context.createBiquadFilter();
+    const noise = context.createBufferSource();
+    const bp = context.createBiquadFilter();
+    const noiseGain = context.createGain();
+    const v = Math.max(velocity, 0.0001);
+
+    t1.type = "triangle";
+    t1.frequency.setValueAtTime(frequency, time);
+    t1.detune.setValueAtTime(-6, time);
+    t2.type = "triangle";
+    t2.frequency.setValueAtTime(frequency, time);
+    t2.detune.setValueAtTime(6, time);
+    lp.type = "lowpass";
+    lp.frequency.value = 2100;
+
+    tone.gain.setValueAtTime(0.0001, time);
+    tone.gain.exponentialRampToValueAtTime(v, time + 0.08); // breathy attack
+    tone.gain.exponentialRampToValueAtTime(0.0001, time + 0.55); // long tail
+
+    noise.buffer = this.getNoiseBuffer(context);
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(frequency, time);
+    bp.Q.value = 4;
+    noiseGain.gain.setValueAtTime(v * 0.12, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.25);
+
+    t1.connect(tone);
+    t2.connect(tone);
+    tone.connect(lp);
+    noise.connect(bp);
+    bp.connect(noiseGain);
+    noiseGain.connect(lp);
+    lp.connect(destination);
+    this.trackChain(
+      [
+        { node: t1, stop: time + 0.6 },
+        { node: t2, stop: time + 0.6 },
+        { node: noise, stop: time + 0.3 },
+      ],
+      [tone, lp, bp, noiseGain],
+      time,
+      "music",
+    );
+  }
+
+  // ---- Bass-style builders (Phase 4) ----
+
+  private scheduleBassVoice(time: number, frequency: number, style: BassStyle, localStep: number): void {
+    if (style === "funk") {
+      this.scheduleFunkBass(time, frequency, localStep);
+    } else if (style === "drone") {
+      this.scheduleDroneBass(time, frequency);
+    } else {
+      this.scheduleBass(time, frequency); // round
+    }
+  }
+
+  /** Neon funk bass: saw through a resonant filter-envelope ("talking" pluck) + octave pops. */
+  private scheduleFunkBass(time: number, frequency: number, localStep: number): void {
+    const context = this.ensureContext();
+    const destination = this.layerDestination("L2");
+    const octavePop = localStep === 7 || localStep === 14;
+    const osc = context.createOscillator();
+    const lp = context.createBiquadFilter();
+    const gain = context.createGain();
+
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(octavePop ? frequency * 2 : frequency, time);
+    lp.type = "lowpass";
+    lp.Q.value = 7;
+    lp.frequency.setValueAtTime(250, time);
+    lp.frequency.exponentialRampToValueAtTime(1500, time + 0.04);
+    lp.frequency.exponentialRampToValueAtTime(300, time + 0.16);
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(0.26, time + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+
+    osc.connect(lp);
+    lp.connect(gain);
+    gain.connect(destination);
+    this.trackChain([{ node: osc, stop: time + 0.2 }], [lp, gain], time, "music");
+  }
+
+  /** Forest drone bass: a long, slow sub sine — one sustained note per chord. */
+  private scheduleDroneBass(time: number, frequency: number): void {
+    const context = this.ensureContext();
+    const destination = this.layerDestination("L2");
+    const osc = context.createOscillator();
+    const lp = context.createBiquadFilter();
+    const gain = context.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(frequency, time);
+    lp.type = "lowpass";
+    lp.frequency.value = 180;
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(0.22, time + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 1.6);
+
+    osc.connect(lp);
+    lp.connect(gain);
+    gain.connect(destination);
+    this.trackChain([{ node: osc, stop: time + 1.65 }], [lp, gain], time, "music");
+  }
+
+  // ---- Persistent texture voices (Phase 4): pad + noise bed, built once per active biome ----
+
+  /** The chord root in a warm pad register (one octave below the lead tonic). */
+  private padRootFreq(): number {
+    return this.degreeToFreq(this.arranger.chordRoot) * 0.5;
+  }
+
+  private buildPad(fadeSeconds: number): void {
+    const context = this.context;
+    if (!context) {
+      return;
+    }
+    const theme = this.theme;
+    const now = context.currentTime;
+    const destination = this.layerDestination("L3");
+    const filter = context.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = theme.padStyle === "neonPWM" ? 1500 : 2200;
+    filter.Q.value = 0.7;
+    const gain = context.createGain();
+    gain.gain.value = 0.0001;
+    filter.connect(gain);
+    gain.connect(destination);
+
+    const oscType: OscillatorType =
+      theme.padStyle === "neonPWM" ? "square" : theme.padStyle === "warmSaw" ? "sawtooth" : "triangle";
+    // Open voicing (root×2 detuned, fifth, octave) — modally neutral, so it never clashes.
+    const voices = [
+      { ratio: 1, detune: -7 },
+      { ratio: 1, detune: 7 },
+      { ratio: 1.5, detune: 0 },
+      { ratio: 2, detune: 5 },
+    ];
+    const root = this.padRootFreq();
+    const oscillators: OscillatorNode[] = [];
+    const ratios: number[] = [];
+    for (const voice of voices) {
+      const osc = context.createOscillator();
+      osc.type = oscType;
+      osc.frequency.setValueAtTime(root * voice.ratio, now);
+      osc.detune.setValueAtTime(voice.detune, now);
+      osc.connect(filter);
+      osc.start();
+      oscillators.push(osc);
+      ratios.push(voice.ratio);
+    }
+    gain.gain.setTargetAtTime(theme.padLevel, now, fadeSeconds);
+    this.padVoice = { oscillators, ratios, gain, filter, level: theme.padLevel };
+  }
+
+  /** Glide the pad to the new chord root (smooth, click-free). */
+  private retunePad(): void {
+    const pad = this.padVoice;
+    const context = this.context;
+    if (!pad || !context) {
+      return;
+    }
+    const root = this.padRootFreq();
+    for (let i = 0; i < pad.oscillators.length; i += 1) {
+      pad.oscillators[i].frequency.setTargetAtTime(root * pad.ratios[i], context.currentTime, 0.25);
+    }
+  }
+
+  private fadeOutPad(pad: PadVoice): void {
+    const context = this.context;
+    const disconnectAll = () => {
+      for (const osc of pad.oscillators) {
+        try {
+          osc.disconnect();
+        } catch {
+          // already gone
+        }
+      }
+      try {
+        pad.filter.disconnect();
+      } catch {
+        // already gone
+      }
+      try {
+        pad.gain.disconnect();
+      } catch {
+        // already gone
+      }
+    };
+    if (!context) {
+      disconnectAll();
+      return;
+    }
+    const now = context.currentTime;
+    pad.gain.gain.cancelScheduledValues(now);
+    pad.gain.gain.setTargetAtTime(0.0001, now, 0.4);
+    const stopAt = now + 1.6;
+    let pending = pad.oscillators.length;
+    for (const osc of pad.oscillators) {
+      osc.onended = () => {
+        pending -= 1;
+        if (pending <= 0) {
+          disconnectAll();
+        }
+      };
+      try {
+        osc.stop(stopAt);
+      } catch {
+        pending -= 1;
+        if (pending <= 0) {
+          disconnectAll();
+        }
+      }
+    }
+  }
+
+  private buildNoiseBed(fadeSeconds: number): void {
+    const context = this.context;
+    if (!context) {
+      return;
+    }
+    const theme = this.theme;
+    if (theme.noiseBed === "none") {
+      this.noiseBedVoice = null;
+      return;
+    }
+    const now = context.currentTime;
+    const source = context.createBufferSource();
+    source.buffer = this.getNoiseBuffer(context);
+    source.loop = true;
+    const hp = context.createBiquadFilter();
+    hp.type = "highpass";
+    const lp = context.createBiquadFilter();
+    lp.type = "lowpass";
+    const gain = context.createGain();
+    gain.gain.value = 0.0001;
+
+    let level = 0.02;
+    if (theme.noiseBed === "vinyl") {
+      hp.frequency.value = 1500;
+      lp.frequency.value = 7000;
+      level = 0.012;
+    } else if (theme.noiseBed === "rain") {
+      hp.frequency.value = 400;
+      lp.frequency.value = 6000;
+      level = 0.02;
+    } else {
+      // wind
+      hp.frequency.value = 300;
+      lp.frequency.value = 1200;
+      level = 0.03;
+    }
+
+    source.connect(hp);
+    hp.connect(lp);
+    lp.connect(gain);
+    // Texture bed sits post-duck (not pumped) and very low.
+    gain.connect(this.autoScaleGain ?? this.layerDestination("L1"));
+    source.start();
+    gain.gain.setTargetAtTime(level, now, fadeSeconds);
+    this.noiseBedVoice = { source, gain, filters: [hp, lp], level };
+  }
+
+  private fadeOutNoiseBed(bed: NoiseBedVoice): void {
+    const context = this.context;
+    const disconnectAll = () => {
+      try {
+        bed.source.disconnect();
+      } catch {
+        // already gone
+      }
+      for (const f of bed.filters) {
+        try {
+          f.disconnect();
+        } catch {
+          // already gone
+        }
+      }
+      try {
+        bed.gain.disconnect();
+      } catch {
+        // already gone
+      }
+    };
+    if (!context) {
+      disconnectAll();
+      return;
+    }
+    const now = context.currentTime;
+    bed.gain.gain.cancelScheduledValues(now);
+    bed.gain.gain.setTargetAtTime(0.0001, now, 0.4);
+    bed.source.onended = () => disconnectAll();
+    try {
+      bed.source.stop(now + 1.6);
+    } catch {
+      disconnectAll();
+    }
+  }
+
+  /** Swap the active biome theme + crossfade its persistent voices (instant at run-start). */
+  private activateBiome(key: string, instant: boolean): void {
+    const theme = BIOME_THEME_BY_KEY[key];
+    if (!theme) {
+      return;
+    }
+    if (this.padVoice) {
+      this.fadeOutPad(this.padVoice);
+      this.padVoice = null;
+    }
+    if (this.noiseBedVoice) {
+      this.fadeOutNoiseBed(this.noiseBedVoice);
+      this.noiseBedVoice = null;
+    }
+    this.theme = theme;
+    this.currentBiomeKey = key;
+    this.arranger.chordRoot = theme.padRoots[this.arranger.chordIdx % theme.padRoots.length] ?? 0;
+    const fade = instant ? 0.3 : 1.2;
+    this.buildPad(fade);
+    this.buildNoiseBed(fade);
+  }
+
+  /** Tell the music which macro-biome the run is in (0 village · 1 neon · 2 forest; autumn = village
+   *  in its autumn season). Applied beat-locked at the next bar while running; stored otherwise. */
+  setBiome(legIndex: number, autumn = false): void {
+    const idx = ((Math.floor(legIndex) % 3) + 3) % 3;
+    const key = autumn && idx === 0 ? "village_autumn" : ["village", "neon", "forest"][idx];
+    if (key === this.currentBiomeKey && this.pendingBiomeKey === null) {
+      return;
+    }
+    if (this.musicMode === "run" && this.isMusicRunning) {
+      this.pendingBiomeKey = key;
+    } else {
+      this.currentBiomeKey = key; // applied when the run (re)starts
+    }
   }
 
   private playTone(
@@ -1470,7 +2155,7 @@ export class ProceduralAudioService {
 
   /** Swing: delay odd 16ths by a fraction of a 16th (MPC-style behind-the-beat groove). */
   private swingOffset(localStep: number): number {
-    return localStep % 2 === 1 ? DEFAULT_SWING * SIXTEENTH_SECONDS : 0;
+    return localStep % 2 === 1 ? this.theme.swing * SIXTEENTH_SECONDS : 0;
   }
 
   /** Never schedule a start in the past — Web Audio would clamp it to "now" and click/flam. */

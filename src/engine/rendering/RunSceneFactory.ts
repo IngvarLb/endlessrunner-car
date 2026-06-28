@@ -49,6 +49,8 @@ export type RunScene = AppScene & {
   getRunStats(): RunStats;
   /** Current speed as a ratio of max (≈0.5 at the start, 1 at flat-out, >1 while boosted) — drives the engine sound. */
   getSpeedRatio(): number;
+  /** Current macro-biome leg (0 village · 1 neon · 2 forest) + whether the village is in its autumn season — drives the per-biome soundtrack. */
+  getMacroBiome(): { legIndex: number; autumn: boolean };
   consumeGameOver(): GameOverInfo | undefined;
   /** Capability bridge for ability effects (see RunAbilityController). */
   getEffectContext(): RunEffectContext;
@@ -1796,6 +1798,10 @@ export class RunSceneFactory {
       activateBoost,
       getRunStats,
       getSpeedRatio: () => (getRunSpeed() * runnerController.getSpeedMultiplier()) / maxSpeed,
+      getMacroBiome: () => {
+        const legIndex = biomeManager.biomeIndexForZ(distance);
+        return { legIndex, autumn: legIndex === 0 && seasonTarget >= 0.5 };
+      },
       consumeGameOver,
       getEffectContext: () => effectContext,
       setPassiveHooks: (hooks: PassiveHooks) => {

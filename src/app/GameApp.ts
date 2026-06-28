@@ -395,6 +395,8 @@ export class GameApp {
     if (this.activeScene === this.runScene && state === "running" && this.runScene) {
       this.runAbilities?.update(dt, this.runScene.getEffectContext());
       this.audio?.setRunIntensity(this.runScene.getSpeedRatio()); // engine pitch tracks speed
+      const macroBiome = this.runScene.getMacroBiome();
+      this.audio?.setBiome(macroBiome.legIndex, macroBiome.autumn); // soundtrack crossfades per biome
 
       // 鬼 Anzapfen: while the police are right behind you, the nearest cars in range
       // bleed a continuous coin stream to the counter (rate scales with mastery).
