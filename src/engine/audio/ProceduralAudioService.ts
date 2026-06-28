@@ -153,6 +153,26 @@ const RUN_DRUM_VARIANTS: DrumGrid[] = [
   { kick: [0, 3, 6, 10], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 11, 12, 14], openHat: [15] },
 ];
 
+// --- Generative lead melody (Phase 3) ---
+// D "yo" pentatonic (D–E–G–A–B): the bright, no-minor-2nd village scale. The lead is regenerated
+// every 2 bars as a directional drunken-walk over scale degrees (stepwise motion = singable), with
+// question/answer phrasing (antecedent rises, the consequent falls and resolves to the root) and a
+// per-section motif shift — so it never exactly repeats yet always stays in key and coherent.
+const RUN_SCALE = [0, 2, 5, 7, 9];
+const RUN_TONIC_HZ = NOTE_FREQUENCIES.D4;
+const SECTION_LEAD: Record<SectionName, { degreeShift: number; octave: number; densityMul: number }> = {
+  intro: { degreeShift: 0, octave: 0, densityMul: 0.45 },
+  A: { degreeShift: 0, octave: 0, densityMul: 1 },
+  A2: { degreeShift: 1, octave: 0, densityMul: 1 },
+  B: { degreeShift: 2, octave: 0, densityMul: 1.2 },
+  bridge: { degreeShift: 0, octave: -1, densityMul: 0.55 },
+  build: { degreeShift: 0, octave: 0, densityMul: 1.35 },
+};
+// Candidate lead onsets within a bar (the downbeat always fires; the rest pass a density roll).
+const LEAD_ONSETS = [0, 2, 3, 6, 8, 10, 11, 14];
+
+type LeadPhrase = Map<number, { freq: number; vel: number }>;
+
 interface ArrangerState {
   barCounter: number;
   sectionIdx: number;
@@ -161,6 +181,8 @@ interface ArrangerState {
   drumsMode: "full" | "half" | "out";
   intensityFloor: number;
   isFillBar: boolean;
+  phraseHalf: number; // which bar (0/1) of the current 2-bar lead phrase
+  leadPhrase: LeadPhrase; // precomputed lead notes for the 2-bar phrase, keyed by 0..31 step
 }
 
 export class ProceduralAudioService {
@@ -229,6 +251,8 @@ export class ProceduralAudioService {
     drumsMode: "half",
     intensityFloor: 0,
     isFillBar: false,
+    phraseHalf: 0,
+    leadPhrase: new Map(),
   };
 
   constructor(settings: Partial<ProceduralAudioSettings> = {}) {
@@ -265,6 +289,8 @@ export class ProceduralAudioService {
         drumsMode: RUN_SECTIONS[0].drums,
         intensityFloor: RUN_SECTIONS[0].intensityFloor,
         isFillBar: false,
+        phraseHalf: 0,
+        leadPhrase: new Map(),
       };
     } else {
       this.musicIntensityTarget = mode === "menu" ? 0.5 : 0.45;
@@ -797,6 +823,13 @@ export class ProceduralAudioService {
     arr.isFillBar = arr.sectionBar === section.bars - 1;
     // Rotate the groove variant per bar — usually the home variant, occasionally a cousin.
     arr.variantIdx = Math.random() < 0.62 ? 0 : 1 + Math.floor(Math.random() * (RUN_DRUM_VARIANTS.length - 1));
+
+    // Lead phrasing: regenerate a fresh 2-bar question/answer phrase at the start of each pair.
+    const firstOfPair = arr.barCounter % 2 === 1;
+    arr.phraseHalf = firstOfPair ? 0 : 1;
+    if (firstOfPair) {
+      arr.leadPhrase = this.generateLeadPhrase();
+    }
   }
 
   /** Theme-driven run step: drum grid + section drum-mode (bridge drop / intro half) + fills. */
@@ -855,7 +888,21 @@ export class ProceduralAudioService {
       }
     }
 
-    this.scheduleMelodicPluck(localStep, swung);
+    // Generative lead (L4): play this step's precomputed note from the current 2-bar phrase.
+    if (this.layerLive("L4")) {
+      const note = arr.leadPhrase.get(arr.phraseHalf * STEPS_PER_BAR + localStep);
+      if (note) {
+        this.schedulePluck(this.clampStart(swung + this.tri(0.012)), note.freq, note.vel * this.humanVel(1));
+        // Octave grace-note sparkle at high intensity (L6).
+        if (this.layerLive("L6") && Math.random() < 0.1) {
+          this.schedulePluck(
+            this.clampStart(swung + SIXTEENTH_SECONDS / 2 + this.tri(0.012)),
+            note.freq * 2,
+            note.vel * 0.4,
+          );
+        }
+      }
+    }
   }
 
   /** Menu/garage: the calmer, non-arranged groove (humanised), unchanged in feel. */
@@ -877,6 +924,79 @@ export class ProceduralAudioService {
     }
 
     this.scheduleMelodicPluck(step, swung);
+  }
+
+  /** Generate the next 2-bar lead phrase: a directional pentatonic walk with question/answer
+   *  shape, strong-beat chord-tone gravity, a per-section motif shift, and a root resolution. */
+  private generateLeadPhrase(): LeadPhrase {
+    const phrase: LeadPhrase = new Map();
+    const arr = this.arranger;
+    const lead = SECTION_LEAD[RUN_SECTIONS[arr.sectionIdx].name];
+    const intensity = Math.max(this.musicIntensitySmoothed, arr.intensityFloor);
+    const density = Math.min(0.95, (0.4 + 0.5 * intensity) * lead.densityMul);
+    const shift = lead.degreeShift + lead.octave * RUN_SCALE.length;
+
+    let degree = 2; // start a little above the root
+    for (let half = 0; half < 2; half += 1) {
+      const rising = half === 0; // antecedent climbs, consequent falls
+      for (const s of LEAD_ONSETS) {
+        if (s !== 0 && Math.random() >= density) {
+          continue; // rest (the downbeat always sounds, for grounding)
+        }
+        const strong = s === 0 || s === 8;
+        degree = this.nextDegree(degree, rising);
+        if (strong && Math.random() < 0.6) {
+          degree = Math.random() < 0.5 ? 0 : 3; // chord tone (root / 5th) on the strong beats
+        }
+        const vel = (strong ? 0.15 : 0.11) * (1 - Math.random() * 0.15);
+        phrase.set(half * STEPS_PER_BAR + s, { freq: this.degreeToFreq(degree + shift), vel });
+      }
+    }
+
+    // The consequent must resolve: force the final note of the phrase to the root.
+    let lastStep = -1;
+    for (const step of phrase.keys()) {
+      if (step > lastStep) {
+        lastStep = step;
+      }
+    }
+    if (lastStep >= 0) {
+      phrase.set(lastStep, { freq: this.degreeToFreq(shift), vel: 0.15 });
+    }
+    return phrase;
+  }
+
+  /** Weighted scale-step walk: mostly stepwise (singable), occasional small leaps, register-clamped. */
+  private nextDegree(current: number, rising: boolean): number {
+    const r = Math.random();
+    let delta: number;
+    if (r < 0.45) {
+      delta = rising ? 1 : -1; // step with the phrase direction
+    } else if (r < 0.7) {
+      delta = rising ? -1 : 1; // step against (gives contour, avoids a scale-run)
+    } else if (r < 0.85) {
+      delta = 0; // repeat
+    } else if (r < 0.95) {
+      delta = rising ? 2 : -2; // small leap with direction
+    } else {
+      delta = rising ? -2 : 2; // small leap against
+    }
+    let next = current + delta;
+    if (next < 0) {
+      next = 1;
+    }
+    if (next > 8) {
+      next = 7; // keep within ~1.5 octaves so it stays in a vocal-like register
+    }
+    return next;
+  }
+
+  /** Pentatonic scale-degree (any integer, octave-wrapping) → frequency from the run tonic. */
+  private degreeToFreq(degree: number): number {
+    const len = RUN_SCALE.length;
+    const idx = ((degree % len) + len) % len;
+    const octave = Math.floor(degree / len);
+    return RUN_TONIC_HZ * Math.pow(2, (RUN_SCALE[idx] + 12 * octave) / 12);
   }
 
   private shouldPlayKick(localStep: number, bar: number): boolean {
