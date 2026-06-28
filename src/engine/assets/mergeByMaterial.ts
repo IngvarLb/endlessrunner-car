@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-const KEEP_ATTRIBUTES = ["position", "normal", "uv"];
+// Merged props use flat-colour materials only (no textures), so UV is dead weight — and
+// keeping it breaks the merge when one prop mixes geometries that have UVs with ones that
+// don't ("uv among all, or none"). Keep just position + normal: uniform across every
+// primitive, so a material group always merges.
+const KEEP_ATTRIBUTES = ["position", "normal"];
 
 /**
  * Collapse a low-poly Group of many small single-material meshes into one merged mesh

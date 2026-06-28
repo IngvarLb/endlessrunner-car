@@ -11,7 +11,12 @@ import { TrafficSystem } from "../../game/traffic/TrafficSystem";
 import { TrafficDirector } from "../../game/traffic/TrafficDirector";
 import { TRAFFIC_CAR_SPECS, type TrafficCarKind } from "../../game/traffic/TrafficTypes";
 import { getVehicleDefinition, type VehicleDefinition } from "../../game/vehicles/VehicleCatalog";
-import { FEUDAL_JAPAN_BIOME_CONTENT, NEON_CITY_DECORATIONS, type DecorationKind } from "../../game/world/BiomeContent";
+import {
+  FEUDAL_JAPAN_BIOME_CONTENT,
+  NEON_CITY_DECORATIONS,
+  FOREST_VALLEY_DECORATIONS,
+  type DecorationKind
+} from "../../game/world/BiomeContent";
 import { BiomeManager } from "../../game/world/BiomeManager";
 import { LaneSystem } from "../../game/world/LaneSystem";
 import { MaterialFactory } from "../assets/MaterialFactory";
@@ -142,26 +147,75 @@ export class RunSceneFactory {
       { mat: materials.mapleLeafGold, summer: materials.mapleLeafGold.color.clone(), autumn: new THREE.Color(0xe6b022) }
     ];
 
-    // 電脳都市 Macro-biome — a SECOND, slower crossfade axis (village ↔ neon city) by long
-    // distance legs. Composes UNDER season + ability tints. The run starts in the village.
-    const MACRO_LEG = 700; // metres per macro-leg (village → city → village …)
-    const biomeManager = new BiomeManager(MACRO_LEG);
-    let biomeLevel = 0; // 0 = feudal village, 1 = neon cyber-city
-    let biomeTarget = 0;
-    const CITY_SKY = new THREE.Color(0x1a2150); // deep blue-violet dusk
-    const CITY_SUN = new THREE.Color(0xff9a55); // low warm key
-    const CITY_HEMI = new THREE.Color(0x3a4a8c); // cool dusk sky bounce
-    const CITY_HEMI_GROUND = new THREE.Color(0x0c1018);
-    const CITY_HEMI_SCALE = 0.5;
-    const CITY_SUN_SCALE = 0.62;
-    // Shared road/ground materials, composed: village(+autumn for grass) → lerp toward the city.
+    // ===== Macro-biome atmosphere — village (0) → 電脳都市 neon city (1) → 奥山 forest valley (2).
+    // A per-biome PRESET table + ONE eased "active" struct that each frame chases the current
+    // leg's preset. This crossfades ANY adjacent pair smoothly (a single scalar couldn't express
+    // city→forest without smearing through village). Season is a village-only sub-mood layered on
+    // the village preset; ability tints compose on top of the eased active.
+    const MACRO_LEG = 700;
+    const biomeManager = new BiomeManager(MACRO_LEG, 3);
+    type AtmoPreset = {
+      sky: THREE.Color; sun: THREE.Color; hemi: THREE.Color; hemiGround: THREE.Color;
+      hemiScale: number; sunScale: number; path: THREE.Color; grass: THREE.Color; line: THREE.Color;
+      fogNear: number; fogFar: number;
+    };
+    const fog = scene.fog as THREE.Fog;
+    const DAY_FOG_NEAR = fog.near;
+    const DAY_FOG_FAR = fog.far;
     const PATH_BASE = materials.path.color.clone();
     const GRASS_SUMMER = materials.grass.color.clone();
     const GRASS_AUTUMN = new THREE.Color(0x9c8a3c);
     const LINE_BASE = materials.roadLine.color.clone();
-    const CITY_ASPHALT = new THREE.Color(0x14171d);
-    const CITY_SIDEWALK = new THREE.Color(0x4a4e57);
-    const CITY_LINE = new THREE.Color(0xdfe4ea);
+    const CITY_PRESET: AtmoPreset = {
+      sky: new THREE.Color(0x1a2150), sun: new THREE.Color(0xff9a55), hemi: new THREE.Color(0x3a4a8c),
+      hemiGround: new THREE.Color(0x0c1018), hemiScale: 0.5, sunScale: 0.62,
+      path: new THREE.Color(0x14171d), grass: new THREE.Color(0x4a4e57), line: new THREE.Color(0xdfe4ea),
+      fogNear: DAY_FOG_NEAR, fogFar: DAY_FOG_FAR
+    };
+    const FOREST_PRESET: AtmoPreset = {
+      sky: new THREE.Color(0xaebfbd), sun: new THREE.Color(0xcfe0d2), hemi: new THREE.Color(0x9fc0b8),
+      hemiGround: new THREE.Color(0x2f3d2c), hemiScale: 0.92, sunScale: 0.5,
+      path: new THREE.Color(0x6f7857), grass: new THREE.Color(0x4f7a3a), line: new THREE.Color(0x6e7a5e),
+      fogNear: 17, fogFar: 48 // tight misty fog — distant cedars/peaks dissolve into the haze
+    };
+    // Village preset, rebuilt each frame from seasonLevel (summer ↔ autumn momiji).
+    const villagePreset: AtmoPreset = {
+      sky: DAY_SKY.clone(), sun: SUMMER_SUN.clone(), hemi: SUMMER_HEMI.clone(),
+      hemiGround: SUMMER_HEMI_GROUND.clone(), hemiScale: 1, sunScale: 1,
+      path: PATH_BASE.clone(), grass: GRASS_SUMMER.clone(), line: LINE_BASE.clone(),
+      fogNear: DAY_FOG_NEAR, fogFar: DAY_FOG_FAR
+    };
+    const refreshVillagePreset = (): void => {
+      villagePreset.sky.copy(DAY_SKY).lerp(AUTUMN_SKY, seasonLevel);
+      villagePreset.sun.copy(SUMMER_SUN).lerp(AUTUMN_SUN, seasonLevel);
+      villagePreset.hemi.copy(SUMMER_HEMI).lerp(AUTUMN_HEMI, seasonLevel);
+      villagePreset.hemiScale = THREE.MathUtils.lerp(1, 0.96, seasonLevel);
+      villagePreset.sunScale = THREE.MathUtils.lerp(1, 1.02, seasonLevel);
+      villagePreset.grass.copy(GRASS_SUMMER).lerp(GRASS_AUTUMN, seasonLevel);
+    };
+    const BIOME_PRESETS: AtmoPreset[] = [villagePreset, CITY_PRESET, FOREST_PRESET];
+    // The eased "active" atmosphere — chases BIOME_PRESETS[currentLeg] every frame.
+    const activeAtmo: AtmoPreset = {
+      sky: DAY_SKY.clone(), sun: SUMMER_SUN.clone(), hemi: SUMMER_HEMI.clone(),
+      hemiGround: SUMMER_HEMI_GROUND.clone(), hemiScale: 1, sunScale: 1,
+      path: PATH_BASE.clone(), grass: GRASS_SUMMER.clone(), line: LINE_BASE.clone(),
+      fogNear: DAY_FOG_NEAR, fogFar: DAY_FOG_FAR
+    };
+    const resetActiveAtmo = (): void => {
+      activeAtmo.sky.copy(DAY_SKY);
+      activeAtmo.sun.copy(SUMMER_SUN);
+      activeAtmo.hemi.copy(SUMMER_HEMI);
+      activeAtmo.hemiGround.copy(SUMMER_HEMI_GROUND);
+      activeAtmo.hemiScale = 1;
+      activeAtmo.sunScale = 1;
+      activeAtmo.path.copy(PATH_BASE);
+      activeAtmo.grass.copy(GRASS_SUMMER);
+      activeAtmo.line.copy(LINE_BASE);
+      activeAtmo.fogNear = DAY_FOG_NEAR;
+      activeAtmo.fogFar = DAY_FOG_FAR;
+      fog.near = DAY_FOG_NEAR;
+      fog.far = DAY_FOG_FAR;
+    };
     const restoreWorldMats = (): void => {
       for (const s of seasonMats) {
         s.mat.color.copy(s.summer);
@@ -737,14 +791,51 @@ export class RunSceneFactory {
       distantTowerCluster: () => models.createDistantTowerCluster(),
       reflectorStrip: () => models.createReflectorStrip(),
       drainGrateKerb: () => models.createDrainGrateKerb(),
-      busLaneMarking: () => models.createBusLaneMarking()
+      busLaneMarking: () => models.createBusLaneMarking(),
+      sugiCedar: () => models.createSugiCedar(),
+      mountainPine: () => models.createMountainPine(),
+      bambooGrove: () => models.createBambooGrove(),
+      valleyMapleTree: () => models.createValleyMapleTree(),
+      fernShrub: () => models.createFernShrub(),
+      undergrowthShrub: () => models.createUndergrowthShrub(),
+      susukiGrass: () => models.createSusukiGrass(),
+      mossBoulder: () => models.createMossBoulder(),
+      rockCluster: () => models.createRockCluster(),
+      rockCairn: () => models.createRockCairn(),
+      cliffWall: () => models.createCliffWall(),
+      riverSegment: () => models.createRiverSegment(),
+      rapidsRock: () => models.createRapidsRock(),
+      waterfall: () => models.createWaterfall(),
+      steppingStones: () => models.createSteppingStones(),
+      forestFootbridge: () => models.createForestFootbridge(),
+      chayaTeahouse: () => models.createChayaTeahouse(),
+      waterMillHut: () => models.createWaterMillHut(),
+      hokoraShrine: () => models.createHokoraShrine(),
+      trailheadTorii: () => models.createTrailheadTorii(),
+      shimenawaSacredTree: () => models.createShimenawaSacredTree(),
+      mossStoneLantern: () => models.createMossStoneLantern(),
+      jizoCluster: () => models.createJizoCluster(),
+      woodenSignpost: () => models.createWoodenSignpost(),
+      sikaDeer: () => models.createSikaDeer(),
+      fallenMossyLog: () => models.createFallenMossyLog(),
+      mushroomCluster: () => models.createMushroomCluster(),
+      mossPatch: () => models.createMossPatch(),
+      forestLogEdging: () => models.createForestLogEdging(),
+      mossyPathEdging: () => models.createMossyPathEdging(),
+      dirtShoulder: () => models.createDirtShoulder(),
+      mistyPeaks: () => models.createMistyPeaks(),
+      cedarRidge: () => models.createCedarRidge(),
+      distantWaterfall: () => models.createDistantWaterfall()
     };
     // Tall city structures + skyline landmarks must not cast shadows.
     const NO_SHADOW_KINDS = new Set<DecorationKind>([
       "cyberSlabTower", "cyberSetbackTower", "cyberCapsuleTower", "cyberOfficeMidrise",
       "neonShophouse", "pachinkoFacade", "capsuleHotelBlock", "rooftopBillboard",
       "verticalKanjiBlade", "hologramAdPanel", "expresswaySignGantry", "glassSkybridge",
-      "monorailPillar", "broadcastTower", "distantTowerCluster"
+      "monorailPillar", "broadcastTower", "distantTowerCluster",
+      // 奥山 tall trees / cliffs / landmarks exceed the ~40 m shadow frustum.
+      "sugiCedar", "mountainPine", "bambooGrove", "shimenawaSacredTree", "cliffWall",
+      "waterfall", "trailheadTorii", "mistyPeaks", "cedarRidge", "distantWaterfall"
     ]);
 
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {
@@ -773,6 +864,7 @@ export class RunSceneFactory {
     };
     buildPool(biome.decorations, 0);
     buildPool(NEON_CITY_DECORATIONS, 1);
+    buildPool(FOREST_VALLEY_DECORATIONS, 2);
 
     for (let index = 0; index < biome.coins.count; index += 1) {
       const coin = models.createKoban();
@@ -858,11 +950,10 @@ export class RunSceneFactory {
       blossomTarget = 0;
       petalMat.opacity = 0;
       petals.visible = false;
-      // 紅葉 season + 電脳都市 macro-biome: back to the summer village; restore shared materials.
+      // 紅葉 season + macro-biome: back to the summer village; restore shared materials + atmosphere.
       seasonLevel = 0;
       seasonTarget = 0;
-      biomeLevel = 0;
-      biomeTarget = 0;
+      resetActiveAtmo();
       restoreWorldMats();
       sceneLights.sun.color.copy(SUMMER_SUN);
       sceneLights.hemi.color.copy(SUMMER_HEMI);
@@ -919,10 +1010,9 @@ export class RunSceneFactory {
       if (isRunning) {
         distance += activeSpeed * dt;
         scoreSystem.updateDistance(distance);
-        // 電脳都市 macro-biome oscillates by long legs: village → neon city → village … .
-        biomeTarget = biomeManager.biomeLevelForDistance(distance);
-        // 紅葉 season oscillates within the VILLAGE leg only (held at summer in the city).
-        seasonTarget = biomeTarget === 1 ? 0 : Math.floor(distance / SEASON_LEG) % 2 === 1 ? 1 : 0;
+        // 紅葉 season oscillates within the VILLAGE leg only (held at summer in city + forest).
+        seasonTarget =
+          biomeManager.biomeIndexForZ(distance) === 0 ? (Math.floor(distance / SEASON_LEG) % 2 === 1 ? 1 : 0) : 0;
         cleanRunTimer += dt;
         pressure = Math.max(0, pressure - dt * 4);
         introChaserTimer = Math.max(0, introChaserTimer - dt);
@@ -977,39 +1067,43 @@ export class RunSceneFactory {
       if (Math.abs(seasonLevel - seasonTarget) < 0.002) {
         seasonLevel = seasonTarget;
       }
-      biomeLevel = THREE.MathUtils.lerp(biomeLevel, biomeTarget, Math.min(1, dt * 0.5));
-      if (Math.abs(biomeLevel - biomeTarget) < 0.002) {
-        biomeLevel = biomeTarget;
-      }
       if (tintLevel !== tintTarget) {
         tintLevel = THREE.MathUtils.lerp(tintLevel, tintTarget, Math.min(1, dt * 3.5));
         if (Math.abs(tintLevel - tintTarget) < 0.01) {
           tintLevel = tintTarget;
         }
       }
-      // Compose in fixed order: village(+season) → macro biome (city dusk) → ability tint.
-      // Sky/fog.
-      const villageSky = DAY_SKY.clone().lerp(AUTUMN_SKY, seasonLevel);
-      const sky = villageSky.lerp(CITY_SKY, biomeLevel).lerp(tintSky, tintLevel);
+      // Ease the active atmosphere toward the current macro-biome's preset (slow, so the sky
+      // never snaps at a leg boundary). Village preset is season-modulated first.
+      refreshVillagePreset();
+      const target = BIOME_PRESETS[biomeManager.legIndexForDistance(distance)] ?? villagePreset;
+      const k = Math.min(1, dt * 0.5);
+      activeAtmo.sky.lerp(target.sky, k);
+      activeAtmo.sun.lerp(target.sun, k);
+      activeAtmo.hemi.lerp(target.hemi, k);
+      activeAtmo.hemiGround.lerp(target.hemiGround, k);
+      activeAtmo.hemiScale = THREE.MathUtils.lerp(activeAtmo.hemiScale, target.hemiScale, k);
+      activeAtmo.sunScale = THREE.MathUtils.lerp(activeAtmo.sunScale, target.sunScale, k);
+      activeAtmo.path.lerp(target.path, k);
+      activeAtmo.grass.lerp(target.grass, k);
+      activeAtmo.line.lerp(target.line, k);
+      activeAtmo.fogNear = THREE.MathUtils.lerp(activeAtmo.fogNear, target.fogNear, k);
+      activeAtmo.fogFar = THREE.MathUtils.lerp(activeAtmo.fogFar, target.fogFar, k);
+      // Apply — ability tint composes on top via tintLevel.
+      const sky = activeAtmo.sky.clone().lerp(tintSky, tintLevel);
       (scene.background as THREE.Color).copy(sky);
-      (scene.fog as THREE.Fog).color.copy(sky);
-      // Light intensity.
-      const villageHemiI = dayHemi * THREE.MathUtils.lerp(1, 0.96, seasonLevel);
-      const villageSunI = daySun * THREE.MathUtils.lerp(1, 1.02, seasonLevel);
-      const baseHemiI = THREE.MathUtils.lerp(villageHemiI, dayHemi * CITY_HEMI_SCALE, biomeLevel);
-      const baseSunI = THREE.MathUtils.lerp(villageSunI, daySun * CITY_SUN_SCALE, biomeLevel);
-      sceneLights.hemi.intensity = THREE.MathUtils.lerp(baseHemiI, baseHemiI * tintHemiScale, tintLevel);
-      sceneLights.sun.intensity = THREE.MathUtils.lerp(baseSunI, baseSunI * tintSunScale, tintLevel);
-      // Light colour (golden-hour autumn → cool blue-hour city).
-      sceneLights.sun.color.copy(SUMMER_SUN).lerp(AUTUMN_SUN, seasonLevel).lerp(CITY_SUN, biomeLevel);
-      sceneLights.hemi.color.copy(SUMMER_HEMI).lerp(AUTUMN_HEMI, seasonLevel).lerp(CITY_HEMI, biomeLevel);
-      sceneLights.hemi.groundColor.copy(SUMMER_HEMI_GROUND).lerp(CITY_HEMI_GROUND, biomeLevel);
-      // Shared road/ground materials: grass village(summer→autumn) then → city sidewalk;
-      // road → wet asphalt; lines → bright. Every visible segment shares these → no seam.
-      materials.grass.color.copy(GRASS_SUMMER).lerp(GRASS_AUTUMN, seasonLevel).lerp(CITY_SIDEWALK, biomeLevel);
-      materials.path.color.copy(PATH_BASE).lerp(CITY_ASPHALT, biomeLevel);
-      materials.roadLine.color.copy(LINE_BASE).lerp(CITY_LINE, biomeLevel);
-      // Maple canopies (village-only; hidden in city) follow the season.
+      fog.color.copy(sky);
+      fog.near = activeAtmo.fogNear;
+      fog.far = activeAtmo.fogFar;
+      sceneLights.hemi.intensity = THREE.MathUtils.lerp(dayHemi * activeAtmo.hemiScale, dayHemi * activeAtmo.hemiScale * tintHemiScale, tintLevel);
+      sceneLights.sun.intensity = THREE.MathUtils.lerp(daySun * activeAtmo.sunScale, daySun * activeAtmo.sunScale * tintSunScale, tintLevel);
+      sceneLights.sun.color.copy(activeAtmo.sun);
+      sceneLights.hemi.color.copy(activeAtmo.hemi);
+      sceneLights.hemi.groundColor.copy(activeAtmo.hemiGround);
+      materials.grass.color.copy(activeAtmo.grass);
+      materials.path.color.copy(activeAtmo.path);
+      materials.roadLine.color.copy(activeAtmo.line);
+      // Maple canopies (village-only) follow the season.
       for (const s of seasonMats) {
         s.mat.color.copy(s.summer).lerp(s.autumn, seasonLevel);
       }

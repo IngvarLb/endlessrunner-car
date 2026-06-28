@@ -35,7 +35,42 @@ export type DecorationKind =
   | "distantTowerCluster"
   | "reflectorStrip"
   | "drainGrateKerb"
-  | "busLaneMarking";
+  | "busLaneMarking"
+  // 奥山渓谷 Mountain-Forest Valley props
+  | "sugiCedar"
+  | "mountainPine"
+  | "bambooGrove"
+  | "valleyMapleTree"
+  | "fernShrub"
+  | "undergrowthShrub"
+  | "susukiGrass"
+  | "mossBoulder"
+  | "rockCluster"
+  | "rockCairn"
+  | "cliffWall"
+  | "riverSegment"
+  | "rapidsRock"
+  | "waterfall"
+  | "steppingStones"
+  | "forestFootbridge"
+  | "chayaTeahouse"
+  | "waterMillHut"
+  | "hokoraShrine"
+  | "trailheadTorii"
+  | "shimenawaSacredTree"
+  | "mossStoneLantern"
+  | "jizoCluster"
+  | "woodenSignpost"
+  | "sikaDeer"
+  | "fallenMossyLog"
+  | "mushroomCluster"
+  | "mossPatch"
+  | "forestLogEdging"
+  | "mossyPathEdging"
+  | "dirtShoulder"
+  | "mistyPeaks"
+  | "cedarRidge"
+  | "distantWaterfall";
 
 export type TrackLoopDefinition = {
   segmentLength: number;
@@ -346,3 +381,85 @@ export function createNeonCityDecorations(): DecorationPlacement[] {
 }
 
 export const NEON_CITY_DECORATIONS: DecorationPlacement[] = createNeonCityDecorations();
+
+/**
+ * 奥山渓谷 Mountain-Forest Valley roadside layout (against the SAME 120 m loop). Camera-safe:
+ * the river + cliffs + waterfalls + misty peaks all live on the LEFT (x<0) off the lanes; the
+ * trailhead torii spans the road but clears y≥9; all trees/clutter stay in their x footprint
+ * outside the ±3.2 lane corridor. A separate biome-tagged pool (biome index 2).
+ */
+export function createForestValleyDecorations(): DecorationPlacement[] {
+  const d: DecorationPlacement[] = [];
+  const loop = FEUDAL_JAPAN_CONTENT_LOOP_LENGTH;
+  const facLeft = Math.PI * 0.5; // left props face +x (toward the road)
+  const facRight = -Math.PI * 0.5;
+
+  // Towering cedar/pine/bamboo/maple wall both sides — the soaring forest corridor.
+  const trees: DecorationKind[] = ["sugiCedar", "sugiCedar", "mountainPine", "bambooGrove", "valleyMapleTree", "sugiCedar"];
+  for (let i = 0, z = 0; z < loop + 4; i += 1, z += 4.2) {
+    d.push({ kind: trees[i % trees.length], x: -5.4 - (i % 3) * 0.6, z, rotationY: facLeft, scale: 0.85 + (i % 4) * 0.12 });
+    d.push({ kind: trees[(i + 3) % trees.length], x: 5.4 + (i % 3) * 0.6, z: z + 2.1, rotationY: facRight, scale: 0.85 + ((i + 1) % 4) * 0.12 });
+  }
+
+  // LEFT-side river valley (off-road, x<0): river channel, dirt shoulder, cliff, rapids.
+  for (let z = 0; z < loop; z += 12) {
+    d.push({ kind: "riverSegment", x: -9.5, z });
+    d.push({ kind: "dirtShoulder", x: -4.6, z });
+  }
+  for (let z = 6; z < loop; z += 13) {
+    d.push({ kind: "cliffWall", x: -13.5, z });
+  }
+  for (let z = 4; z < loop; z += 9) {
+    d.push({ kind: "rapidsRock", x: -9.2 + (z % 18 < 9 ? 0.6 : -0.6), z });
+  }
+  for (let z = 24; z < loop; z += 60) {
+    d.push({ kind: "waterfall", x: -13.0, z }); // on the far cliff face
+    d.push({ kind: "forestFootbridge", x: -9.0, z: z + 20, rotationY: facLeft }); // over the river
+    d.push({ kind: "steppingStones", x: -9.2, z: z + 42 });
+  }
+  d.push({ kind: "waterMillHut", x: -6.6, z: 50, rotationY: facLeft });
+
+  // Distant misty backdrop, far LEFT (parallax fill swallowed by the fog).
+  d.push({ kind: "mistyPeaks", x: -34, z: 40 });
+  for (let z = 14; z < loop; z += 42) {
+    d.push({ kind: "cedarRidge", x: -19, z });
+  }
+  d.push({ kind: "distantWaterfall", x: -30, z: 78 });
+
+  // Roadside rustic structures (mostly the RIGHT bank), facing the road.
+  d.push({ kind: "chayaTeahouse", x: 6.95, z: 26, rotationY: facRight });
+  d.push({ kind: "chayaTeahouse", x: 6.95, z: 96, rotationY: facRight });
+  for (let z = 16; z < loop; z += 38) {
+    d.push({ kind: "hokoraShrine", x: 4.2, z, rotationY: facRight });
+  }
+  d.push({ kind: "shimenawaSacredTree", x: -6.9, z: 70, rotationY: facLeft });
+  d.push({ kind: "shimenawaSacredTree", x: 6.9, z: 12, rotationY: facRight });
+
+  // Trailhead torii spanning the road — beam clears y≥9; sparse (one per loop).
+  d.push({ kind: "trailheadTorii", x: 0, z: 58 });
+
+  // Dense ground clutter both verges (x ±3.5..7, never inside ±3.2).
+  const clutter: DecorationKind[] = [
+    "fernShrub", "undergrowthShrub", "mossBoulder", "susukiGrass", "rockCluster", "mossStoneLantern",
+    "fallenMossyLog", "jizoCluster", "woodenSignpost", "sikaDeer", "rockCairn", "mushroomCluster", "mossPatch"
+  ];
+  for (let i = 0, z = 3; z < loop; i += 1, z += 4.4) {
+    const side = i % 2 === 0 ? -1 : 1;
+    d.push({ kind: clutter[i % clutter.length], x: side * (3.6 + (i % 4) * 0.7), z, rotationY: side < 0 ? facLeft : facRight });
+    d.push({ kind: clutter[(i + 5) % clutter.length], x: -side * (3.6 + (i % 3) * 0.8), z: z + 2.1, rotationY: side < 0 ? facRight : facLeft });
+  }
+
+  // The 'Feldweg' mossy log + paver edging both shoulders, tiling continuously.
+  for (let z = 0; z < loop; z += 8) {
+    d.push({ kind: "forestLogEdging", x: -3.2, z });
+    d.push({ kind: "forestLogEdging", x: 3.2, z });
+  }
+  for (let z = 4; z < loop; z += 10) {
+    d.push({ kind: "mossyPathEdging", x: -3.05, z });
+    d.push({ kind: "mossyPathEdging", x: 3.05, z });
+  }
+
+  return d;
+}
+
+export const FOREST_VALLEY_DECORATIONS: DecorationPlacement[] = createForestValleyDecorations();

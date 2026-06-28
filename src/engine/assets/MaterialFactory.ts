@@ -66,6 +66,43 @@ export class MaterialFactory {
   // Emissive — glowing vegetation
   readonly sakuraNeon = this.emissive(0xff9ad5, 1.2);
   readonly ginkgoNeon = this.emissive(0xffe23a, 1.2);
+
+  // ===== 奥山渓谷 Misty Mountain-Forest Valley — cedar/moss/rock/water/thatch palette =====
+  readonly cedarBark = this.standard(0x5a4631, 0.92, 0.02);
+  readonly cedarBarkDark = this.standard(0x3f3120, 0.92, 0.02);
+  readonly sugiCanopy = this.standard(0x23492e, 0.95, 0.02);
+  readonly sugiCanopyDeep = this.standard(0x173524, 0.95, 0.02);
+  readonly pineCanopy = this.standard(0x2f5e3d, 0.95, 0.02);
+  readonly bambooStalk = this.standard(0x7fa84a, 0.9, 0.02);
+  readonly bambooStalkPale = this.standard(0xa7c466, 0.9, 0.02);
+  readonly mossGreen = this.standard(0x4f7a3a, 0.95, 0.02);
+  readonly mossGreenDeep = this.standard(0x35592a, 0.95, 0.02);
+  readonly fernGreen = this.standard(0x5e8c3f, 0.95, 0.02);
+  readonly mapleEmber = this.standard(0xc2451f, 0.9, 0.02);
+  readonly mapleGold = this.standard(0xd98a2b, 0.9, 0.02);
+  readonly wetRock = this.standard(0x5c6066, 0.85, 0.03);
+  readonly wetRockDark = this.standard(0x3d4146, 0.85, 0.03);
+  readonly cliffStone = this.standard(0x6a6d70, 0.9, 0.02);
+  readonly dirtPath = this.standard(0x7a5f42, 0.95, 0.01);
+  readonly packedEarth = this.standard(0x8a6f4e, 0.95, 0.01);
+  readonly mossPaver = this.standard(0x6f7857, 0.92, 0.02);
+  readonly riverWater = this.standard(0x3f7d86, 0.4, 0.06);
+  readonly riverWaterDeep = this.standard(0x235a66, 0.4, 0.06);
+  readonly riverFoam = this.emissive(0xe8f2ef, 0.7);
+  readonly waterfallVeil = this.emissive(0xcfe6e8, 0.85);
+  readonly thatchForest = this.standard(0x9b7d4a, 0.98, 0.01);
+  readonly rusticWood = this.standard(0x6b4a2e, 0.9, 0.02);
+  readonly darkBeam = this.standard(0x33241a, 0.9, 0.02);
+  readonly toriiVermillion = this.standard(0xc64a2f, 0.8, 0.04);
+  readonly shimenawaRope = this.standard(0xc9b079, 0.95, 0.01);
+  readonly shideWhite = this.standard(0xf2ede0, 0.9, 0.01);
+  readonly jizoStone = this.standard(0x8b8f8c, 0.92, 0.02);
+  readonly redBib = this.standard(0xcc3b39, 0.9, 0.02);
+  readonly lanternEmber = this.emissive(0xffcf8a, 1.1);
+  readonly deerHide = this.standard(0xa9794e, 0.9, 0.02);
+  readonly mistVeil = this.emissive(0xb9cdc9, 0.6);
+  readonly mountainFar = this.standard(0x7d97a0, 0.95, 0.01);
+  readonly ridgeSilhouette = this.standard(0x4d6b63, 0.95, 0.01);
   readonly torii = this.standard(0xe9442e, 0.75, 0.05);
   readonly gold = this.standard(0xffc857, 0.45, 0.25);
   readonly turquoise = this.emissive(0x00e5ff, 0.35);

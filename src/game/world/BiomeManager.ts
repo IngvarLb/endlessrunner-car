@@ -1,28 +1,25 @@
 /**
- * Macro-biome selector for the endless run. The world alternates between long "legs"
- * by absolute track distance: leg 0 = village (with its own village↔autumn season
- * sub-cycle), leg 1 = neon city, leg 2 = village, … . Pure logic (no THREE): the run
- * scene asks it which biome a given prop/segment z belongs to (drives the recycle-time
- * visibility swap) and what the eased biome target is for the camera distance (drives
- * the sky/fog/road crossfade).
+ * Macro-biome selector for the endless run. The world cycles through long "legs" by
+ * absolute track distance: leg 0 = village (with its own village↔autumn season sub-cycle),
+ * leg 1 = neon city, leg 2 = mountain-forest valley, then back to village … . Pure logic
+ * (no THREE): the run scene asks which biome a given prop/segment z belongs to (drives the
+ * recycle-time visibility swap) and which biome the camera is currently in (drives the
+ * sky/fog/road atmosphere crossfade toward that biome's preset).
  */
-export type MacroBiomeIndex = 0 | 1;
-
 export class BiomeManager {
   constructor(
     private readonly legLength: number,
-    private readonly biomeCount = 2
+    private readonly biomeCount = 3
   ) {}
 
-  /** Macro-biome index for an absolute forward track-z (0 = village, 1 = city). */
-  biomeIndexForZ(absoluteZ: number): MacroBiomeIndex {
+  /** Macro-biome index (0..count-1) for an absolute forward track-z. */
+  biomeIndexForZ(absoluteZ: number): number {
     const leg = Math.floor(absoluteZ / this.legLength);
-    const idx = ((leg % this.biomeCount) + this.biomeCount) % this.biomeCount;
-    return (idx === 1 ? 1 : 0) as MacroBiomeIndex;
+    return ((leg % this.biomeCount) + this.biomeCount) % this.biomeCount;
   }
 
-  /** Eased crossfade TARGET [0 = village, 1 = city] for the camera's current distance. */
-  biomeLevelForDistance(distance: number): number {
-    return this.biomeIndexForZ(distance) === 1 ? 1 : 0;
+  /** The macro-biome the camera is currently in (atmosphere eases toward its preset). */
+  legIndexForDistance(distance: number): number {
+    return this.biomeIndexForZ(distance);
   }
 }
