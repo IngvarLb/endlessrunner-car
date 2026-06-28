@@ -1069,6 +1069,7 @@ export class GameApp {
         audio.startMusic("garage");
         return;
       case "running":
+        audio.setVehicleEngine(this.selectedVehicle.kanji, this.vehicleTierRank(this.selectedVehicle.tier));
         audio.startMusic("run");
         return;
       case "paused":
@@ -1083,6 +1084,11 @@ export class GameApp {
       case "reviving":
         return;
     }
+  }
+
+  /** Map a car's rarity tier to an engine-refinement rank (0 common … 3 legend). */
+  private vehicleTierRank(tier: VehicleDefinition["tier"]): number {
+    return { common: 0, rare: 1, epic: 2, legend: 3 }[tier] ?? 0;
   }
 
   private unlockAudio(): void {

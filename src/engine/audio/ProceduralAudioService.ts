@@ -162,7 +162,6 @@ type LeadPhrase = Map<number, { freq: number; vel: number }>;
 type DrumKit = "boombap" | "brushed" | "electronic" | "taiko";
 type LeadStyle = "koto" | "rhodes" | "supersaw" | "shakuhachi";
 type BassStyle = "round" | "funk" | "drone";
-type PadStyle = "warmSaw" | "minTriangle" | "neonPWM" | "mistTriangle";
 type NoiseBedKind = "vinyl" | "rain" | "wind" | "none";
 
 interface BiomeTheme {
@@ -175,9 +174,7 @@ interface BiomeTheme {
   bassSteps: number[]; // which 16th steps the bass articulates
   bassStyle: BassStyle;
   leadStyle: LeadStyle;
-  padStyle: PadStyle;
-  padLevel: number;
-  padRoots: number[]; // chord-root scale degrees, cycled every chordBars
+  chordRootSemis: number[]; // chord-root semitone offsets from the tonic, cycled every chordBars (drives the bass)
   chordBars: number;
   noiseBed: NoiseBedKind;
 }
@@ -204,9 +201,7 @@ const BIOME_THEMES: BiomeTheme[] = [
     bassSteps: [0, 6, 10],
     bassStyle: "round",
     leadStyle: "koto",
-    padStyle: "warmSaw",
-    padLevel: 0.07,
-    padRoots: [0, 3, 0, 4],
+    chordRootSemis: [0, 5, 7, 9], // D – G – A – B (Dm9 · Gmaj7 · Am7 · Bm7 roots)
     chordBars: 2,
     noiseBed: "vinyl",
   },
@@ -220,9 +215,7 @@ const BIOME_THEMES: BiomeTheme[] = [
     bassSteps: [0, 6, 10],
     bassStyle: "round",
     leadStyle: "rhodes",
-    padStyle: "minTriangle",
-    padLevel: 0.08,
-    padRoots: [0, 3, 4, 0],
+    chordRootSemis: [0, 5, 2, 7], // D – G – E – A (Dm9 · Gm7 · Em7♭5 · A7 roots)
     chordBars: 2,
     noiseBed: "rain",
   },
@@ -236,9 +229,7 @@ const BIOME_THEMES: BiomeTheme[] = [
     bassSteps: [0, 3, 6, 7, 10, 13, 14],
     bassStyle: "funk",
     leadStyle: "supersaw",
-    padStyle: "neonPWM",
-    padLevel: 0.06,
-    padRoots: [0, 1, 3, 0],
+    chordRootSemis: [0, 8, 10, 7], // F# – D – E – C# (F#m · D · E · C#m roots, i–♭VI–♭VII–v)
     chordBars: 2,
     noiseBed: "none",
   },
@@ -252,9 +243,7 @@ const BIOME_THEMES: BiomeTheme[] = [
     bassSteps: [0],
     bassStyle: "drone",
     leadStyle: "shakuhachi",
-    padStyle: "mistTriangle",
-    padLevel: 0.09,
-    padRoots: [0, 0, 2, 4],
+    chordRootSemis: [0, 8, 3, 10], // A – F – C – G (Am · Fmaj7 · Cmaj7 · G6 roots)
     chordBars: 4,
     noiseBed: "wind",
   },
@@ -274,16 +263,8 @@ interface ArrangerState {
   isFillBar: boolean;
   phraseHalf: number; // which bar (0/1) of the current 2-bar lead phrase
   leadPhrase: LeadPhrase; // precomputed lead notes for the 2-bar phrase, keyed by 0..31 step
-  chordIdx: number; // index into the active theme's padRoots progression
-  chordRoot: number; // current chord-root scale degree (drives bass + pad)
-}
-
-interface PadVoice {
-  oscillators: OscillatorNode[];
-  ratios: number[];
-  gain: GainNode;
-  filter: BiquadFilterNode;
-  level: number;
+  chordIdx: number; // index into the active theme's chordRootSemis progression
+  chordRoot: number; // current chord-root semitone offset from the tonic (drives the bass)
 }
 
 interface NoiseBedVoice {
@@ -292,6 +273,53 @@ interface NoiseBedVoice {
   filters: BiquadFilterNode[];
   level: number;
 }
+
+// --- Per-car engine voice (the continuous EV motor) ---
+// Each car gets its own character, keyed by its ability-kanji and refined by its price tier:
+// waveform + pitch register + harmony interval + sub weight + EV coil-whine + brightness shape
+// the "personality" so a heavy 鬼 Oni growls dark and low while a 龍 Dragon sings deep but bright.
+interface EngineProfile {
+  waveA: OscillatorType;
+  waveB: OscillatorType;
+  pitchScale: number; // multiplies the fundamental Hz curve (lower = heavier/deeper)
+  intervalB: number; // toneB / toneA ratio (1.5 perfect fifth · 2 octave · 1.335 fourth)
+  detuneB: number; // chorus beat width on the upper tone
+  subLevel: number; // sub-oscillator weight (body/weight)
+  whineLevel: number; // EV inverter coil-whine multiplier (high-tech/electric)
+  brightness: number; // master lowpass-cutoff multiplier (bright vs dark)
+  tremoloRate: number; // base "singing" LFO Hz
+  gainScale: number; // overall engine loudness
+}
+
+const DEFAULT_ENGINE_PROFILE: EngineProfile = {
+  waveA: "sawtooth",
+  waveB: "sawtooth",
+  pitchScale: 1,
+  intervalB: 1.5,
+  detuneB: 1.004,
+  subLevel: 0.12,
+  whineLevel: 1,
+  brightness: 1,
+  tremoloRate: 5,
+  gainScale: 1,
+};
+
+const ENGINE_FLAVORS: Record<string, EngineProfile> = {
+  // 赤 Crimson Bolt — classic punchy sporty saw, mid-bright.
+  "赤": { ...DEFAULT_ENGINE_PROFILE, brightness: 1.1, tremoloRate: 5.5 },
+  // 藍 Indigo Drift — clean electric: square + octave harmony, more EV whine, higher.
+  "藍": { ...DEFAULT_ENGINE_PROFILE, waveA: "square", waveB: "sine", pitchScale: 1.05, intervalB: 2, subLevel: 0.09, whineLevel: 1.8, brightness: 1.2, tremoloRate: 4.5, gainScale: 0.95 },
+  // 桜 Sakura Roadster — gentle, soft, smooth triangles, light.
+  "桜": { ...DEFAULT_ENGINE_PROFILE, waveA: "triangle", waveB: "triangle", pitchScale: 1.08, subLevel: 0.08, whineLevel: 0.6, brightness: 0.95, tremoloRate: 4, gainScale: 0.9 },
+  // 狐 Kitsune GT — nimble, bright, high coil-whine.
+  "狐": { ...DEFAULT_ENGINE_PROFILE, pitchScale: 1.05, subLevel: 0.1, whineLevel: 1.5, brightness: 1.3, tremoloRate: 6 },
+  // 将 Daimyo Coupe — heavy growl: low, fourth interval, wide chorus beat.
+  "将": { ...DEFAULT_ENGINE_PROFILE, pitchScale: 0.9, intervalB: 1.335, detuneB: 1.008, subLevel: 0.16, whineLevel: 0.8, brightness: 0.85, tremoloRate: 4, gainScale: 1.05 },
+  // 鬼 Oni Racer — dark, menacing, deep sub, muffled.
+  "鬼": { ...DEFAULT_ENGINE_PROFILE, waveB: "square", pitchScale: 0.85, detuneB: 1.006, subLevel: 0.18, whineLevel: 0.7, brightness: 0.7, tremoloRate: 3.5, gainScale: 1.05 },
+  // 龍 Dragon Zero — powerful hypercar: deep + bright + strong, with EV shimmer.
+  "龍": { ...DEFAULT_ENGINE_PROFILE, pitchScale: 0.92, detuneB: 1.005, subLevel: 0.16, whineLevel: 1.6, brightness: 1.25, tremoloRate: 5, gainScale: 1.1 },
+};
 
 export class ProceduralAudioService {
   private settings: ProceduralAudioSettings;
@@ -327,6 +355,7 @@ export class ProceduralAudioService {
     gain: GainNode;
   } | null = null;
   private runIntensity = 0.4;
+  private engineProfile: EngineProfile = DEFAULT_ENGINE_PROFILE;
 
   // Adaptive-music buses + state. Melodic layers (L2..L7) route through `duckBus` (kick-
   // sidechained for pump + headroom); drum layers (L0/L1) bypass it. `autoScaleGain` trims the
@@ -349,13 +378,11 @@ export class ProceduralAudioService {
     L6: false,
     L7: false,
   };
-  private musicVoiceCount = 0;
-  // Active biome theme (scale/tonic/kit/lead/pad/chords). The run cycles through these per leg.
+  // Active biome theme (scale/tonic/kit/lead/chords). The run cycles through these per leg.
   private theme: BiomeTheme = BIOME_THEMES[0];
   private currentBiomeKey = "village";
   private pendingBiomeKey: string | null = null;
-  // Persistent texture voices, built once per active biome and crossfaded at leg boundaries.
-  private padVoice: PadVoice | null = null;
+  // Persistent texture voice (noise bed), built once per active biome and crossfaded at leg boundaries.
   private noiseBedVoice: NoiseBedVoice | null = null;
   // Run-mode song-form cursor; advanced once per bar at the bar boundary.
   private arranger: ArrangerState = {
@@ -411,7 +438,7 @@ export class ProceduralAudioService {
         phraseHalf: 0,
         leadPhrase: new Map(),
         chordIdx: 0,
-        chordRoot: theme.padRoots[0] ?? 0,
+        chordRoot: theme.chordRootSemis[0] ?? 0,
       };
       this.activateBiome(theme.key, true);
     } else {
@@ -442,17 +469,13 @@ export class ProceduralAudioService {
     }
 
     this.activeMusicNodes.clear();
-    this.musicVoiceCount = 0;
+    this.pendingBiomeKey = null;
     this.musicIntensitySmoothed = 0;
     this.isMusicRunning = false;
     this.isMusicPaused = false;
     this.nextStepIndex = 0;
     this.stopEngine();
 
-    if (this.padVoice) {
-      this.fadeOutPad(this.padVoice);
-      this.padVoice = null;
-    }
     if (this.noiseBedVoice) {
       this.fadeOutNoiseBed(this.noiseBedVoice);
       this.noiseBedVoice = null;
@@ -503,11 +526,28 @@ export class ProceduralAudioService {
     this.dangerNorm = this.clamp01(Number.isFinite(dangerNorm) ? dangerNorm : 0);
   }
 
+  /**
+   * Give the EV motor the character of the selected car. `kanji` is the car's ability glyph (its
+   * personality), `tierRank` its price tier (0 common … 3 legend) — pricier cars sound a touch more
+   * refined/high-tech (brighter + more coil-whine). Set before the run's engine starts.
+   */
+  setVehicleEngine(kanji: string, tierRank = 0): void {
+    const base = ENGINE_FLAVORS[kanji] ?? DEFAULT_ENGINE_PROFILE;
+    const rank = Math.max(0, Math.min(3, Math.floor(tierRank)));
+    this.engineProfile = {
+      ...base,
+      brightness: base.brightness * (1 + rank * 0.04),
+      whineLevel: base.whineLevel * (1 + rank * 0.08),
+    };
+    this.applyEngineIntensity(); // live-nudge the intensity-driven params if the engine is running
+  }
+
   private startEngine(): void {
     if (this.engine) {
       return;
     }
     const ctx = this.ensureContext();
+    const profile = this.engineProfile;
     const gain = ctx.createGain();
     gain.gain.value = 0.0001;
 
@@ -517,22 +557,21 @@ export class ProceduralAudioService {
     lp.frequency.value = 900;
     lp.Q.value = 0.7;
 
-    // The two singing tones: a deep fundamental + a perfect fifth above it. Equal-ish
-    // weight so you clearly hear a two-note harmony.
+    // The two singing tones: a deep fundamental + an upper interval. Waveforms set by the car.
     const toneA = ctx.createOscillator();
-    toneA.type = "sawtooth";
+    toneA.type = profile.waveA;
     const gA = ctx.createGain();
     gA.gain.value = 0.34;
     const toneB = ctx.createOscillator();
-    toneB.type = "sawtooth";
+    toneB.type = profile.waveB;
     const gB = ctx.createGain();
     gB.gain.value = 0.3;
 
-    // Faint sub an octave below the fundamental for body / "tiefer".
+    // Faint sub an octave below the fundamental for body / "tiefer" (weight set by the car).
     const sub = ctx.createOscillator();
     sub.type = "sine";
     const gSub = ctx.createGain();
-    gSub.gain.value = 0.12;
+    gSub.gain.value = profile.subLevel;
 
     // Just a hint of high inverter coil-whine for EV character (mostly tamed by the lowpass).
     const inverter = ctx.createOscillator();
@@ -592,7 +631,7 @@ export class ProceduralAudioService {
     const ctx = this.context;
     const now = ctx ? ctx.currentTime : 0;
     engine.gain.gain.setTargetAtTime(0.0001, now, 0.12);
-    const stopAt = now + 0.4;
+    const stopAt = now + 0.8; // let the setTargetAtTime fade reach silence before the hard stop
     for (const node of [engine.toneA, engine.toneB, engine.sub, engine.inverter, engine.noise, engine.lfo]) {
       try {
         node.stop(stopAt);
@@ -611,18 +650,19 @@ export class ProceduralAudioService {
     }
     const v = this.runIntensity;
     const t = ctx.currentTime;
-    // Deep, singing two-tone harmony: a low fundamental + a perfect fifth (×1.5), the
-    // fifth nudged +0.4% for a slow chorus beat. Much lower than a whine.
-    const fund = 55 + v * 205; // ~55 Hz idle → ~430 Hz flat-out (deep, not a high whine)
+    const p = this.engineProfile;
+    // Deep, singing two-tone harmony shaped by the car's profile: a low fundamental + an upper
+    // interval (a hair detuned for a slow chorus beat). pitchScale sets the register.
+    const fund = (55 + v * 205) * p.pitchScale; // ~55 Hz idle → ~430 Hz flat-out (deep, not a high whine)
     engine.toneA.frequency.setTargetAtTime(fund, t, 0.09);
-    engine.toneB.frequency.setTargetAtTime(fund * 1.5 * 1.004, t, 0.09);
+    engine.toneB.frequency.setTargetAtTime(fund * p.intervalB * p.detuneB, t, 0.09);
     engine.sub.frequency.setTargetAtTime(fund * 0.5, t, 0.09);
     engine.inverter.frequency.setTargetAtTime(1400 + v * 2400, t, 0.1);
-    engine.gInv.gain.setTargetAtTime(0.003 + v * 0.01, t, 0.12);
-    engine.lp.frequency.setTargetAtTime(700 + v * 1500, t, 0.12); // warmth opens with speed
+    engine.gInv.gain.setTargetAtTime((0.003 + v * 0.01) * p.whineLevel, t, 0.12);
+    engine.lp.frequency.setTargetAtTime((700 + v * 1500) * p.brightness, t, 0.12); // warmth opens with speed
     engine.air.gain.setTargetAtTime(0.005 + v * 0.03, t, 0.12);
-    engine.lfo.frequency.setTargetAtTime(4 + v * 3, t, 0.2);
-    engine.gain.gain.setTargetAtTime(0.032 + v * 0.026, t, 0.12); // sits behind the music
+    engine.lfo.frequency.setTargetAtTime(p.tremoloRate * (0.8 + v * 0.5), t, 0.2);
+    engine.gain.gain.setTargetAtTime((0.032 + v * 0.026) * p.gainScale, t, 0.12); // sits behind the music
   }
 
   setSettings(settings: Partial<ProceduralAudioSettings>): void {
@@ -966,18 +1006,17 @@ export class ProceduralAudioService {
     arr.variantIdx =
       Math.random() < 0.62 ? 0 : 1 + Math.floor(Math.random() * Math.max(1, this.theme.drumVariants.length - 1));
 
-    // Chord progression → bass root + pad retune.
-    const chordIdx = Math.floor((arr.barCounter - 1) / this.theme.chordBars) % this.theme.padRoots.length;
+    // Chord progression → moving bass root.
+    const chordIdx = Math.floor((arr.barCounter - 1) / this.theme.chordBars) % this.theme.chordRootSemis.length;
     if (chordIdx !== arr.chordIdx) {
       arr.chordIdx = chordIdx;
-      arr.chordRoot = this.theme.padRoots[chordIdx];
-      this.retunePad();
+      arr.chordRoot = this.theme.chordRootSemis[chordIdx];
     }
 
     // Lead phrasing: regenerate a fresh 2-bar question/answer phrase at the start of each pair,
     // or immediately on a biome change so the new timbre never plays the old key's notes.
     const firstOfPair = arr.barCounter % 2 === 1;
-    arr.phraseHalf = firstOfPair || biomeChanged ? 0 : 1;
+    arr.phraseHalf = firstOfPair ? 0 : 1;
     if (firstOfPair || biomeChanged) {
       arr.leadPhrase = this.generateLeadPhrase();
     }
@@ -1057,9 +1096,9 @@ export class ProceduralAudioService {
     }
   }
 
-  /** Chord-root scale degree → a bass frequency, dropped into the sub register (~55–110 Hz). */
-  private bassFreqForRoot(rootDegree: number): number {
-    let f = this.degreeToFreq(rootDegree);
+  /** Chord-root semitone offset → a bass frequency, dropped into the sub register (~55–110 Hz). */
+  private bassFreqForRoot(rootSemis: number): number {
+    let f = this.chordRootHz(rootSemis);
     while (f > 110) {
       f /= 2;
     }
@@ -1122,7 +1161,9 @@ export class ProceduralAudioService {
       }
     }
     if (lastStep >= 0) {
-      phrase.set(lastStep, { freq: this.degreeToFreq(shift), vel: 0.15 });
+      // Resolve to the actual tonic (drop the per-section degree shift, keep its octave) so A2/B
+      // don't "resolve" onto the 2nd/3rd degree.
+      phrase.set(lastStep, { freq: this.degreeToFreq(lead.octave * this.theme.scale.length), vel: 0.15 });
     }
     return phrase;
   }
@@ -1663,115 +1704,13 @@ export class ProceduralAudioService {
     this.trackChain([{ node: osc, stop: time + 1.65 }], [lp, gain], time, "music");
   }
 
-  // ---- Persistent texture voices (Phase 4): pad + noise bed, built once per active biome ----
+  // ---- Persistent texture voice (Phase 4): noise bed, built once per active biome ----
+  // (The sustained tonal pad was removed — it muddied the mix and clashed with the EV engine drone.
+  //  Harmony now comes purely from the moving bass root + the lead over the beat.)
 
-  /** The chord root in a warm pad register (one octave below the lead tonic). */
-  private padRootFreq(): number {
-    return this.degreeToFreq(this.arranger.chordRoot) * 0.5;
-  }
-
-  private buildPad(fadeSeconds: number): void {
-    const context = this.context;
-    if (!context) {
-      return;
-    }
-    const theme = this.theme;
-    const now = context.currentTime;
-    const destination = this.layerDestination("L3");
-    const filter = context.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = theme.padStyle === "neonPWM" ? 1500 : 2200;
-    filter.Q.value = 0.7;
-    const gain = context.createGain();
-    gain.gain.value = 0.0001;
-    filter.connect(gain);
-    gain.connect(destination);
-
-    const oscType: OscillatorType =
-      theme.padStyle === "neonPWM" ? "square" : theme.padStyle === "warmSaw" ? "sawtooth" : "triangle";
-    // Open voicing (root×2 detuned, fifth, octave) — modally neutral, so it never clashes.
-    const voices = [
-      { ratio: 1, detune: -7 },
-      { ratio: 1, detune: 7 },
-      { ratio: 1.5, detune: 0 },
-      { ratio: 2, detune: 5 },
-    ];
-    const root = this.padRootFreq();
-    const oscillators: OscillatorNode[] = [];
-    const ratios: number[] = [];
-    for (const voice of voices) {
-      const osc = context.createOscillator();
-      osc.type = oscType;
-      osc.frequency.setValueAtTime(root * voice.ratio, now);
-      osc.detune.setValueAtTime(voice.detune, now);
-      osc.connect(filter);
-      osc.start();
-      oscillators.push(osc);
-      ratios.push(voice.ratio);
-    }
-    gain.gain.setTargetAtTime(theme.padLevel, now, fadeSeconds);
-    this.padVoice = { oscillators, ratios, gain, filter, level: theme.padLevel };
-  }
-
-  /** Glide the pad to the new chord root (smooth, click-free). */
-  private retunePad(): void {
-    const pad = this.padVoice;
-    const context = this.context;
-    if (!pad || !context) {
-      return;
-    }
-    const root = this.padRootFreq();
-    for (let i = 0; i < pad.oscillators.length; i += 1) {
-      pad.oscillators[i].frequency.setTargetAtTime(root * pad.ratios[i], context.currentTime, 0.25);
-    }
-  }
-
-  private fadeOutPad(pad: PadVoice): void {
-    const context = this.context;
-    const disconnectAll = () => {
-      for (const osc of pad.oscillators) {
-        try {
-          osc.disconnect();
-        } catch {
-          // already gone
-        }
-      }
-      try {
-        pad.filter.disconnect();
-      } catch {
-        // already gone
-      }
-      try {
-        pad.gain.disconnect();
-      } catch {
-        // already gone
-      }
-    };
-    if (!context) {
-      disconnectAll();
-      return;
-    }
-    const now = context.currentTime;
-    pad.gain.gain.cancelScheduledValues(now);
-    pad.gain.gain.setTargetAtTime(0.0001, now, 0.4);
-    const stopAt = now + 1.6;
-    let pending = pad.oscillators.length;
-    for (const osc of pad.oscillators) {
-      osc.onended = () => {
-        pending -= 1;
-        if (pending <= 0) {
-          disconnectAll();
-        }
-      };
-      try {
-        osc.stop(stopAt);
-      } catch {
-        pending -= 1;
-        if (pending <= 0) {
-          disconnectAll();
-        }
-      }
-    }
+  /** Chord-root semitone offset (from the active theme's tonic) → frequency. */
+  private chordRootHz(semis: number): number {
+    return this.theme.tonicHz * Math.pow(2, semis / 12);
   }
 
   private buildNoiseBed(fadeSeconds: number): void {
@@ -1863,19 +1802,14 @@ export class ProceduralAudioService {
     if (!theme) {
       return;
     }
-    if (this.padVoice) {
-      this.fadeOutPad(this.padVoice);
-      this.padVoice = null;
-    }
     if (this.noiseBedVoice) {
       this.fadeOutNoiseBed(this.noiseBedVoice);
       this.noiseBedVoice = null;
     }
     this.theme = theme;
     this.currentBiomeKey = key;
-    this.arranger.chordRoot = theme.padRoots[this.arranger.chordIdx % theme.padRoots.length] ?? 0;
+    this.arranger.chordRoot = theme.chordRootSemis[this.arranger.chordIdx % theme.chordRootSemis.length] ?? 0;
     const fade = instant ? 0.3 : 1.2;
-    this.buildPad(fade);
     this.buildNoiseBed(fade);
   }
 
@@ -1989,7 +1923,8 @@ export class ProceduralAudioService {
     }
 
     // Voice-cap backstop: never let music voices pile up unboundedly (a runaway-scheduler guard).
-    if (group === "music" && this.musicVoiceCount + sources.length > MAX_MUSIC_VOICES) {
+    // Derived from the live set so it can't drift out of sync across stop/start boundaries.
+    if (group === "music" && this.activeMusicNodes.size + sources.length > MAX_MUSIC_VOICES) {
       for (const { node } of sources) {
         try {
           node.disconnect();
@@ -2025,9 +1960,6 @@ export class ProceduralAudioService {
           // already disconnected
         }
       }
-      if (group === "music") {
-        this.musicVoiceCount = Math.max(0, this.musicVoiceCount - sources.length);
-      }
     };
 
     for (const { node, stop } of sources) {
@@ -2040,10 +1972,6 @@ export class ProceduralAudioService {
       };
       node.start(startTime);
       node.stop(stop);
-    }
-
-    if (group === "music") {
-      this.musicVoiceCount += sources.length;
     }
   }
 
@@ -2138,8 +2066,12 @@ export class ProceduralAudioService {
     if (!duck) {
       return;
     }
+    // Ramp DOWN over ~6 ms (not an instantaneous step) so a sustained pad/bass on the duck bus
+    // doesn't get a waveform discontinuity = a sidechain click on every kick. Anchor at the
+    // current value so overlapping ducks ramp from where they are.
     duck.gain.cancelScheduledValues(time);
-    duck.gain.setValueAtTime(0.6, time);
+    duck.gain.setValueAtTime(duck.gain.value, time);
+    duck.gain.linearRampToValueAtTime(0.6, time + 0.006);
     duck.gain.linearRampToValueAtTime(1, time + 0.12);
   }
 
