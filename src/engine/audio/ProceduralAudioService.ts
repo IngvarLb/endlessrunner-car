@@ -112,6 +112,57 @@ const PLUCK_PATTERN: Array<string | null> = [
   null,
 ];
 
+// --- Song-form arrangement (Phase 2) ---
+// A run is not a 4-bar loop on repeat — it walks an 8-section macro form (8 bars each = 64 bars
+// ≈ 2.7 min), so the same groove keeps re-contextualising. The bridge MANDATORILY drops the drums
+// (negative space resets the ear's habituation — the Nujabes trick), and the last bar of each
+// section fills.
+type SectionName = "intro" | "A" | "A2" | "B" | "bridge" | "build";
+
+interface SectionDef {
+  name: SectionName;
+  bars: number;
+  drums: "full" | "half" | "out";
+  /** A floor the section asserts on the musical intensity (B/build lift energy regardless of speed). */
+  intensityFloor: number;
+}
+
+const RUN_SECTIONS: SectionDef[] = [
+  { name: "intro", bars: 8, drums: "half", intensityFloor: 0 },
+  { name: "A", bars: 8, drums: "full", intensityFloor: 0 },
+  { name: "A2", bars: 8, drums: "full", intensityFloor: 0 },
+  { name: "B", bars: 8, drums: "full", intensityFloor: 0.2 },
+  { name: "A", bars: 8, drums: "full", intensityFloor: 0 },
+  { name: "bridge", bars: 8, drums: "out", intensityFloor: 0 },
+  { name: "A2", bars: 8, drums: "full", intensityFloor: 0 },
+  { name: "build", bars: 8, drums: "full", intensityFloor: 0.15 },
+];
+
+interface DrumGrid {
+  kick: number[];
+  snare: number[];
+  hat: number[];
+  openHat: number[];
+}
+
+// 2–3 groove variants rotated per bar so the backbeat skeleton itself changes (pure humanisation
+// alone fatigues after a few minutes — the unchanged grid is the real culprit).
+const RUN_DRUM_VARIANTS: DrumGrid[] = [
+  { kick: [0, 6, 10], snare: [4, 12], hat: [0, 2, 4, 6, 7, 8, 10, 12, 14, 15], openHat: [15] },
+  { kick: [0, 6, 10, 14], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 14], openHat: [7, 15] },
+  { kick: [0, 3, 6, 10], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 11, 12, 14], openHat: [15] },
+];
+
+interface ArrangerState {
+  barCounter: number;
+  sectionIdx: number;
+  sectionBar: number;
+  variantIdx: number;
+  drumsMode: "full" | "half" | "out";
+  intensityFloor: number;
+  isFillBar: boolean;
+}
+
 export class ProceduralAudioService {
   private settings: ProceduralAudioSettings;
   private context: AudioContext | null = null;
@@ -169,6 +220,16 @@ export class ProceduralAudioService {
     L7: false,
   };
   private musicVoiceCount = 0;
+  // Run-mode song-form cursor; advanced once per bar at the bar boundary.
+  private arranger: ArrangerState = {
+    barCounter: 0,
+    sectionIdx: 0,
+    sectionBar: -1,
+    variantIdx: 0,
+    drumsMode: "half",
+    intensityFloor: 0,
+    isFillBar: false,
+  };
 
   constructor(settings: Partial<ProceduralAudioSettings> = {}) {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
@@ -196,6 +257,15 @@ export class ProceduralAudioService {
     if (mode === "run") {
       this.musicIntensityTarget = 0;
       this.musicIntensitySmoothed = 0;
+      this.arranger = {
+        barCounter: 0,
+        sectionIdx: 0,
+        sectionBar: -1,
+        variantIdx: 0,
+        drumsMode: RUN_SECTIONS[0].drums,
+        intensityFloor: RUN_SECTIONS[0].intensityFloor,
+        isFillBar: false,
+      };
     } else {
       this.musicIntensityTarget = mode === "menu" ? 0.5 : 0.45;
       this.musicIntensitySmoothed = this.musicIntensityTarget;
@@ -700,9 +770,96 @@ export class ProceduralAudioService {
   private scheduleStep(step: number, time: number): void {
     const localStep = step % STEPS_PER_BAR;
     const bar = Math.floor(step / STEPS_PER_BAR);
-    // Global swing pushes odd 16ths late; per-voice micro-offsets add the J-Dilla "drunk" feel
-    // (kick a hair late, snare a hair early) on top. Never let an offset put a Step-0 hit in the
-    // past — clampStart floors every start time at currentTime + 5 ms.
+    if (this.musicMode === "run") {
+      if (localStep === 0) {
+        this.advanceBar();
+      }
+      this.scheduleRunStep(localStep, time);
+    } else {
+      this.scheduleAmbientStep(step, localStep, bar, time);
+    }
+  }
+
+  /** Walk the song-form one bar at the bar boundary. Cheap (no allocation) — safe to run N times
+   *  in a catch-up tick without causing the very lateness it guards against. */
+  private advanceBar(): void {
+    const arr = this.arranger;
+    arr.barCounter += 1;
+    arr.sectionBar += 1;
+    let section = RUN_SECTIONS[arr.sectionIdx];
+    if (arr.sectionBar >= section.bars) {
+      arr.sectionIdx = (arr.sectionIdx + 1) % RUN_SECTIONS.length;
+      arr.sectionBar = 0;
+      section = RUN_SECTIONS[arr.sectionIdx];
+    }
+    arr.drumsMode = section.drums;
+    arr.intensityFloor = section.intensityFloor;
+    arr.isFillBar = arr.sectionBar === section.bars - 1;
+    // Rotate the groove variant per bar — usually the home variant, occasionally a cousin.
+    arr.variantIdx = Math.random() < 0.62 ? 0 : 1 + Math.floor(Math.random() * (RUN_DRUM_VARIANTS.length - 1));
+  }
+
+  /** Theme-driven run step: drum grid + section drum-mode (bridge drop / intro half) + fills. */
+  private scheduleRunStep(localStep: number, time: number): void {
+    const arr = this.arranger;
+    const grid = RUN_DRUM_VARIANTS[arr.variantIdx];
+    const swung = time + this.swingOffset(localStep);
+    const onZero = localStep === 0;
+    const drumsOut = arr.drumsMode === "out";
+    const drumsHalf = arr.drumsMode === "half";
+
+    if (!drumsOut) {
+      const kickHit = drumsHalf ? localStep === 0 || localStep === 8 : grid.kick.includes(localStep);
+      if (kickHit) {
+        this.scheduleKick(this.clampStart(swung + 0.018 + this.tri(0.006)));
+      }
+
+      const snareHit = drumsHalf ? localStep === 12 : grid.snare.includes(localStep);
+      if (snareHit) {
+        const early = onZero ? 0 : 0.006;
+        this.scheduleSnare(this.clampStart(swung - early + this.tri(0.006)), this.humanVel(1));
+      } else if (!drumsHalf && (localStep === 3 || localStep === 7 || localStep === 11) && Math.random() < 0.12) {
+        this.scheduleSnare(this.clampStart(swung + this.tri(0.006)), 0.3); // ghost
+      }
+
+      const hatHit = drumsHalf ? localStep % 4 === 0 : grid.hat.includes(localStep);
+      if (hatHit && Math.random() < 0.92) {
+        const accent = (localStep % 4 === 0 ? 1 : 0.72) * this.humanVel(1);
+        this.scheduleClosedHat(this.clampStart(swung + this.tri(0.006)), accent);
+      }
+
+      if (!drumsHalf && !arr.isFillBar && grid.openHat.includes(localStep)) {
+        this.scheduleOpenHat(this.clampStart(swung + this.tri(0.006)));
+      }
+
+      // Section-end fill: a quick 1/64 hat roll across the last beat.
+      if (arr.isFillBar && localStep === 14) {
+        for (let i = 0; i < 4; i += 1) {
+          this.scheduleClosedHat(
+            this.clampStart(swung + (i * SIXTEENTH_SECONDS) / 4 + this.tri(0.004)),
+            (0.55 + i * 0.12) * this.humanVel(1),
+          );
+        }
+      }
+    }
+
+    // Bass continues through the bridge as a sparse pedal (downbeats only when drums are out).
+    if (localStep % 2 === 0) {
+      const bassNote = BASS_PATTERN[localStep];
+      if (bassNote && (!drumsOut || localStep === 0 || localStep === 8)) {
+        this.scheduleBass(
+          this.clampStart(swung + this.tri(0.004)),
+          NOTE_FREQUENCIES[bassNote],
+          localStep === 10 ? NOTE_FREQUENCIES.G1 : undefined,
+        );
+      }
+    }
+
+    this.scheduleMelodicPluck(localStep, swung);
+  }
+
+  /** Menu/garage: the calmer, non-arranged groove (humanised), unchanged in feel. */
+  private scheduleAmbientStep(step: number, localStep: number, bar: number, time: number): void {
     const swung = time + this.swingOffset(localStep);
     const onZero = localStep === 0;
 
@@ -711,31 +868,12 @@ export class ProceduralAudioService {
     }
 
     if (this.shouldPlaySnare(localStep)) {
-      const early = onZero ? 0 : 0.006; // snare pulled slightly early, but never on the downbeat
-      this.scheduleSnare(this.clampStart(swung - early + this.tri(0.006)), this.humanVel(1));
-    } else if (this.musicMode === "run" && (localStep === 3 || localStep === 7 || localStep === 11) && Math.random() < 0.12) {
-      // Ghost snares — the "played, not stamped" feel.
-      this.scheduleSnare(this.clampStart(swung + this.tri(0.006)), 0.3);
+      this.scheduleSnare(this.clampStart(swung - (onZero ? 0 : 0.006) + this.tri(0.006)), this.humanVel(1));
     }
 
     if (this.shouldPlayHat(localStep) && Math.random() < 0.92) {
       const accent = (localStep % 4 === 0 ? 1 : 0.72) * this.humanVel(1);
       this.scheduleClosedHat(this.clampStart(swung + this.tri(0.006)), accent);
-    }
-
-    if (this.musicMode === "run" && (step === 15 || step === 31 || step === 47)) {
-      this.scheduleOpenHat(this.clampStart(swung + this.tri(0.006)));
-    }
-
-    if (this.musicMode === "run" && localStep % 2 === 0) {
-      const bassNote = BASS_PATTERN[localStep];
-      if (bassNote) {
-        this.scheduleBass(
-          this.clampStart(swung + this.tri(0.004)),
-          NOTE_FREQUENCIES[bassNote],
-          localStep === 10 ? NOTE_FREQUENCIES.G1 : undefined,
-        );
-      }
     }
 
     this.scheduleMelodicPluck(step, swung);
@@ -1151,7 +1289,9 @@ export class ProceduralAudioService {
     }
 
     this.musicIntensitySmoothed += (this.musicIntensityTarget - this.musicIntensitySmoothed) * 0.025;
-    const v = this.musicIntensitySmoothed;
+    // The current song-form section can assert a floor (a B/build lifts layers regardless of speed).
+    const floor = this.musicMode === "run" ? this.arranger.intensityFloor : 0;
+    const v = Math.max(this.musicIntensitySmoothed, floor);
 
     for (const id of LAYER_IDS) {
       const gate = LAYER_GATES[id];
