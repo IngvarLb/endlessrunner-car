@@ -27,6 +27,30 @@ const SIXTEENTH_SECONDS = 60 / BPM / 4;
 const LOOKAHEAD_MS = 25;
 const SCHEDULE_AHEAD_SECONDS = 0.12;
 
+// --- Adaptive-music infrastructure (Phase 1) ---
+// The arrangement is split into vertical layers (additive stems). Each layer owns a gain bus;
+// the bus fades in/out as the smoothed musical intensity crosses the layer's gate, so drivers
+// (speed/combo/danger) make the music thicken/thin without ever changing *when* notes land.
+type LayerId = "L0" | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7";
+const LAYER_IDS: LayerId[] = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"];
+// Smoothed-intensity threshold at which each layer fades in (hysteresis applied at runtime).
+// L0 kick+sub · L1 snare/hat · L2 bass · L3 pad · L4 lead · L5 counter/stabs · L6 garnish · L7 ornament.
+const LAYER_GATES: Record<LayerId, number> = {
+  L0: 0,
+  L1: 0,
+  L2: 0,
+  L3: 0,
+  L4: 0.25,
+  L5: 0.55,
+  L6: 0.7,
+  L7: 0.8,
+};
+const LAYER_HYSTERESIS = 0.08;
+// Hard ceiling on simultaneously-tracked music source nodes — a backstop against voice pile-up.
+const MAX_MUSIC_VOICES = 32;
+// Swing for the current single beat (Village feel): odd 16ths are pushed late by this fraction.
+const DEFAULT_SWING = 0.16;
+
 const NOTE_FREQUENCIES: Record<string, number> = {
   D1: 36.71,
   F1: 43.65,
@@ -123,6 +147,29 @@ export class ProceduralAudioService {
   } | null = null;
   private runIntensity = 0.4;
 
+  // Adaptive-music buses + state. Melodic layers (L2..L7) route through `duckBus` (kick-
+  // sidechained for pump + headroom); drum layers (L0/L1) bypass it. `autoScaleGain` trims the
+  // sum as more layers stack so the output keeps headroom. Layer gates open/close on the
+  // smoothed musical intensity (driven by speed/combo/danger).
+  private layerGain: Partial<Record<LayerId, GainNode>> = {};
+  private duckBus: GainNode | null = null;
+  private autoScaleGain: GainNode | null = null;
+  private musicIntensityTarget = 0;
+  private musicIntensitySmoothed = 0;
+  private comboNorm = 0;
+  private dangerNorm = 0;
+  private layerOn: Record<LayerId, boolean> = {
+    L0: true,
+    L1: true,
+    L2: true,
+    L3: true,
+    L4: false,
+    L5: false,
+    L6: false,
+    L7: false,
+  };
+  private musicVoiceCount = 0;
+
   constructor(settings: Partial<ProceduralAudioSettings> = {}) {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
   }
@@ -144,6 +191,15 @@ export class ProceduralAudioService {
     this.isMusicPaused = false;
     this.nextStepTime = context.currentTime + 0.05;
     this.nextStepIndex = 0;
+    // In a run the music intensity builds from the player's speed (starts thin). In the
+    // menu/garage there is no speed signal, so park it at a fixed, fully-audible level.
+    if (mode === "run") {
+      this.musicIntensityTarget = 0;
+      this.musicIntensitySmoothed = 0;
+    } else {
+      this.musicIntensityTarget = mode === "menu" ? 0.5 : 0.45;
+      this.musicIntensitySmoothed = this.musicIntensityTarget;
+    }
     this.updateMusicModeGain();
     this.scheduleMusic();
     this.musicTimer = setInterval(() => this.scheduleMusic(), LOOKAHEAD_MS);
@@ -167,6 +223,8 @@ export class ProceduralAudioService {
     }
 
     this.activeMusicNodes.clear();
+    this.musicVoiceCount = 0;
+    this.musicIntensitySmoothed = 0;
     this.isMusicRunning = false;
     this.isMusicPaused = false;
     this.nextStepIndex = 0;
@@ -205,6 +263,16 @@ export class ProceduralAudioService {
   setRunIntensity(value: number): void {
     this.runIntensity = Math.min(1.8, Math.max(0, Number.isFinite(value) ? value : 0));
     this.applyEngineIntensity();
+    // Feed the music arranger too: speed dominates, combo/danger reserve the top layers so they
+    // feel "earned" (see setMusicDynamics). speedNorm: idle (~0.5 ratio) → 0, flat-out (1.0) → 1.
+    const speedNorm = this.clamp01((this.runIntensity - 0.5) / 0.5);
+    this.musicIntensityTarget = this.clamp01(0.85 * speedNorm + 0.3 * this.comboNorm + 0.2 * this.dangerNorm);
+  }
+
+  /** Optional gameplay coupling for the music: combo + danger lift the upper "earned" layers. */
+  setMusicDynamics(comboNorm: number, dangerNorm: number): void {
+    this.comboNorm = this.clamp01(Number.isFinite(comboNorm) ? comboNorm : 0);
+    this.dangerNorm = this.clamp01(Number.isFinite(dangerNorm) ? dangerNorm : 0);
   }
 
   private startEngine(): void {
@@ -501,6 +569,12 @@ export class ProceduralAudioService {
     }
     this.activeSfxNodes.clear();
 
+    for (const id of LAYER_IDS) {
+      this.layerGain[id]?.disconnect();
+    }
+    this.layerGain = {};
+    this.duckBus?.disconnect();
+    this.autoScaleGain?.disconnect();
     this.masterGain?.disconnect();
     this.musicGain?.disconnect();
     this.sfxGain?.disconnect();
@@ -508,6 +582,8 @@ export class ProceduralAudioService {
     this.noiseBuffer = null;
 
     this.context = null;
+    this.duckBus = null;
+    this.autoScaleGain = null;
     this.masterGain = null;
     this.musicGain = null;
     this.sfxGain = null;
@@ -546,6 +622,7 @@ export class ProceduralAudioService {
     this.musicGain = musicGain;
     this.sfxGain = sfxGain;
     this.compressor = compressor;
+    this.buildMusicBuses(context, musicGain);
     this.noiseBuffer = this.createNoiseBuffer(context);
     this.applySettings();
 
@@ -597,6 +674,22 @@ export class ProceduralAudioService {
       return;
     }
 
+    // Backgrounded tabs throttle setInterval; keep the clock in sync so we never burst-schedule
+    // a pile of past-due notes on refocus (a prime cause of clicks).
+    if (typeof document !== "undefined" && document.hidden) {
+      this.nextStepTime = context.currentTime;
+      return;
+    }
+
+    // Lateness guard: if a GC pause / throttle dropped us far behind, snap to the next bar
+    // boundary instead of frantically scheduling every missed step into the past.
+    if (context.currentTime - this.nextStepTime > 0.5) {
+      this.nextStepTime = context.currentTime + 0.05;
+      this.nextStepIndex = (Math.ceil(this.nextStepIndex / STEPS_PER_BAR) * STEPS_PER_BAR) % LOOP_STEPS;
+    }
+
+    this.updateMusicIntensity();
+
     while (this.nextStepTime < context.currentTime + SCHEDULE_AHEAD_SECONDS) {
       this.scheduleStep(this.nextStepIndex, this.nextStepTime);
       this.nextStepTime += SIXTEENTH_SECONDS;
@@ -607,32 +700,45 @@ export class ProceduralAudioService {
   private scheduleStep(step: number, time: number): void {
     const localStep = step % STEPS_PER_BAR;
     const bar = Math.floor(step / STEPS_PER_BAR);
+    // Global swing pushes odd 16ths late; per-voice micro-offsets add the J-Dilla "drunk" feel
+    // (kick a hair late, snare a hair early) on top. Never let an offset put a Step-0 hit in the
+    // past — clampStart floors every start time at currentTime + 5 ms.
+    const swung = time + this.swingOffset(localStep);
+    const onZero = localStep === 0;
 
     if (this.shouldPlayKick(localStep, bar)) {
-      this.scheduleKick(time);
+      this.scheduleKick(this.clampStart(swung + 0.018 + this.tri(0.006)));
     }
 
     if (this.shouldPlaySnare(localStep)) {
-      this.scheduleSnare(time);
+      const early = onZero ? 0 : 0.006; // snare pulled slightly early, but never on the downbeat
+      this.scheduleSnare(this.clampStart(swung - early + this.tri(0.006)), this.humanVel(1));
+    } else if (this.musicMode === "run" && (localStep === 3 || localStep === 7 || localStep === 11) && Math.random() < 0.12) {
+      // Ghost snares — the "played, not stamped" feel.
+      this.scheduleSnare(this.clampStart(swung + this.tri(0.006)), 0.3);
     }
 
-    if (this.shouldPlayHat(localStep)) {
-      const accent = localStep % 4 === 0 ? 1 : 0.72;
-      this.scheduleClosedHat(time, accent);
+    if (this.shouldPlayHat(localStep) && Math.random() < 0.92) {
+      const accent = (localStep % 4 === 0 ? 1 : 0.72) * this.humanVel(1);
+      this.scheduleClosedHat(this.clampStart(swung + this.tri(0.006)), accent);
     }
 
     if (this.musicMode === "run" && (step === 15 || step === 31 || step === 47)) {
-      this.scheduleOpenHat(time);
+      this.scheduleOpenHat(this.clampStart(swung + this.tri(0.006)));
     }
 
     if (this.musicMode === "run" && localStep % 2 === 0) {
       const bassNote = BASS_PATTERN[localStep];
       if (bassNote) {
-        this.scheduleBass(time, NOTE_FREQUENCIES[bassNote], localStep === 10 ? NOTE_FREQUENCIES.G1 : undefined);
+        this.scheduleBass(
+          this.clampStart(swung + this.tri(0.004)),
+          NOTE_FREQUENCIES[bassNote],
+          localStep === 10 ? NOTE_FREQUENCIES.G1 : undefined,
+        );
       }
     }
 
-    this.scheduleMelodicPluck(step, time);
+    this.scheduleMelodicPluck(step, swung);
   }
 
   private shouldPlayKick(localStep: number, bar: number): boolean {
@@ -668,6 +774,11 @@ export class ProceduralAudioService {
   }
 
   private scheduleMelodicPluck(step: number, time: number): void {
+    // The pluck is the lead layer (L4) — at low speed it stays silent so the beat can breathe.
+    if (!this.layerLive("L4")) {
+      return;
+    }
+
     if (this.musicMode === "menu" && step % 16 !== 0 && step % 16 !== 10) {
       return;
     }
@@ -681,13 +792,22 @@ export class ProceduralAudioService {
       return;
     }
 
-    const velocity = this.musicMode === "run" ? 0.13 : 0.08;
-    this.schedulePluck(time, NOTE_FREQUENCIES[noteName], velocity);
+    const velocity = (this.musicMode === "run" ? 0.13 : 0.08) * this.humanVel(1);
+    this.schedulePluck(this.clampStart(time + this.tri(0.012)), NOTE_FREQUENCIES[noteName], velocity);
+
+    // Occasional grace-note octave echo — a touch of generative sparkle at higher intensity.
+    if (this.musicMode === "run" && this.layerLive("L6") && Math.random() < 0.1) {
+      this.schedulePluck(
+        this.clampStart(time + SIXTEENTH_SECONDS / 2 + this.tri(0.012)),
+        NOTE_FREQUENCIES[noteName] * 2,
+        velocity * 0.4,
+      );
+    }
   }
 
   private scheduleKick(time: number): void {
     const context = this.ensureContext();
-    const destination = this.getMusicDestination();
+    const destination = this.layerDestination("L0");
     const oscillator = context.createOscillator();
     const gain = context.createGain();
 
@@ -702,12 +822,13 @@ export class ProceduralAudioService {
 
     oscillator.connect(gain);
     gain.connect(destination);
-    this.startAndTrack(oscillator, time, time + 0.3, "music");
+    this.duckOnKick(time); // sidechain the melodic bus under the kick (pump + headroom)
+    this.trackChain([{ node: oscillator, stop: time + 0.3 }], [gain], time, "music");
   }
 
-  private scheduleSnare(time: number): void {
+  private scheduleSnare(time: number, velocity = 1): void {
     const context = this.ensureContext();
-    const destination = this.getMusicDestination();
+    const destination = this.layerDestination("L1");
     const body = context.createOscillator();
     const bodyGain = context.createGain();
     const noise = context.createBufferSource();
@@ -717,14 +838,14 @@ export class ProceduralAudioService {
     body.type = "triangle";
     body.frequency.setValueAtTime(182, time);
     body.frequency.exponentialRampToValueAtTime(145, time + 0.09);
-    bodyGain.gain.setValueAtTime(0.18, time);
+    bodyGain.gain.setValueAtTime(0.18 * velocity, time);
     bodyGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
 
     noise.buffer = this.getNoiseBuffer(context);
     noiseFilter.type = "bandpass";
     noiseFilter.frequency.setValueAtTime(1800, time);
     noiseFilter.Q.value = 0.7;
-    noiseGain.gain.setValueAtTime(0.22, time);
+    noiseGain.gain.setValueAtTime(0.22 * velocity, time);
     noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.14);
 
     body.connect(bodyGain);
@@ -733,13 +854,20 @@ export class ProceduralAudioService {
     noiseFilter.connect(noiseGain);
     noiseGain.connect(destination);
 
-    this.startAndTrack(body, time, time + 0.18, "music");
-    this.startAndTrack(noise, time, time + 0.16, "music");
+    this.trackChain(
+      [
+        { node: body, stop: time + 0.18 },
+        { node: noise, stop: time + 0.16 },
+      ],
+      [bodyGain, noiseFilter, noiseGain],
+      time,
+      "music",
+    );
   }
 
   private scheduleClosedHat(time: number, accent: number): void {
     const context = this.ensureContext();
-    const destination = this.getMusicDestination();
+    const destination = this.layerDestination("L1");
     const source = context.createBufferSource();
     const filter = context.createBiquadFilter();
     const gain = context.createGain();
@@ -753,12 +881,12 @@ export class ProceduralAudioService {
     source.connect(filter);
     filter.connect(gain);
     gain.connect(destination);
-    this.startAndTrack(source, time, time + 0.055, "music");
+    this.trackChain([{ node: source, stop: time + 0.055 }], [filter, gain], time, "music");
   }
 
   private scheduleOpenHat(time: number): void {
     const context = this.ensureContext();
-    const destination = this.getMusicDestination();
+    const destination = this.layerDestination("L1");
     const source = context.createBufferSource();
     const filter = context.createBiquadFilter();
     const gain = context.createGain();
@@ -772,12 +900,12 @@ export class ProceduralAudioService {
     source.connect(filter);
     filter.connect(gain);
     gain.connect(destination);
-    this.startAndTrack(source, time, time + 0.2, "music");
+    this.trackChain([{ node: source, stop: time + 0.2 }], [filter, gain], time, "music");
   }
 
   private scheduleBass(time: number, frequency: number, slideTo?: number): void {
     const context = this.ensureContext();
-    const destination = this.getMusicDestination();
+    const destination = this.layerDestination("L2");
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const filter = context.createBiquadFilter();
@@ -797,12 +925,12 @@ export class ProceduralAudioService {
     oscillator.connect(filter);
     filter.connect(gain);
     gain.connect(destination);
-    this.startAndTrack(oscillator, time, time + 0.36, "music");
+    this.trackChain([{ node: oscillator, stop: time + 0.36 }], [filter, gain], time, "music");
   }
 
   private schedulePluck(time: number, frequency: number, velocity: number): void {
     const context = this.ensureContext();
-    const destination = this.getMusicDestination();
+    const destination = this.layerDestination("L4");
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const filter = context.createBiquadFilter();
@@ -814,13 +942,13 @@ export class ProceduralAudioService {
     filter.frequency.setValueAtTime(frequency * 2.6, time);
     filter.Q.setValueAtTime(5.5, time);
     gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.exponentialRampToValueAtTime(velocity, time + 0.006);
+    gain.gain.exponentialRampToValueAtTime(Math.max(velocity, 0.0001), time + 0.006);
     gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
 
     oscillator.connect(filter);
     filter.connect(gain);
     gain.connect(destination);
-    this.startAndTrack(oscillator, time, time + 0.18, "music");
+    this.trackChain([{ node: oscillator, stop: time + 0.18 }], [filter, gain], time, "music");
   }
 
   private playTone(
@@ -844,7 +972,7 @@ export class ProceduralAudioService {
 
     oscillator.connect(gain);
     gain.connect(destination ?? context.destination);
-    this.startAndTrack(oscillator, time, time + duration + 0.02, "sfx");
+    this.trackChain([{ node: oscillator, stop: time + duration + 0.02 }], [gain], time, "sfx");
   }
 
   private playSweep(
@@ -869,7 +997,7 @@ export class ProceduralAudioService {
 
     oscillator.connect(gain);
     gain.connect(destination ?? context.destination);
-    this.startAndTrack(oscillator, time, time + duration + 0.02, "sfx");
+    this.trackChain([{ node: oscillator, stop: time + duration + 0.02 }], [gain], time, "sfx");
   }
 
   private playNoiseBurst(
@@ -897,25 +1025,198 @@ export class ProceduralAudioService {
     source.connect(filter);
     filter.connect(gain);
     gain.connect(destination ?? context.destination);
-    this.startAndTrack(source, time, time + duration + 0.02, "sfx");
+    this.trackChain([{ node: source, stop: time + duration + 0.02 }], [filter, gain], time, "sfx");
   }
 
-  private startAndTrack<T extends AudioScheduledSourceNode>(
-    node: T,
+  /**
+   * Start + track a voice and — critically — disconnect its WHOLE node chain when it ends, not
+   * just the source. The previous startAndTrack left the per-note gain/filter nodes connected to
+   * the graph until GC, inflating the audio-thread graph and feeding the click/crackle build-up.
+   * Cleanup fires once every source in the voice has ended (a voice can be multi-source, e.g. the
+   * snare's body + noise), so nothing is double- or under-disconnected.
+   */
+  private trackChain(
+    sources: Array<{ node: AudioScheduledSourceNode; stop: number }>,
+    chain: AudioNode[],
     startTime: number,
-    stopTime: number,
     group: "music" | "sfx",
   ): void {
-    const activeNodes = group === "music" ? this.activeMusicNodes : this.activeSfxNodes;
-    activeNodes.add(node);
+    if (sources.length === 0) {
+      return;
+    }
 
-    node.onended = () => {
-      activeNodes.delete(node);
-      node.disconnect();
+    // Voice-cap backstop: never let music voices pile up unboundedly (a runaway-scheduler guard).
+    if (group === "music" && this.musicVoiceCount + sources.length > MAX_MUSIC_VOICES) {
+      for (const { node } of sources) {
+        try {
+          node.disconnect();
+        } catch {
+          // not yet connected
+        }
+      }
+      for (const node of chain) {
+        try {
+          node.disconnect();
+        } catch {
+          // not yet connected
+        }
+      }
+      return;
+    }
+
+    const activeNodes = group === "music" ? this.activeMusicNodes : this.activeSfxNodes;
+    let pending = sources.length;
+    const cleanup = () => {
+      for (const { node } of sources) {
+        activeNodes.delete(node);
+        try {
+          node.disconnect();
+        } catch {
+          // already disconnected
+        }
+      }
+      for (const node of chain) {
+        try {
+          node.disconnect();
+        } catch {
+          // already disconnected
+        }
+      }
+      if (group === "music") {
+        this.musicVoiceCount = Math.max(0, this.musicVoiceCount - sources.length);
+      }
     };
 
-    node.start(startTime);
-    node.stop(stopTime);
+    for (const { node, stop } of sources) {
+      activeNodes.add(node);
+      node.onended = () => {
+        pending -= 1;
+        if (pending <= 0) {
+          cleanup();
+        }
+      };
+      node.start(startTime);
+      node.stop(stop);
+    }
+
+    if (group === "music") {
+      this.musicVoiceCount += sources.length;
+    }
+  }
+
+  /** Build the per-layer gain buses + the kick-sidechained duck bus + the headroom auto-scaler. */
+  private buildMusicBuses(context: AudioContext, musicGain: GainNode): void {
+    const duckBus = context.createGain();
+    duckBus.gain.value = 1;
+    const autoScale = context.createGain();
+    autoScale.gain.value = 0.9;
+    duckBus.connect(autoScale);
+    autoScale.connect(musicGain);
+    this.duckBus = duckBus;
+    this.autoScaleGain = autoScale;
+
+    this.layerGain = {};
+    for (const id of LAYER_IDS) {
+      const bus = context.createGain();
+      const on = LAYER_GATES[id] <= 0;
+      bus.gain.value = on ? 1 : 0.0001;
+      this.layerOn[id] = on;
+      // Drums (L0/L1) bypass the sidechain; melodic layers (L2..L7) duck under the kick.
+      bus.connect(id === "L0" || id === "L1" ? autoScale : duckBus);
+      this.layerGain[id] = bus;
+    }
+  }
+
+  private layerDestination(id: LayerId): AudioNode {
+    if (!this.layerGain[id]) {
+      this.ensureContext();
+    }
+    return this.layerGain[id] ?? this.getMusicDestination();
+  }
+
+  /** Whether a layer's gate is currently open (used to skip scheduling silent melodic layers). */
+  private layerLive(id: LayerId): boolean {
+    // In the menu/garage the speed-driven intensity isn't meaningful — keep melodic layers audible.
+    if (this.musicMode !== "run") {
+      return true;
+    }
+    return this.layerOn[id];
+  }
+
+  /** Per-tick: smooth the intensity, flip layer gates (with hysteresis), keep output headroom. */
+  private updateMusicIntensity(): void {
+    const context = this.context;
+    if (!context) {
+      return;
+    }
+
+    this.musicIntensitySmoothed += (this.musicIntensityTarget - this.musicIntensitySmoothed) * 0.025;
+    const v = this.musicIntensitySmoothed;
+
+    for (const id of LAYER_IDS) {
+      const gate = LAYER_GATES[id];
+      if (gate <= 0) {
+        continue; // L0..L3 are always on
+      }
+      const on = this.layerOn[id];
+      const threshold = on ? gate - LAYER_HYSTERESIS : gate + LAYER_HYSTERESIS;
+      const next = v >= threshold;
+      if (next !== on) {
+        this.layerOn[id] = next;
+        this.layerGain[id]?.gain.setTargetAtTime(next ? 1 : 0.0001, context.currentTime, 0.2);
+      }
+    }
+
+    this.updateAutoScale();
+  }
+
+  /** Trim the summed music level as more layers stack so the output keeps headroom. */
+  private updateAutoScale(): void {
+    const context = this.context;
+    const node = this.autoScaleGain;
+    if (!context || !node) {
+      return;
+    }
+    let count = 0;
+    for (const id of LAYER_IDS) {
+      if (this.layerOn[id]) {
+        count += 1;
+      }
+    }
+    const scale = Math.min(1, 1.4 / Math.sqrt(Math.max(1, count)));
+    node.gain.setTargetAtTime(scale, context.currentTime, 0.1);
+  }
+
+  /** Sidechain: duck the melodic bus under each kick, recovering over ~120 ms (the "pump"). */
+  private duckOnKick(time: number): void {
+    const duck = this.duckBus;
+    if (!duck) {
+      return;
+    }
+    duck.gain.cancelScheduledValues(time);
+    duck.gain.setValueAtTime(0.6, time);
+    duck.gain.linearRampToValueAtTime(1, time + 0.12);
+  }
+
+  /** Triangular jitter in seconds (sum of two uniforms ≈ centred, natural-feeling micro-timing). */
+  private tri(maxSeconds: number): number {
+    return ((Math.random() + Math.random()) / 2) * 2 * maxSeconds - maxSeconds;
+  }
+
+  /** Humanised velocity: scale a base level down by up to 18% at random. */
+  private humanVel(base: number): number {
+    return base * (1 - Math.random() * 0.18);
+  }
+
+  /** Swing: delay odd 16ths by a fraction of a 16th (MPC-style behind-the-beat groove). */
+  private swingOffset(localStep: number): number {
+    return localStep % 2 === 1 ? DEFAULT_SWING * SIXTEENTH_SECONDS : 0;
+  }
+
+  /** Never schedule a start in the past — Web Audio would clamp it to "now" and click/flam. */
+  private clampStart(time: number): number {
+    const context = this.context;
+    return context ? Math.max(time, context.currentTime + 0.005) : time;
   }
 
   private stopNode(node: ScheduledNode, when?: number): void {
