@@ -345,6 +345,9 @@ export class ProceduralAudioService {
   private engineProfile: EngineProfile = DEFAULT_ENGINE_PROFILE;
   private engineDip = 0; // transient "gear-shift" — momentarily pulls the engine pitch down, then recovers
   private engineDipTime = 0;
+  // Coin-chime pitch climbs over a quick streak but resets after a 2 s gap (so it doesn't sit high).
+  private coinSoundStep = 0;
+  private lastCoinSoundTime = -10;
 
   // Adaptive-music buses + state. Melodic layers (L2..L7) route through `duckBus` (kick-
   // sidechained for pump + headroom); drum layers (L0/L1) bypass it. `autoScaleGain` trims the
@@ -671,11 +674,18 @@ export class ProceduralAudioService {
     this.applySettings();
   }
 
-  playCoin(combo = 0): void {
+  playCoin(_combo = 0): void {
     const context = this.ensureContext();
     const now = context.currentTime;
-    const step = Math.min(Math.max(0, combo), 16);
-    const f = 820 * Math.pow(2, step / 16); // pitch climbs up to an octave as the combo grows
+    // The chime climbs only while coins keep coming; a >2 s gap resets it to the base pitch, so it
+    // doesn't sit permanently "up". Driven by real time here, not the game combo (which can persist).
+    if (now - this.lastCoinSoundTime > 2) {
+      this.coinSoundStep = 0;
+    } else {
+      this.coinSoundStep = Math.min(this.coinSoundStep + 1, 16);
+    }
+    this.lastCoinSoundTime = now;
+    const f = 820 * Math.pow(2, this.coinSoundStep / 16); // pitch climbs up to an octave over a streak
     this.playTone(now, f, 0.07, "sine", 0.16, this.sfxGain, 0.008);
     this.playTone(now + 0.05, f * 1.5, 0.09, "triangle", 0.12, this.sfxGain, 0.004);
   }
