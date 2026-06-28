@@ -163,6 +163,8 @@ type DrumKit = "boombap" | "brushed" | "electronic" | "taiko";
 type LeadStyle = "koto" | "rhodes" | "supersaw" | "shakuhachi";
 type BassStyle = "round" | "funk" | "drone";
 
+type AccentKind = "none" | "synthBell" | "panFlute";
+
 interface BiomeTheme {
   key: string;
   tonicHz: number;
@@ -175,19 +177,13 @@ interface BiomeTheme {
   leadStyle: LeadStyle;
   chordRootSemis: number[]; // chord-root semitone offsets from the tonic, cycled every chordBars (drives the bass)
   chordBars: number;
+  accent: AccentKind; // a per-biome "evolution" voice layered over the shared village spine
 }
 
-const NEON_DRUMS: DrumGrid[] = [
-  { kick: [0, 4, 8, 12], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 14], openHat: [14] },
-  { kick: [0, 4, 8, 12], snare: [4, 12], hat: [2, 3, 6, 7, 10, 11, 14, 15], openHat: [] },
-  { kick: [0, 4, 7, 8, 12], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 13, 14], openHat: [15] },
-];
-
-const FOREST_DRUMS: DrumGrid[] = [
-  { kick: [0], snare: [8], hat: [0, 4, 8, 12], openHat: [] },
-  { kick: [0, 10], snare: [8], hat: [0, 4, 8, 12, 14], openHat: [] },
-];
-
+// All biomes share ONE soundtrack — the warm D lo-fi-hip-hop village spine (same tonic, swing, kit
+// family + koto lead) — and merely EVOLVE it from leg to leg rather than cutting to a new genre:
+// autumn reharmonises to in-sen + Rhodes; the neon city keeps the beat but adds a bright synth-bell
+// sparkle; the forest stays calm + soft and floats a pan-flute counter-melody over the koto.
 const BIOME_THEMES: BiomeTheme[] = [
   {
     key: "village",
@@ -199,8 +195,9 @@ const BIOME_THEMES: BiomeTheme[] = [
     bassSteps: [0, 6, 10],
     bassStyle: "round",
     leadStyle: "koto",
-    chordRootSemis: [0, 5, 7, 9], // D – G – A – B (Dm9 · Gmaj7 · Am7 · Bm7 roots)
+    chordRootSemis: [0, 5, 7, 9], // D – G – A – B
     chordBars: 2,
+    accent: "none",
   },
   {
     key: "village_autumn",
@@ -212,34 +209,41 @@ const BIOME_THEMES: BiomeTheme[] = [
     bassSteps: [0, 6, 10],
     bassStyle: "round",
     leadStyle: "rhodes",
-    chordRootSemis: [0, 5, 2, 7], // D – G – E – A (Dm9 · Gm7 · Em7♭5 · A7 roots)
+    chordRootSemis: [0, 5, 2, 7], // D – G – E – A
     chordBars: 2,
+    accent: "none",
   },
   {
+    // 電脳都市 — the SAME village beat at night, lifted by a bright electronic sparkle (no genre
+    // change): same D key, swing + koto lead, with a shimmering synth-bell arp layered on top.
     key: "neon",
-    tonicHz: 369.99, // F#4 — bright synthwave register
-    scale: [0, 3, 5, 7, 10], // F# minor pentatonic
-    swing: 0,
-    drumVariants: NEON_DRUMS,
-    kit: "electronic",
-    bassSteps: [0, 3, 6, 7, 10, 13, 14],
-    bassStyle: "funk",
-    leadStyle: "supersaw",
-    chordRootSemis: [0, 8, 10, 7], // F# – D – E – C# (F#m · D · E · C#m roots, i–♭VI–♭VII–v)
+    tonicHz: NOTE_FREQUENCIES.D4,
+    scale: [0, 2, 5, 7, 9], // D yo — stay in the village key
+    swing: 0.16,
+    drumVariants: RUN_DRUM_VARIANTS,
+    kit: "boombap",
+    bassSteps: [0, 6, 10],
+    bassStyle: "round",
+    leadStyle: "koto",
+    chordRootSemis: [0, 7, 9, 5], // D – A – B – G (a brighter, lifted turn, still in D)
     chordBars: 2,
+    accent: "synthBell",
   },
   {
+    // 奥山渓谷 — the same spine, calmer + more open: softer brushed kit, slower harmonic motion and
+    // a gentle pan-flute counter-melody floating over the koto.
     key: "forest",
-    tonicHz: 220.0, // A3 — calm mid register
-    scale: [0, 2, 5, 7, 10], // A yo-leaning modal (A–B–D–E–G)
-    swing: 0.12,
-    drumVariants: FOREST_DRUMS,
-    kit: "taiko",
-    bassSteps: [0],
-    bassStyle: "drone",
-    leadStyle: "shakuhachi",
-    chordRootSemis: [0, 8, 3, 10], // A – F – C – G (Am · Fmaj7 · Cmaj7 · G6 roots)
+    tonicHz: NOTE_FREQUENCIES.D4,
+    scale: [0, 2, 5, 7, 9], // D yo — stay in the village key
+    swing: 0.14,
+    drumVariants: RUN_DRUM_VARIANTS,
+    kit: "brushed",
+    bassSteps: [0, 10],
+    bassStyle: "round",
+    leadStyle: "koto",
+    chordRootSemis: [0, 5, 0, 7], // D – G – D – A (restful, pedal-ish)
     chordBars: 4,
+    accent: "panFlute",
   },
 ];
 
@@ -1107,6 +1111,19 @@ export class ProceduralAudioService {
         }
       }
     }
+
+    // Per-biome "evolution" accent — same song, gently developed. Comes in with the lead (L4):
+    // a bright synth-bell sparkle in the neon city, a soft pan-flute counter-melody in the forest.
+    if (theme.accent !== "none" && this.layerLive("L4")) {
+      if (theme.accent === "synthBell" && (localStep === 2 || localStep === 6 || localStep === 10 || localStep === 14)) {
+        const bellDeg = [5, 7, 9, 7][((localStep - 2) / 4) | 0]; // D5 · G5 · B5 · G5 — a bright arp
+        this.scheduleSynthBell(this.clampStart(swung + this.tri(0.01)), this.degreeToFreq(bellDeg), 0.07 * this.humanVel(1));
+      } else if (theme.accent === "panFlute" && localStep === 0) {
+        const fluteLine = [3, 4, 2, 3, 0, 2, 4, 3]; // a slow lyrical counter-line over 8 bars
+        const deg = fluteLine[arr.barCounter % fluteLine.length];
+        this.scheduleAccentFlute(this.clampStart(swung + this.tri(0.01)), this.degreeToFreq(deg), 0.1);
+      }
+    }
   }
 
   /** Chord-root semitone offset → a bass frequency, dropped into the sub register (~55–110 Hz). */
@@ -1652,6 +1669,93 @@ export class ProceduralAudioService {
         { node: noise, stop: time + 0.3 },
       ],
       [tone, lp, bp, noiseGain],
+      time,
+      "music",
+    );
+  }
+
+  // ---- Per-biome evolution accents (route to the always-on L3 bus) ----
+
+  /** Neon sparkle: a bright, slightly inharmonic sine bell — the city evolution over the koto. */
+  private scheduleSynthBell(time: number, frequency: number, velocity: number): void {
+    const context = this.ensureContext();
+    const destination = this.layerDestination("L3");
+    const fund = context.createOscillator();
+    const partial = context.createOscillator();
+    const fundGain = context.createGain();
+    const partialGain = context.createGain();
+    const lp = context.createBiquadFilter();
+    const v = Math.max(velocity, 0.0001);
+
+    fund.type = "sine";
+    fund.frequency.setValueAtTime(frequency, time);
+    partial.type = "sine";
+    partial.frequency.setValueAtTime(frequency * 2.01, time); // slight inharmonic shimmer
+    lp.type = "lowpass";
+    lp.frequency.value = 6000;
+
+    fundGain.gain.setValueAtTime(0.0001, time);
+    fundGain.gain.exponentialRampToValueAtTime(v, time + 0.004);
+    fundGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.3);
+    partialGain.gain.setValueAtTime(0.0001, time);
+    partialGain.gain.exponentialRampToValueAtTime(v * 0.4, time + 0.004);
+    partialGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+
+    fund.connect(fundGain);
+    fundGain.connect(lp);
+    partial.connect(partialGain);
+    partialGain.connect(lp);
+    lp.connect(destination);
+    this.trackChain(
+      [
+        { node: fund, stop: time + 0.32 },
+        { node: partial, stop: time + 0.2 },
+      ],
+      [fundGain, partialGain, lp],
+      time,
+      "music",
+    );
+  }
+
+  /** Forest pan flute: a soft, breathy triangle counter-melody with a long tail — the forest evolution. */
+  private scheduleAccentFlute(time: number, frequency: number, velocity: number): void {
+    const context = this.ensureContext();
+    const destination = this.layerDestination("L3");
+    const tone = context.createOscillator();
+    const gain = context.createGain();
+    const lp = context.createBiquadFilter();
+    const noise = context.createBufferSource();
+    const bp = context.createBiquadFilter();
+    const noiseGain = context.createGain();
+    const v = Math.max(velocity, 0.0001);
+
+    tone.type = "triangle";
+    tone.frequency.setValueAtTime(frequency, time);
+    lp.type = "lowpass";
+    lp.frequency.value = 1800;
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(v, time + 0.1); // gentle breathy attack
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.7); // long, soft tail
+
+    noise.buffer = this.getNoiseBuffer(context);
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(frequency, time);
+    bp.Q.value = 5;
+    noiseGain.gain.setValueAtTime(v * 0.1, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.2);
+
+    tone.connect(gain);
+    gain.connect(lp);
+    noise.connect(bp);
+    bp.connect(noiseGain);
+    noiseGain.connect(lp);
+    lp.connect(destination);
+    this.trackChain(
+      [
+        { node: tone, stop: time + 0.75 },
+        { node: noise, stop: time + 0.25 },
+      ],
+      [gain, lp, bp, noiseGain],
       time,
       "music",
     );
