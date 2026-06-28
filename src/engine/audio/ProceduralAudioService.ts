@@ -269,47 +269,75 @@ interface ArrangerState {
 // Each car gets its own character, keyed by its ability-kanji and refined by its price tier:
 // waveform + pitch register + harmony interval + sub weight + EV coil-whine + brightness shape
 // the "personality" so a heavy 鬼 Oni growls dark and low while a 龍 Dragon sings deep but bright.
-interface EngineProfile {
-  waveA: OscillatorType;
-  waveB: OscillatorType;
-  pitchScale: number; // multiplies the fundamental Hz curve (lower = heavier/deeper)
-  intervalB: number; // toneB / toneA ratio (1.5 perfect fifth · 2 octave · 1.335 fourth)
-  detuneB: number; // chorus beat width on the upper tone
-  subLevel: number; // sub-oscillator weight (body/weight)
-  whineLevel: number; // EV inverter coil-whine multiplier (high-tech/electric)
-  brightness: number; // master lowpass-cutoff multiplier (bright vs dark)
-  tremoloRate: number; // base "singing" LFO Hz
-  gainScale: number; // overall engine loudness
+// --- Per-car melodic engine voice ---
+// The car "engine" is NOT a held drone — it's a quiet, key-locked D-pentatonic arpeggio the player
+// accelerates THROUGH. Speed raises the arp rate, register (stepped), note density and brightness
+// (never just raw pitch or level), so going faster feels musical, not shrill. Each car has its own
+// motif + timbre; a whisper of sub-pad gives body; two slow LFOs let it "breathe". Strictly
+// consonant in D, low in the mix, non-fatiguing over a long run.
+interface MelodyProfile {
+  motif: number[]; // scale-degree indices (octave-wrapping)
+  scaleOverride?: number[]; // defaults to D yo (RUN_SCALE)
+  rootMul: number; // base-register multiplier on the D tonic (0.25 = D2 · 0.5 = D3 · 1 = D4)
+  oscMain: OscillatorType;
+  oscDetune: OscillatorType;
+  detuneCents: number; // 2nd-voice chorus detune (±3–8 ¢ → shimmer, not roughness)
+  attackMin: number; // fast attack at speed
+  attackMax: number; // slow, soft attack when calm
+  release: number; // note tail length (s) — every note decays to silence (anti-fatigue)
+  vibratoCents: number; // vibrato depth at full speed (≤10 ¢ @ 5–6 Hz, tails)
+  lpBase: number; // per-note lowpass cutoff at idle (warm)
+  lpRange: number; // cutoff added by speed (opens, never sharper than lpCap)
+  lpQ: number;
+  lpCap: number; // brightness ceiling (anti-sharpness)
+  subLevel: number; // continuous sub-pad weight
+  whineLevel: number; // gated boost garnish (≤2 kHz); 0 = none
+  rateMin: number; // arp notes/sec at idle
+  rateMax: number; // arp notes/sec flat-out
+  octaveSpan: number; // octaves the register steps up with speed (integer steps)
+  twoVoiceFrom: number; // speed at which the harmony (2nd) voice joins
+  gainScale: number; // per-car loudness trim (kept low)
 }
 
-const DEFAULT_ENGINE_PROFILE: EngineProfile = {
-  waveA: "sawtooth",
-  waveB: "sawtooth",
-  pitchScale: 1,
-  intervalB: 1.5,
-  detuneB: 1.004,
+const DEFAULT_MELODY: MelodyProfile = {
+  motif: [0, 3, 2, 3],
+  rootMul: 0.5,
+  oscMain: "triangle",
+  oscDetune: "triangle",
+  detuneCents: 5,
+  attackMin: 0.008,
+  attackMax: 0.035,
+  release: 0.28,
+  vibratoCents: 8,
+  lpBase: 600,
+  lpRange: 2000,
+  lpQ: 0.7,
+  lpCap: 3200,
   subLevel: 0.12,
-  whineLevel: 1,
-  brightness: 1,
-  tremoloRate: 5,
+  whineLevel: 0,
+  rateMin: 2.4,
+  rateMax: 7,
+  octaveSpan: 1,
+  twoVoiceFrom: 0.65,
   gainScale: 1,
 };
 
-const ENGINE_FLAVORS: Record<string, EngineProfile> = {
-  // 赤 Crimson Bolt — classic punchy sporty saw, mid-bright.
-  "赤": { ...DEFAULT_ENGINE_PROFILE, brightness: 1.1, tremoloRate: 5.5 },
-  // 藍 Indigo Drift — clean electric: square + octave harmony, more EV whine, higher.
-  "藍": { ...DEFAULT_ENGINE_PROFILE, waveA: "square", waveB: "sine", pitchScale: 1.05, intervalB: 2, subLevel: 0.09, whineLevel: 1.8, brightness: 1.2, tremoloRate: 4.5, gainScale: 0.95 },
-  // 桜 Sakura Roadster — gentle, soft, smooth triangles, light.
-  "桜": { ...DEFAULT_ENGINE_PROFILE, waveA: "triangle", waveB: "triangle", pitchScale: 1.08, subLevel: 0.08, whineLevel: 0.6, brightness: 0.95, tremoloRate: 4, gainScale: 0.9 },
-  // 狐 Kitsune GT — nimble, bright, high coil-whine.
-  "狐": { ...DEFAULT_ENGINE_PROFILE, pitchScale: 1.05, subLevel: 0.1, whineLevel: 1.5, brightness: 1.3, tremoloRate: 6 },
-  // 将 Daimyo Coupe — heavy growl: low, fourth interval, wide chorus beat.
-  "将": { ...DEFAULT_ENGINE_PROFILE, pitchScale: 0.9, intervalB: 1.335, detuneB: 1.008, subLevel: 0.16, whineLevel: 0.8, brightness: 0.85, tremoloRate: 4, gainScale: 1.05 },
-  // 鬼 Oni Racer — dark, menacing, deep sub, muffled.
-  "鬼": { ...DEFAULT_ENGINE_PROFILE, waveB: "square", pitchScale: 0.85, detuneB: 1.006, subLevel: 0.18, whineLevel: 0.7, brightness: 0.7, tremoloRate: 3.5, gainScale: 1.05 },
-  // 龍 Dragon Zero — powerful hypercar: deep + bright + strong, with EV shimmer.
-  "龍": { ...DEFAULT_ENGINE_PROFILE, pitchScale: 0.92, detuneB: 1.005, subLevel: 0.16, whineLevel: 1.6, brightness: 1.25, tremoloRate: 5, gainScale: 1.1 },
+// Each car's melodic signature — all in D, all consonant, all calm + low.
+const MELODY_VOICES: Record<string, MelodyProfile> = {
+  // 赤 Crimson Bolt — warm, eager hero baseline (D A G A).
+  "赤": { ...DEFAULT_MELODY },
+  // 藍 Indigo Drift — clean, glassy, weightless; floats above the root.
+  "藍": { ...DEFAULT_MELODY, motif: [3, 4, 3, 2], rootMul: 1, oscMain: "sine", oscDetune: "triangle", detuneCents: 3, lpBase: 1100, lpRange: 2000, lpCap: 3200, subLevel: 0.08, whineLevel: 0.5, rateMin: 2.2, rateMax: 6, twoVoiceFrom: 0.5, gainScale: 0.95 },
+  // 桜 Sakura Roadster — soft, gentle, music-box calm; the least aggressive curve.
+  "桜": { ...DEFAULT_MELODY, motif: [0, 1, 3, 1], rootMul: 1, detuneCents: 6, attackMax: 0.045, release: 0.34, lpBase: 550, lpRange: 1450, lpCap: 2400, subLevel: 0.07, rateMin: 2, rateMax: 5, twoVoiceFrom: 0.8, gainScale: 0.9 },
+  // 狐 Kitsune GT — nimble, bright, mischievous; speed adds passing notes.
+  "狐": { ...DEFAULT_MELODY, motif: [0, 2, 3, 4, 3, 2], rootMul: 0.5, oscDetune: "square", detuneCents: 4, lpBase: 900, lpRange: 2100, lpCap: 3200, subLevel: 0.1, whineLevel: 0.6, rateMin: 2.6, rateMax: 8, twoVoiceFrom: 0.6 },
+  // 将 Daimyo Coupe — noble, stately open-fifth fanfare, low register.
+  "将": { ...DEFAULT_MELODY, motif: [0, 3, 7, 3], rootMul: 0.25, detuneCents: 4, lpBase: 500, lpRange: 1700, lpCap: 2600, subLevel: 0.16, rateMin: 2, rateMax: 5.5, twoVoiceFrom: 0.7, gainScale: 1.05 },
+  // 鬼 Oni Racer — dark + dangerous but smooth/warm (minor pentatonic, capped dark — never harsh).
+  "鬼": { ...DEFAULT_MELODY, motif: [0, 3, 7, 0], scaleOverride: [0, 3, 5, 7, 10], rootMul: 0.25, oscDetune: "sine", detuneCents: 5, lpBase: 380, lpRange: 1120, lpCap: 1500, subLevel: 0.18, rateMin: 2, rateMax: 5.5, twoVoiceFrom: 0.7, gainScale: 1.05 },
+  // 龍 Dragon Zero — majestic, soaring, premium; widest arc + harmony joins early.
+  "龍": { ...DEFAULT_MELODY, motif: [0, 3, 4, 7, 3], rootMul: 0.5, detuneCents: 5, lpBase: 700, lpRange: 2200, lpCap: 3200, subLevel: 0.16, whineLevel: 0.5, rateMin: 2.4, rateMax: 7.5, twoVoiceFrom: 0.55, gainScale: 1.1 },
 };
 
 export class ProceduralAudioService {
@@ -328,27 +356,31 @@ export class ProceduralAudioService {
   private nextStepIndex = 0;
   private activeMusicNodes = new Set<ScheduledNode>();
   private activeSfxNodes = new Set<ScheduledNode>();
-  // Continuous EV motor sound: a deep, SINGING two-tone harmony (a fundamental + a perfect
-  // fifth, slightly detuned for a chorus shimmer) warmed by a master lowpass, with a faint
-  // sub for depth, a hint of inverter coil-whine, airy road noise + a sport-sound tremolo.
-  // Pitch + brightness rise with the player's speed.
+  // The EV motor = a quiet, key-locked D-pentatonic arpeggio (one motif per car) the player
+  // accelerates through, plus a whisper of sub-pad for body and two slow "breathing" LFOs so even a
+  // held speed keeps gently evolving. Driven by SPEED only. See MelodyProfile / MELODY_VOICES.
   private engine: {
-    toneA: OscillatorNode;
-    toneB: OscillatorNode;
-    sub: OscillatorNode;
-    inverter: OscillatorNode;
-    noise: AudioBufferSourceNode;
-    lfo: OscillatorNode;
-    gA: GainNode;
-    gInv: GainNode;
-    air: GainNode;
+    bus: GainNode;
     lp: BiquadFilterNode;
-    gain: GainNode;
+    sub: OscillatorNode;
+    subGain: GainNode;
+    vibratoLfo: OscillatorNode;
+    vibratoDepth: GainNode; // outputs cents → each note's osc.detune
+    whine: OscillatorNode;
+    whineGain: GainNode;
+    breathA: OscillatorNode;
+    breathADepth: GainNode;
+    breathB: OscillatorNode;
+    breathBDepth: GainNode;
   } | null = null;
   private runIntensity = 0.4;
-  private engineProfile: EngineProfile = DEFAULT_ENGINE_PROFILE;
-  private engineDip = 0; // transient "gear-shift" — momentarily pulls the engine pitch down, then recovers
-  private engineDipTime = 0;
+  private melody: MelodyProfile = MELODY_VOICES["赤"] ?? DEFAULT_MELODY;
+  private engineTimer: ReturnType<typeof setInterval> | null = null;
+  private engineNextNoteTime = 0;
+  private engineStep = 0;
+  private engineLastFreq = 0; // previous arp note, for short portamento
+  private engineS = 0; // smoothed speed: 0 idle → 1 flat-out
+  private engineBoost = 0; // 0 → 1 only when boosted (>1.0 ratio)
   // Coin-chime pitch climbs over a quick streak but resets after a 2 s gap (so it doesn't sit high).
   private coinSoundStep = 0;
   private lastCoinSoundTime = -10;
@@ -518,29 +550,35 @@ export class ProceduralAudioService {
   }
 
   /**
-   * Give the EV motor the character of the selected car. `kanji` is the car's ability glyph (its
-   * personality), `tierRank` its price tier (0 common … 3 legend) — pricier cars sound a touch more
-   * refined/high-tech (brighter + more coil-whine). Set before the run's engine starts.
+   * Give the EV motor the character of the selected car by swapping its melodic voice. `kanji` is
+   * the car's ability glyph (its personality); `tierRank` (0 common … 3 legend) refines pricier cars
+   * — longer, more luxurious tails + a hair more chorus shimmer — never louder or sharper. Live-
+   * swappable: the running arpeggiator picks up the new voice on its next note.
    */
   setVehicleEngine(kanji: string, tierRank = 0): void {
-    const base = ENGINE_FLAVORS[kanji] ?? DEFAULT_ENGINE_PROFILE;
+    const base = MELODY_VOICES[kanji] ?? DEFAULT_MELODY;
     const rank = Math.max(0, Math.min(3, Math.floor(tierRank)));
-    this.engineProfile = {
+    this.melody = {
       ...base,
-      brightness: base.brightness * (1 + rank * 0.04),
-      whineLevel: base.whineLevel * (1 + rank * 0.08),
+      release: base.release + rank * 0.04,
+      detuneCents: base.detuneCents + rank * 0.6,
     };
-    this.applyEngineIntensity(); // live-nudge the intensity-driven params if the engine is running
+    this.engineStep = 0;
+    this.applyEngineIntensity(); // refresh the sub-pad register if already running
   }
 
-  /**
-   * A momentary "downshift": pull the engine pitch + brightness down, then let it climb back over
-   * ~0.5 s — fired on lane changes, small mistakes and ability use so the motor breathes (and the
-   * car's power reads in the surge back up) instead of holding one constant drone.
-   */
-  engineDownshift(strength = 0.3): void {
-    this.engineDip = Math.min(0.6, this.engineDip + strength);
-    this.applyEngineIntensity();
+  private lerp(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
+  }
+
+  /** Pentatonic scale-degree (octave-wrapping) → engine frequency, fixed in D (never the biome key). */
+  private engineNoteFreq(degree: number, octaveAdd: number): number {
+    const scale = this.melody.scaleOverride ?? RUN_SCALE;
+    const len = scale.length;
+    const d = degree + octaveAdd * len;
+    const idx = ((d % len) + len) % len;
+    const oct = Math.floor(d / len);
+    return RUN_TONIC_HZ * this.melody.rootMul * Math.pow(2, (scale[idx] + 12 * oct) / 12);
   }
 
   private startEngine(): void {
@@ -548,81 +586,72 @@ export class ProceduralAudioService {
       return;
     }
     const ctx = this.ensureContext();
-    const profile = this.engineProfile;
-    const gain = ctx.createGain();
-    gain.gain.value = 0.0001;
+    const out = this.sfxGain ?? ctx.destination;
 
-    // Master lowpass keeps the whole sound deep + warm (the two tones sing rather than buzz).
+    // Bus → a warm ceiling lowpass (anti-sharpness) → the sfx bus.
+    const bus = ctx.createGain();
+    bus.gain.value = 0.0001;
     const lp = ctx.createBiquadFilter();
     lp.type = "lowpass";
-    lp.frequency.value = 900;
-    lp.Q.value = 0.7;
+    lp.frequency.value = 3200;
+    lp.Q.value = 0.6;
+    bus.connect(lp);
+    lp.connect(out);
 
-    // The two singing tones: a deep fundamental + an upper interval. Waveforms set by the car.
-    const toneA = ctx.createOscillator();
-    toneA.type = profile.waveA;
-    const gA = ctx.createGain();
-    gA.gain.value = 0.34;
-    const toneB = ctx.createOscillator();
-    toneB.type = profile.waveB;
-    const gB = ctx.createGain();
-    gB.gain.value = 0.3;
-
-    // Faint sub an octave below the fundamental for body / "tiefer" (weight set by the car).
+    // Continuous sub-pad — the only sustained element (pure body, no harmony).
     const sub = ctx.createOscillator();
     sub.type = "sine";
-    const gSub = ctx.createGain();
-    gSub.gain.value = profile.subLevel;
+    const subGain = ctx.createGain();
+    subGain.gain.value = 0.0001;
+    sub.connect(subGain);
+    subGain.connect(bus);
 
-    // Just a hint of high inverter coil-whine for EV character (mostly tamed by the lowpass).
-    const inverter = ctx.createOscillator();
-    inverter.type = "sine";
-    const gInv = ctx.createGain();
-    gInv.gain.value = 0.004;
+    // Gated boost garnish — a faint high sine, silent unless going fast/boosting (≤2 kHz).
+    const whine = ctx.createOscillator();
+    whine.type = "sine";
+    whine.frequency.value = 1600;
+    const whineGain = ctx.createGain();
+    whineGain.gain.value = 0.0001;
+    whine.connect(whineGain);
+    whineGain.connect(bus);
 
-    // Airy high-passed road noise (faint hiss, no rumble).
-    const noise = ctx.createBufferSource();
-    noise.buffer = this.getNoiseBuffer(ctx);
-    noise.loop = true;
-    const hp = ctx.createBiquadFilter();
-    hp.type = "highpass";
-    hp.frequency.value = 2400;
-    const air = ctx.createGain();
-    air.gain.value = 0.004;
+    // Shared vibrato LFO (5.5 Hz) → cents → each arp note's detune (depth scales with speed, tails).
+    const vibratoLfo = ctx.createOscillator();
+    vibratoLfo.type = "sine";
+    vibratoLfo.frequency.value = 5.5;
+    const vibratoDepth = ctx.createGain();
+    vibratoDepth.gain.value = 0;
+    vibratoLfo.connect(vibratoDepth);
 
-    // Slow sport-sound tremolo so the harmony gently breathes/sings.
-    const lfo = ctx.createOscillator();
-    lfo.type = "sine";
-    lfo.frequency.value = 5;
-    const lfoDepth = ctx.createGain();
-    lfoDepth.gain.value = 0.07;
+    // Two very slow "breathing" LFOs so even a held speed keeps subtly evolving.
+    const breathA = ctx.createOscillator();
+    breathA.type = "sine";
+    breathA.frequency.value = 0.05;
+    const breathADepth = ctx.createGain();
+    breathADepth.gain.value = 0.05; // ± on bus gain (~10% breathing)
+    breathA.connect(breathADepth);
+    breathADepth.connect(bus.gain);
+    const breathB = ctx.createOscillator();
+    breathB.type = "sine";
+    breathB.frequency.value = 0.067;
+    const breathBDepth = ctx.createGain();
+    breathBDepth.gain.value = 350; // ± on the ceiling cutoff (Hz)
+    breathB.connect(breathBDepth);
+    breathBDepth.connect(lp.frequency);
 
-    toneA.connect(gA);
-    gA.connect(gain);
-    toneB.connect(gB);
-    gB.connect(gain);
-    sub.connect(gSub);
-    gSub.connect(gain);
-    inverter.connect(gInv);
-    gInv.connect(gain);
-    noise.connect(hp);
-    hp.connect(air);
-    air.connect(gain);
-    lfo.connect(lfoDepth);
-    lfoDepth.connect(gA.gain); // breathe the fundamental for the singing pulse
-    gain.connect(lp);
-    lp.connect(this.sfxGain ?? ctx.destination);
-
-    toneA.start();
-    toneB.start();
     sub.start();
-    inverter.start();
-    noise.start();
-    lfo.start();
-    this.engineDip = 0;
-    this.engineDipTime = ctx.currentTime;
-    this.engine = { toneA, toneB, sub, inverter, noise, lfo, gA, gInv, air, lp, gain };
+    whine.start();
+    vibratoLfo.start();
+    breathA.start();
+    breathB.start();
+
+    this.engine = { bus, lp, sub, subGain, vibratoLfo, vibratoDepth, whine, whineGain, breathA, breathADepth, breathB, breathBDepth };
+    this.engineStep = 0;
+    this.engineLastFreq = 0;
+    this.engineNextNoteTime = ctx.currentTime + 0.06;
     this.applyEngineIntensity();
+    this.scheduleEngineArp();
+    this.engineTimer = setInterval(() => this.scheduleEngineArp(), LOOKAHEAD_MS);
   }
 
   private stopEngine(): void {
@@ -631,20 +660,58 @@ export class ProceduralAudioService {
       return;
     }
     this.engine = null;
+    if (this.engineTimer !== null) {
+      clearInterval(this.engineTimer);
+      this.engineTimer = null;
+    }
     const ctx = this.context;
     const now = ctx ? ctx.currentTime : 0;
-    engine.gain.gain.setTargetAtTime(0.0001, now, 0.12);
-    const stopAt = now + 0.8; // let the setTargetAtTime fade reach silence before the hard stop
-    for (const node of [engine.toneA, engine.toneB, engine.sub, engine.inverter, engine.noise, engine.lfo]) {
+    engine.bus.gain.cancelScheduledValues(now);
+    engine.bus.gain.setTargetAtTime(0.0001, now, 0.12);
+    const stopAt = now + 0.8; // let the fade reach silence before the hard stop
+    const oscillators = [engine.sub, engine.whine, engine.vibratoLfo, engine.breathA, engine.breathB];
+    let pending = oscillators.length;
+    const cleanup = () => {
+      for (const node of [
+        engine.sub,
+        engine.whine,
+        engine.vibratoLfo,
+        engine.breathA,
+        engine.breathB,
+        engine.subGain,
+        engine.whineGain,
+        engine.vibratoDepth,
+        engine.breathADepth,
+        engine.breathBDepth,
+        engine.lp,
+        engine.bus,
+      ]) {
+        try {
+          node.disconnect();
+        } catch {
+          // already gone
+        }
+      }
+    };
+    for (const osc of oscillators) {
+      osc.onended = () => {
+        pending -= 1;
+        if (pending <= 0) {
+          cleanup();
+        }
+      };
       try {
-        node.stop(stopAt);
-        node.onended = () => node.disconnect();
+        osc.stop(stopAt);
       } catch {
-        // already stopped
+        pending -= 1;
+        if (pending <= 0) {
+          cleanup();
+        }
       }
     }
   }
 
+  /** Speed is the ONLY input: glide the continuous beds + store s/boost for the arpeggiator. */
   private applyEngineIntensity(): void {
     const engine = this.engine;
     const ctx = this.context;
@@ -652,25 +719,118 @@ export class ProceduralAudioService {
       return;
     }
     const t = ctx.currentTime;
-    const p = this.engineProfile;
-    // Decay the transient downshift dip toward 0 (real-time based → frame-rate independent, ~0.5 s).
-    const dt = this.engineDipTime > 0 ? Math.min(0.2, Math.max(0, t - this.engineDipTime)) : 0;
-    this.engineDipTime = t;
-    this.engineDip *= Math.exp(-dt / 0.5);
-    const dip = this.engineDip;
-    const v = this.runIntensity;
-    // Deep, singing two-tone harmony shaped by the car's profile. The dip pulls the pitch (and some
-    // brightness) down on a shift, then it surges back up as the dip decays — that's the "power" cue.
-    const fund = (55 + v * 205) * p.pitchScale * (1 - dip);
-    engine.toneA.frequency.setTargetAtTime(fund, t, 0.09);
-    engine.toneB.frequency.setTargetAtTime(fund * p.intervalB * p.detuneB, t, 0.09);
-    engine.sub.frequency.setTargetAtTime(fund * 0.5, t, 0.09);
-    engine.inverter.frequency.setTargetAtTime(1400 + v * 2400, t, 0.1);
-    engine.gInv.gain.setTargetAtTime((0.003 + v * 0.01) * p.whineLevel, t, 0.12);
-    engine.lp.frequency.setTargetAtTime((700 + v * 1500) * p.brightness * (1 - dip * 0.5), t, 0.12);
-    engine.air.gain.setTargetAtTime(0.003 + v * 0.015, t, 0.12); // reduced road hiss (less constant "rauschen")
-    engine.lfo.frequency.setTargetAtTime(p.tremoloRate * (0.8 + v * 0.5), t, 0.2);
-    engine.gain.gain.setTargetAtTime((0.032 + v * 0.026) * p.gainScale, t, 0.12); // sits behind the music
+    const m = this.melody;
+    const s = this.clamp01((this.runIntensity - 0.5) / 0.5); // 0 idle → 1 flat-out
+    const boost = this.clamp01((this.runIntensity - 1.0) / 0.8); // 0 → 1 only when boosted
+    this.engineS = s;
+    this.engineBoost = boost;
+
+    const root = RUN_TONIC_HZ * m.rootMul;
+    engine.sub.frequency.setTargetAtTime(root * 0.5, t, 0.15); // sub one octave below the car's root
+    engine.subGain.gain.setTargetAtTime(m.subLevel * 0.12 * (0.9 - 0.2 * s), t, 0.2);
+    engine.bus.gain.setTargetAtTime(0.45 + 0.1 * s, t, 0.15); // engine master — low + behind the music
+    engine.whine.frequency.setTargetAtTime(Math.min(2000, root * 8), t, 0.1);
+    const whineGate = Math.max(boost, this.clamp01((s - 0.7) / 0.3));
+    engine.whineGain.gain.setTargetAtTime(m.whineLevel * whineGate * 0.02, t, 0.15);
+    engine.vibratoDepth.gain.setTargetAtTime(m.vibratoCents * s, t, 0.2); // cents, grows with speed
+  }
+
+  /** Look-ahead arp ticker (own clock, decoupled from the music grid — sings through bridges/biomes). */
+  private scheduleEngineArp(): void {
+    const ctx = this.context;
+    const engine = this.engine;
+    if (!ctx || !engine) {
+      return;
+    }
+    if (typeof document !== "undefined" && document.hidden) {
+      this.engineNextNoteTime = ctx.currentTime;
+      return;
+    }
+    if (ctx.currentTime - this.engineNextNoteTime > 0.5) {
+      this.engineNextNoteTime = ctx.currentTime + 0.05; // snap back if a throttled tab fell behind
+    }
+    const m = this.melody;
+    const s = this.engineS;
+    const boost = this.engineBoost;
+    while (this.engineNextNoteTime < ctx.currentTime + SCHEDULE_AHEAD_SECONDS) {
+      this.playArpNote(this.engineNextNoteTime, s, boost);
+      const rate = this.lerp(m.rateMin, m.rateMax, s * s) + boost * 1.5; // notes/sec, ease-in
+      this.engineNextNoteTime += 1 / Math.max(0.5, rate);
+    }
+  }
+
+  /** One soft arp note: short-attack → decay-to-silence (never sustains), key-locked, speed-shaped. */
+  private playArpNote(time: number, s: number, boost: number): void {
+    const ctx = this.context;
+    const engine = this.engine;
+    if (!ctx || !engine) {
+      return;
+    }
+    const m = this.melody;
+    const degree = m.motif[this.engineStep % m.motif.length];
+    this.engineStep += 1;
+
+    // Sparse when calm: rest probability fades to 0 with speed.
+    if (Math.random() < this.clamp01(0.45 - 0.5 * s)) {
+      return; // micro-rest (clock + step already advanced)
+    }
+
+    const freq = this.engineNoteFreq(degree, Math.floor(s * m.octaveSpan));
+
+    const osc = ctx.createOscillator();
+    osc.type = m.oscMain;
+    const det = ctx.createOscillator();
+    det.type = m.oscDetune;
+    det.detune.setValueAtTime(m.detuneCents, time);
+    const detGain = ctx.createGain();
+    const span = Math.max(0.01, 1 - m.twoVoiceFrom);
+    detGain.gain.value = this.lerp(0, 0.7, this.clamp01((s - m.twoVoiceFrom) / span)); // harmony joins with speed
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.Q.value = m.lpQ;
+    lp.frequency.setValueAtTime(Math.min(m.lpCap, m.lpBase + m.lpRange * s + boost * 700), time);
+    const vca = ctx.createGain();
+
+    // Short portamento from the previous note when the leap is small (≤ a fifth); else a clean onset.
+    const from = this.engineLastFreq;
+    if (from > 0 && Math.abs(Math.log2(freq / from)) <= 0.6) {
+      osc.frequency.setValueAtTime(from, time);
+      osc.frequency.exponentialRampToValueAtTime(freq, time + 0.04);
+      det.frequency.setValueAtTime(from, time);
+      det.frequency.exponentialRampToValueAtTime(freq, time + 0.04);
+    } else {
+      osc.frequency.setValueAtTime(freq, time);
+      det.frequency.setValueAtTime(freq, time);
+    }
+    this.engineLastFreq = freq;
+
+    // Speed-scaled vibrato on the tails (shared LFO → both oscillators' detune).
+    engine.vibratoDepth.connect(osc.detune);
+    engine.vibratoDepth.connect(det.detune);
+
+    const attack = this.lerp(m.attackMax, m.attackMin, s);
+    const dur = m.release * (0.7 + 0.3 * s);
+    const peak = m.gainScale * this.lerp(0.5, 1, s) * 0.08; // low; speed carried by rate/brightness
+    vca.gain.setValueAtTime(0.0001, time);
+    vca.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0001), time + attack);
+    vca.gain.exponentialRampToValueAtTime(0.0001, time + attack + dur);
+
+    osc.connect(vca);
+    det.connect(detGain);
+    detGain.connect(vca);
+    vca.connect(lp);
+    lp.connect(engine.bus);
+
+    const stop = time + attack + dur + 0.05;
+    this.trackChain(
+      [
+        { node: osc, stop },
+        { node: det, stop },
+      ],
+      [detGain, lp, vca],
+      time,
+      "sfx",
+    );
   }
 
   setSettings(settings: Partial<ProceduralAudioSettings>): void {
@@ -1841,8 +2001,7 @@ export class ProceduralAudioService {
     this.currentBiomeKey = key;
     this.arranger.chordRoot = theme.chordRootSemis[this.arranger.chordIdx % theme.chordRootSemis.length] ?? 0;
     if (!instant) {
-      this.sweepMusicTransition();
-      this.engineDownshift(0.2);
+      this.sweepMusicTransition(); // mask the theme cut; engine stays speed-driven only
     }
   }
 

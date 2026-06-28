@@ -306,6 +306,9 @@ export class GameApp {
     if (import.meta.env.DEV) {
       // Dev-only: fill the Main charge from the console for visual smoke tests.
       (window as unknown as { __charge?: () => void }).__charge = () => this.runAbilities?.debugFillCharge();
+      // Dev-only: drive the engine intensity (0 idle → 1 flat-out → >1 boost) to audition each car's
+      // melodic engine without driving. e.g. __speed(0.8).
+      (window as unknown as { __speed?: (r: number) => void }).__speed = (r: number) => this.audio?.setRunIntensity(r);
     }
     this.runScene.setPassiveHooks({
       onWeakFail: () => this.runAbilities?.onWeakFail() ?? { type: "normal" },
@@ -945,10 +948,7 @@ export class GameApp {
       audio.playCoin(combo);
       this.bumpCoinCounter();
     });
-    this.events.on("runner:laneChanged", () => {
-      audio.playSwerve();
-      audio.engineDownshift(0.15); // a small lift on every swerve
-    });
+    this.events.on("runner:laneChanged", () => audio.playSwerve());
     this.events.on("traffic:destroyed", ({ cause }) => {
       if (cause === "ram") {
         audio.playRam();
@@ -964,7 +964,6 @@ export class GameApp {
     this.events.on("runner:hit", ({ hit }) => {
       if (hit.severity === "minor") {
         audio.playWeakFail();
-        audio.engineDownshift(0.28); // a small mistake bogs the motor down briefly
       } else {
         audio.playCollision();
       }
@@ -1967,7 +1966,6 @@ export class GameApp {
     } else {
       this.audio?.playBoost();
     }
-    this.audio?.engineDownshift(0.34); // ability kick — the motor drops then surges back
     this.hudCharge?.classList.remove("is-ready");
     this.hudCharge?.classList.add("is-fired");
     window.setTimeout(() => this.hudCharge?.classList.remove("is-fired"), 360);
