@@ -56,6 +56,50 @@ const PAUSE_ICON =
 const SETTINGS_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="9" y="9" width="6" height="6"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19"/></svg>';
 
+// 速 speedometer — a round tacho with a sweeping needle (bottom-left HUD). The dial face
+// (a 240° arc of ticks + a redline) is static, so it's built once here; only the needle
+// rotation + the digital readout change at runtime. Geometry: viewBox 0..100, hub at 50,50,
+// the needle points "up" (rotate 0) and sweeps -120°(idle) → +120°(top speed).
+const SPEEDO_TOP_KMH = 260; // gauge full-scale; cruising sits high, boost pins the redline
+const SPEEDO_NEEDLE_MIN = -120;
+const SPEEDO_NEEDLE_SPAN = 240;
+function speedoPolar(r: number, angleDeg: number): [number, number] {
+  const a = (angleDeg * Math.PI) / 180;
+  return [50 + r * Math.sin(a), 50 - r * Math.cos(a)];
+}
+function buildSpeedoMarkup(): string {
+  const rTrack = 43;
+  const redlineFrom = 0.82; // fraction of the sweep where the redline begins
+  const [sx, sy] = speedoPolar(rTrack, SPEEDO_NEEDLE_MIN);
+  const [ex, ey] = speedoPolar(rTrack, SPEEDO_NEEDLE_MIN + SPEEDO_NEEDLE_SPAN);
+  const [rx, ry] = speedoPolar(rTrack, SPEEDO_NEEDLE_MIN + redlineFrom * SPEEDO_NEEDLE_SPAN);
+  const f = (n: number) => n.toFixed(2);
+  const track = `M ${f(sx)} ${f(sy)} A ${rTrack} ${rTrack} 0 1 1 ${f(ex)} ${f(ey)}`;
+  const redline = `M ${f(rx)} ${f(ry)} A ${rTrack} ${rTrack} 0 0 1 ${f(ex)} ${f(ey)}`;
+  let ticks = "";
+  const segments = 8; // 9 ticks across the sweep
+  for (let i = 0; i <= segments; i += 1) {
+    const frac = i / segments;
+    const ang = SPEEDO_NEEDLE_MIN + frac * SPEEDO_NEEDLE_SPAN;
+    const major = i % 2 === 0;
+    const [x1, y1] = speedoPolar(rTrack - 1.5, ang);
+    const [x2, y2] = speedoPolar(rTrack - (major ? 8 : 5), ang);
+    const red = frac >= redlineFrom - 0.001 ? " fr-speedo-tick--red" : "";
+    ticks += `<line class="fr-speedo-tick${major ? " fr-speedo-tick--major" : ""}${red}" x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}"/>`;
+  }
+  return `<div class="fr-speedo" data-hud-speedo aria-hidden="true">
+        <svg class="fr-speedo-dial" viewBox="0 0 100 100">
+          <path class="fr-speedo-track" d="${track}"/>
+          ${ticks}
+          <path class="fr-speedo-redline" d="${redline}"/>
+          <g class="fr-speedo-needle" data-hud-speedo-needle transform="rotate(${SPEEDO_NEEDLE_MIN} 50 50)"><line x1="50" y1="57" x2="50" y2="16"/></g>
+          <circle class="fr-speedo-hub" cx="50" cy="50" r="4.4"/>
+        </svg>
+        <div class="fr-speedo-readout"><span class="fr-speedo-num" data-hud-speedo-num>0</span><span class="fr-speedo-unit">km/h</span></div>
+        <span class="fr-speedo-tag">速</span>
+      </div>`;
+}
+
 export function createGameApp(root: HTMLElement, config: Partial<GameConfig> = {}): GameApp {
   return new GameApp(root, mergeConfig(config));
 }
@@ -125,6 +169,10 @@ export class GameApp {
   private hudPassiveKanji?: HTMLElement;
   private hudPassiveRing?: HTMLElement;
   private hudPassiveTag?: HTMLElement;
+  private hudSpeedo?: HTMLElement;
+  private hudSpeedoNeedle?: SVGGElement;
+  private hudSpeedoNum?: HTMLElement;
+  private speedoShownKmh = 0; // eased toward the live speed so the needle glides
   private goMeta?: HTMLElement;
   private goCoins?: HTMLElement;
   private goScore?: HTMLElement;
@@ -395,6 +443,7 @@ export class GameApp {
     if (this.activeScene === this.runScene && state === "running" && this.runScene) {
       this.runAbilities?.update(dt, this.runScene.getEffectContext());
       this.audio?.setRunIntensity(this.runScene.getSpeedRatio()); // engine pitch tracks speed
+      this.updateSpeedo(dt);
 
       // 鬼 Anzapfen: while the police are right behind you, the nearest cars in range
       // bleed a continuous coin stream to the counter (rate scales with mastery).
@@ -414,6 +463,7 @@ export class GameApp {
             ? this.runAbilities?.onFatalHit(this.runScene.isPursued(), this.runScene.wasHitFromSide())
             : undefined;
         if (outcome?.survived) {
+          this.runScene.penalizeSpeed(); // a saved crash bleeds speed — you lose ground for it
           if (outcome.pursuitSec !== undefined) {
             this.audio?.playBoost(); // 将 powers through the wreck
             this.runScene.openPursuit(outcome.pursuitSec);
@@ -677,6 +727,10 @@ export class GameApp {
           <span class="fr-hud-toast-txt"><span class="fr-hud-toast-k" data-hud-toast-k>MEISTERSCHAFT</span><span class="fr-hud-toast-big" data-hud-toast-big>Stufe 2</span></span>
         </div>
 
+        <div class="fr-hud-bottomleft">
+          ${buildSpeedoMarkup()}
+        </div>
+
         <div class="fr-hud-bottom">
           <div class="fr-charge fr-charge--passive" data-hud-passive aria-hidden="true">
             <span class="fr-charge-ring" data-hud-passive-ring></span>
@@ -772,6 +826,9 @@ export class GameApp {
     this.hudPassiveKanji = ui.querySelector("[data-hud-passive-k]") ?? undefined;
     this.hudPassiveRing = ui.querySelector("[data-hud-passive-ring]") ?? undefined;
     this.hudPassiveTag = ui.querySelector("[data-hud-passive-tag]") ?? undefined;
+    this.hudSpeedo = ui.querySelector("[data-hud-speedo]") ?? undefined;
+    this.hudSpeedoNeedle = ui.querySelector<SVGGElement>("[data-hud-speedo-needle]") ?? undefined;
+    this.hudSpeedoNum = ui.querySelector("[data-hud-speedo-num]") ?? undefined;
     this.goMeta = ui.querySelector("[data-go-meta]") ?? undefined;
     this.goCoins = ui.querySelector("[data-go-coins]") ?? undefined;
     this.goScore = ui.querySelector("[data-go-score]") ?? undefined;
@@ -1787,6 +1844,35 @@ export class GameApp {
     if (this.hudPassiveTag) {
       this.hudPassiveTag.textContent = "匠";
     }
+    this.resetSpeedoHud();
+  }
+
+  /** Park the speedometer needle at idle + zero the readout (run start / countdown). */
+  private resetSpeedoHud(): void {
+    this.speedoShownKmh = 0;
+    this.hudSpeedoNeedle?.setAttribute("transform", `rotate(${SPEEDO_NEEDLE_MIN} 50 50)`);
+    if (this.hudSpeedoNum) {
+      this.hudSpeedoNum.textContent = "0";
+    }
+    this.hudSpeedo?.classList.remove("is-redline");
+  }
+
+  /** Per-frame (running): glide the needle toward live speed + update the km/h readout. */
+  private updateSpeedo(dt: number): void {
+    if (!this.runScene) {
+      return;
+    }
+    const target = this.runScene.getSpeedKmh();
+    // Ease the shown value so the needle glides (snappy, but no single-frame jitter).
+    this.speedoShownKmh += (target - this.speedoShownKmh) * Math.min(1, dt * 9);
+    const kmh = this.speedoShownKmh;
+    const ratio = Math.max(0, Math.min(1, kmh / SPEEDO_TOP_KMH));
+    const angle = SPEEDO_NEEDLE_MIN + ratio * SPEEDO_NEEDLE_SPAN;
+    this.hudSpeedoNeedle?.setAttribute("transform", `rotate(${angle.toFixed(1)} 50 50)`);
+    if (this.hudSpeedoNum) {
+      this.hudSpeedoNum.textContent = String(Math.round(kmh));
+    }
+    this.hudSpeedo?.classList.toggle("is-redline", ratio > 0.82);
   }
 
   /** Per-frame: charge-ring fill/ready state + mastery level-up toast. */

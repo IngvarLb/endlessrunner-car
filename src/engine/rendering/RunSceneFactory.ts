@@ -49,6 +49,10 @@ export type RunScene = AppScene & {
   getRunStats(): RunStats;
   /** Current speed as a ratio of max (≈0.5 at the start, 1 at flat-out, >1 while boosted) — drives the engine sound. */
   getSpeedRatio(): number;
+  /** Current display speed in arcade km/h — drives the bottom-left speedometer. */
+  getSpeedKmh(): number;
+  /** Shave speed for a moment (an ability-saved crash) — drives the tacho dip + lost ground. */
+  penalizeSpeed(): void;
   consumeGameOver(): GameOverInfo | undefined;
   /** Capability bridge for ability effects (see RunAbilityController). */
   getEffectContext(): RunEffectContext;
@@ -72,6 +76,7 @@ export type RunScene = AppScene & {
   clearSiphonVfx(): void;
 };
 
+const SPEED_TO_KMH = 8; // m/s → arcade km/h shown on the speedometer
 const baseSpeed = 14; // fast from the very start (was 9.5)
 const linearSpeedRampDistance = 300;
 const linearSpeedGain = 3.5;
@@ -1702,6 +1707,10 @@ export class RunSceneFactory {
         return;
       }
 
+      // Any slip — whether an ability eats it or the police get a window — briefly costs
+      // speed (felt on the tacho; later it means losing ground to the rival racers).
+      runnerController.dipForMistake();
+
       const outcome = passiveHooks?.onWeakFail() ?? { type: "normal" };
       if (outcome.type === "absorbed") {
         // 赤 Knautschzone: buffer eats the mistake — small stumble, no police window.
@@ -1796,6 +1805,8 @@ export class RunSceneFactory {
       activateBoost,
       getRunStats,
       getSpeedRatio: () => (getRunSpeed() * runnerController.getSpeedMultiplier()) / maxSpeed,
+      getSpeedKmh: () => getRunSpeed() * runnerController.getSpeedMultiplier() * SPEED_TO_KMH,
+      penalizeSpeed: () => runnerController.dipForMistake(),
       consumeGameOver,
       getEffectContext: () => effectContext,
       setPassiveHooks: (hooks: PassiveHooks) => {

@@ -2101,6 +2101,104 @@ button {
   font-family: var(--font-jp);
 }
 
+/* ===== 速 Speedometer — round tacho w/ needle, bottom-left (matches the charge dials) ===== */
+.fr-hud-bottomleft {
+  position: absolute;
+  left: clamp(16px, 3vw, 40px);
+  bottom: calc(clamp(16px, 3vw, 30px) + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+.fr-speedo {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.45));
+}
+.fr-speedo-dial {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgb(20 14 22 / 0.92);
+  border: 1px solid var(--color-border-ondark);
+}
+.fr-speedo-track {
+  fill: none;
+  stroke: rgb(244 237 224 / 0.16);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.fr-speedo-redline {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  opacity: 0.92;
+}
+.fr-speedo-tick {
+  stroke: rgb(244 237 224 / 0.45);
+  stroke-width: 1;
+}
+.fr-speedo-tick--major {
+  stroke: rgb(244 237 224 / 0.82);
+  stroke-width: 1.7;
+}
+.fr-speedo-tick--red {
+  stroke: var(--color-accent);
+}
+.fr-speedo-needle line {
+  stroke: var(--color-gold);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+.fr-speedo-hub {
+  fill: var(--color-gold);
+  stroke: rgb(20 14 22 / 0.9);
+  stroke-width: 1.2;
+}
+.fr-speedo-readout {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 15px;
+  text-align: center;
+  line-height: 1;
+}
+.fr-speedo-num {
+  display: block;
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 21px;
+  color: #f4ede0;
+}
+.fr-speedo-unit {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  color: rgb(244 237 224 / 0.58);
+}
+.fr-speedo-tag {
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
+  padding: 1px 7px;
+  background: rgb(20 14 22 / 0.86);
+  border: 1px solid var(--color-border-ondark);
+  font-family: var(--font-jp);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgb(244 237 224 / 0.82);
+}
+/* near top speed / boosting: the readout warms + the dial gets a vermillion halo */
+.fr-speedo.is-redline .fr-speedo-num {
+  color: #ffd9b0;
+}
+.fr-speedo.is-redline .fr-speedo-dial {
+  box-shadow: 0 0 16px rgb(226 59 46 / 0.5);
+}
+
 /* ===== Mastery level-up toast ===== */
 .fr-hud-toast {
   position: absolute;
