@@ -823,8 +823,10 @@ export class ModelFactory {
     group.name = "seg_torii_straight_fallback";
 
     const path = this.mesh(new THREE.BoxGeometry(6.4, 0.16, length), this.materials.path, [0, -0.08, length * 0.5]);
-    const leftGrass = this.mesh(new THREE.BoxGeometry(5, 0.12, length), this.materials.grass, [-5.7, -0.1, length * 0.5]);
-    const rightGrass = this.mesh(new THREE.BoxGeometry(5, 0.12, length), this.materials.grass, [5.7, -0.1, length * 0.5]);
+    // Wide verge so deep roadside scenery (forest tree rows, river, cliffs) stands on ground
+    // rather than floating over the void; the surface recolours per biome (grass/sidewalk/moss).
+    const leftGrass = this.mesh(new THREE.BoxGeometry(18.8, 0.12, length), this.materials.grass, [-12.6, -0.1, length * 0.5]);
+    const rightGrass = this.mesh(new THREE.BoxGeometry(18.8, 0.12, length), this.materials.grass, [12.6, -0.1, length * 0.5]);
     const leftEdgeLine = this.mesh(new THREE.BoxGeometry(0.08, 0.012, length), this.materials.roadLine, [-3.03, 0.012, length * 0.5]);
     const rightEdgeLine = this.mesh(new THREE.BoxGeometry(0.08, 0.012, length), this.materials.roadLine, [3.03, 0.012, length * 0.5]);
 

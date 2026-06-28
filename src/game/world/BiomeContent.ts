@@ -394,62 +394,77 @@ export function createForestValleyDecorations(): DecorationPlacement[] {
   const facLeft = Math.PI * 0.5; // left props face +x (toward the road)
   const facRight = -Math.PI * 0.5;
 
-  // Towering cedar/pine/bamboo/maple wall both sides — the soaring forest corridor.
+  // FRONT tree line both sides (x≈±5.5) — the soaring cedar wall right at the verge.
   const trees: DecorationKind[] = ["sugiCedar", "sugiCedar", "mountainPine", "bambooGrove", "valleyMapleTree", "sugiCedar"];
   for (let i = 0, z = 0; z < loop + 4; i += 1, z += 4.2) {
-    d.push({ kind: trees[i % trees.length], x: -5.4 - (i % 3) * 0.6, z, rotationY: facLeft, scale: 0.85 + (i % 4) * 0.12 });
-    d.push({ kind: trees[(i + 3) % trees.length], x: 5.4 + (i % 3) * 0.6, z: z + 2.1, rotationY: facRight, scale: 0.85 + ((i + 1) % 4) * 0.12 });
+    d.push({ kind: trees[i % trees.length], x: -5.6 - (i % 3) * 0.6, z, rotationY: facLeft, scale: 0.85 + (i % 4) * 0.12 });
+    d.push({ kind: trees[(i + 3) % trees.length], x: 5.6 + (i % 3) * 0.6, z: z + 2.1, rotationY: facRight, scale: 0.85 + ((i + 1) % 4) * 0.12 });
+  }
+  // MID + BACK tree rows further out (x≈±9.5 and ±13.5) so the forest has DEPTH — you look
+  // INTO the trees, not at a thin line backed by void. Sparser than the front row.
+  for (let i = 0, z = 1; z < loop + 4; i += 1, z += 6.5) {
+    d.push({ kind: trees[(i + 1) % trees.length], x: -9.5 - (i % 3) * 0.8, z, rotationY: facLeft, scale: 1.0 + (i % 3) * 0.15 });
+    d.push({ kind: trees[(i + 4) % trees.length], x: 9.5 + (i % 3) * 0.8, z: z + 3.2, rotationY: facRight, scale: 1.0 + ((i + 1) % 3) * 0.15 });
+  }
+  for (let i = 0, z = 4; z < loop + 4; i += 1, z += 9) {
+    d.push({ kind: i % 3 === 0 ? "mountainPine" : "sugiCedar", x: -13.6 - (i % 2) * 1.0, z, rotationY: facLeft, scale: 1.1 + (i % 2) * 0.2 });
+    d.push({ kind: i % 3 === 1 ? "mountainPine" : "sugiCedar", x: 13.6 + (i % 2) * 1.0, z: z + 4.5, rotationY: facRight, scale: 1.1 + (i % 2) * 0.2 });
   }
 
-  // LEFT-side river valley (off-road, x<0): river channel, dirt shoulder, cliff, rapids.
-  for (let z = 0; z < loop; z += 12) {
-    d.push({ kind: "riverSegment", x: -9.5, z });
-    d.push({ kind: "dirtShoulder", x: -4.6, z });
+  // RIGHT-of-world (x<0) river valley, pushed OUT past the front trees + dirt bank so it
+  // never reaches the lanes: dirt bank (−7.5), river channel (−11.5), rapids, far cliff (−18).
+  for (let z = 0; z < loop; z += 10) {
+    d.push({ kind: "riverSegment", x: -11.5, z });
+    d.push({ kind: "dirtShoulder", x: -7.5, z });
   }
-  for (let z = 6; z < loop; z += 13) {
-    d.push({ kind: "cliffWall", x: -13.5, z });
+  for (let z = 6; z < loop; z += 14) {
+    d.push({ kind: "cliffWall", x: -18.5, z });
   }
   for (let z = 4; z < loop; z += 9) {
-    d.push({ kind: "rapidsRock", x: -9.2 + (z % 18 < 9 ? 0.6 : -0.6), z });
+    d.push({ kind: "rapidsRock", x: -11.3 + (z % 18 < 9 ? 0.6 : -0.6), z });
   }
   for (let z = 24; z < loop; z += 60) {
-    d.push({ kind: "waterfall", x: -13.0, z }); // on the far cliff face
-    d.push({ kind: "forestFootbridge", x: -9.0, z: z + 20, rotationY: facLeft }); // over the river
-    d.push({ kind: "steppingStones", x: -9.2, z: z + 42 });
+    d.push({ kind: "waterfall", x: -18.0, z }); // on the far cliff face
+    d.push({ kind: "forestFootbridge", x: -11.0, z: z + 20, rotationY: facLeft }); // over the river
+    d.push({ kind: "steppingStones", x: -11.3, z: z + 42 });
   }
-  d.push({ kind: "waterMillHut", x: -6.6, z: 50, rotationY: facLeft });
+  d.push({ kind: "waterMillHut", x: -8.4, z: 50, rotationY: facLeft });
 
-  // Distant misty backdrop, far LEFT (parallax fill swallowed by the fog).
-  d.push({ kind: "mistyPeaks", x: -34, z: 40 });
-  for (let z = 14; z < loop; z += 42) {
-    d.push({ kind: "cedarRidge", x: -19, z });
+  // Distant misty mountain peaks on BOTH sides, set far beyond the trees (they float on the
+  // fog horizon like real distant ranges) — a faint backdrop so neither side ends in void.
+  // (cedarRidge is intentionally NOT used here: at 40 m wide it can't both clear the lanes and
+  // sit behind the trees — the layered tree rows + fog provide the depth instead.)
+  for (let z = 8; z < loop; z += 46) {
+    d.push({ kind: "mistyPeaks", x: -44, z });
+    d.push({ kind: "mistyPeaks", x: 44, z: z + 23 });
   }
-  d.push({ kind: "distantWaterfall", x: -30, z: 78 });
+  d.push({ kind: "distantWaterfall", x: -40, z: 88 });
 
-  // Roadside rustic structures (mostly the RIGHT bank), facing the road.
+  // Roadside rustic structures (the LEFT-of-world bank, x>0), facing the road.
   d.push({ kind: "chayaTeahouse", x: 6.95, z: 26, rotationY: facRight });
   d.push({ kind: "chayaTeahouse", x: 6.95, z: 96, rotationY: facRight });
   for (let z = 16; z < loop; z += 38) {
-    d.push({ kind: "hokoraShrine", x: 4.2, z, rotationY: facRight });
+    d.push({ kind: "hokoraShrine", x: 4.8, z, rotationY: facRight });
   }
-  d.push({ kind: "shimenawaSacredTree", x: -6.9, z: 70, rotationY: facLeft });
-  d.push({ kind: "shimenawaSacredTree", x: 6.9, z: 12, rotationY: facRight });
+  d.push({ kind: "shimenawaSacredTree", x: -7.4, z: 70, rotationY: facLeft });
+  d.push({ kind: "shimenawaSacredTree", x: 7.4, z: 12, rotationY: facRight });
 
   // Trailhead torii spanning the road — beam clears y≥9; sparse (one per loop).
   d.push({ kind: "trailheadTorii", x: 0, z: 58 });
 
-  // Dense ground clutter both verges (x ±3.5..7, never inside ±3.2).
+  // Ground clutter both verges, kept OUT of the lane corridor (x ≥ 4.6 so wide boulders
+  // never poke past the ±3.4 shoulder), thinning into the deeper rows.
   const clutter: DecorationKind[] = [
     "fernShrub", "undergrowthShrub", "mossBoulder", "susukiGrass", "rockCluster", "mossStoneLantern",
     "fallenMossyLog", "jizoCluster", "woodenSignpost", "sikaDeer", "rockCairn", "mushroomCluster", "mossPatch"
   ];
   for (let i = 0, z = 3; z < loop; i += 1, z += 4.4) {
     const side = i % 2 === 0 ? -1 : 1;
-    d.push({ kind: clutter[i % clutter.length], x: side * (3.6 + (i % 4) * 0.7), z, rotationY: side < 0 ? facLeft : facRight });
-    d.push({ kind: clutter[(i + 5) % clutter.length], x: -side * (3.6 + (i % 3) * 0.8), z: z + 2.1, rotationY: side < 0 ? facRight : facLeft });
+    d.push({ kind: clutter[i % clutter.length], x: side * (4.6 + (i % 4) * 0.8), z, rotationY: side < 0 ? facLeft : facRight });
+    d.push({ kind: clutter[(i + 5) % clutter.length], x: -side * (7.5 + (i % 3) * 1.2), z: z + 2.1, rotationY: side < 0 ? facRight : facLeft });
   }
 
-  // The 'Feldweg' mossy log + paver edging both shoulders, tiling continuously.
+  // The 'Feldweg' mossy log + paver edging both shoulders, tiling continuously (low, at the lip).
   for (let z = 0; z < loop; z += 8) {
     d.push({ kind: "forestLogEdging", x: -3.2, z });
     d.push({ kind: "forestLogEdging", x: 3.2, z });
