@@ -306,6 +306,9 @@ export class GameApp {
     if (import.meta.env.DEV) {
       // Dev-only: fill the Main charge from the console for visual smoke tests.
       (window as unknown as { __charge?: () => void }).__charge = () => this.runAbilities?.debugFillCharge();
+      // Dev-only: drive the engine intensity (0 idle → 1 flat-out → >1 boost) to audition each car's
+      // melodic engine without driving. e.g. __speed(0.8).
+      (window as unknown as { __speed?: (r: number) => void }).__speed = (r: number) => this.audio?.setRunIntensity(r);
     }
     this.runScene.setPassiveHooks({
       onWeakFail: () => this.runAbilities?.onWeakFail() ?? { type: "normal" },
@@ -445,6 +448,8 @@ export class GameApp {
       this.runAbilities?.update(dt, this.runScene.getEffectContext());
       this.audio?.setRunIntensity(this.runScene.getSpeedRatio()); // engine pitch tracks speed
       this.updateSpeedo(dt);
+      const macroBiome = this.runScene.getMacroBiome();
+      this.audio?.setBiome(macroBiome.legIndex, macroBiome.autumn); // soundtrack crossfades per biome
 
       // 鬼 Anzapfen: while the police are right behind you, the nearest cars in range
       // bleed a continuous coin stream to the counter (rate scales with mastery).
@@ -1107,6 +1112,7 @@ export class GameApp {
         audio.startMusic("garage");
         return;
       case "running":
+        audio.setVehicleEngine(this.selectedVehicle.kanji, this.vehicleTierRank(this.selectedVehicle.tier));
         audio.startMusic("run");
         return;
       case "paused":
@@ -1121,6 +1127,11 @@ export class GameApp {
       case "reviving":
         return;
     }
+  }
+
+  /** Map a car's rarity tier to an engine-refinement rank (0 common … 3 legend). */
+  private vehicleTierRank(tier: VehicleDefinition["tier"]): number {
+    return { common: 0, rare: 1, epic: 2, legend: 3 }[tier] ?? 0;
   }
 
   private unlockAudio(): void {
