@@ -888,7 +888,10 @@ export class GameApp {
       audio.playCoin(combo);
       this.bumpCoinCounter();
     });
-    this.events.on("runner:laneChanged", () => audio.playSwerve());
+    this.events.on("runner:laneChanged", () => {
+      audio.playSwerve();
+      audio.engineDownshift(0.15); // a small lift on every swerve
+    });
     this.events.on("traffic:destroyed", ({ cause }) => {
       if (cause === "ram") {
         audio.playRam();
@@ -904,6 +907,7 @@ export class GameApp {
     this.events.on("runner:hit", ({ hit }) => {
       if (hit.severity === "minor") {
         audio.playWeakFail();
+        audio.engineDownshift(0.28); // a small mistake bogs the motor down briefly
       } else {
         audio.playCollision();
       }
@@ -1877,6 +1881,7 @@ export class GameApp {
     } else {
       this.audio?.playBoost();
     }
+    this.audio?.engineDownshift(0.34); // ability kick — the motor drops then surges back
     this.hudCharge?.classList.remove("is-ready");
     this.hudCharge?.classList.add("is-fired");
     window.setTimeout(() => this.hudCharge?.classList.remove("is-fired"), 360);

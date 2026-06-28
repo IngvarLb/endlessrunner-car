@@ -162,7 +162,6 @@ type LeadPhrase = Map<number, { freq: number; vel: number }>;
 type DrumKit = "boombap" | "brushed" | "electronic" | "taiko";
 type LeadStyle = "koto" | "rhodes" | "supersaw" | "shakuhachi";
 type BassStyle = "round" | "funk" | "drone";
-type NoiseBedKind = "vinyl" | "rain" | "wind" | "none";
 
 interface BiomeTheme {
   key: string;
@@ -176,7 +175,6 @@ interface BiomeTheme {
   leadStyle: LeadStyle;
   chordRootSemis: number[]; // chord-root semitone offsets from the tonic, cycled every chordBars (drives the bass)
   chordBars: number;
-  noiseBed: NoiseBedKind;
 }
 
 const NEON_DRUMS: DrumGrid[] = [
@@ -203,7 +201,6 @@ const BIOME_THEMES: BiomeTheme[] = [
     leadStyle: "koto",
     chordRootSemis: [0, 5, 7, 9], // D – G – A – B (Dm9 · Gmaj7 · Am7 · Bm7 roots)
     chordBars: 2,
-    noiseBed: "vinyl",
   },
   {
     key: "village_autumn",
@@ -217,7 +214,6 @@ const BIOME_THEMES: BiomeTheme[] = [
     leadStyle: "rhodes",
     chordRootSemis: [0, 5, 2, 7], // D – G – E – A (Dm9 · Gm7 · Em7♭5 · A7 roots)
     chordBars: 2,
-    noiseBed: "rain",
   },
   {
     key: "neon",
@@ -231,7 +227,6 @@ const BIOME_THEMES: BiomeTheme[] = [
     leadStyle: "supersaw",
     chordRootSemis: [0, 8, 10, 7], // F# – D – E – C# (F#m · D · E · C#m roots, i–♭VI–♭VII–v)
     chordBars: 2,
-    noiseBed: "none",
   },
   {
     key: "forest",
@@ -245,7 +240,6 @@ const BIOME_THEMES: BiomeTheme[] = [
     leadStyle: "shakuhachi",
     chordRootSemis: [0, 8, 3, 10], // A – F – C – G (Am · Fmaj7 · Cmaj7 · G6 roots)
     chordBars: 4,
-    noiseBed: "wind",
   },
 ];
 
@@ -265,13 +259,6 @@ interface ArrangerState {
   leadPhrase: LeadPhrase; // precomputed lead notes for the 2-bar phrase, keyed by 0..31 step
   chordIdx: number; // index into the active theme's chordRootSemis progression
   chordRoot: number; // current chord-root semitone offset from the tonic (drives the bass)
-}
-
-interface NoiseBedVoice {
-  source: AudioBufferSourceNode;
-  gain: GainNode;
-  filters: BiquadFilterNode[];
-  level: number;
 }
 
 // --- Per-car engine voice (the continuous EV motor) ---
@@ -356,6 +343,8 @@ export class ProceduralAudioService {
   } | null = null;
   private runIntensity = 0.4;
   private engineProfile: EngineProfile = DEFAULT_ENGINE_PROFILE;
+  private engineDip = 0; // transient "gear-shift" — momentarily pulls the engine pitch down, then recovers
+  private engineDipTime = 0;
 
   // Adaptive-music buses + state. Melodic layers (L2..L7) route through `duckBus` (kick-
   // sidechained for pump + headroom); drum layers (L0/L1) bypass it. `autoScaleGain` trims the
@@ -382,8 +371,8 @@ export class ProceduralAudioService {
   private theme: BiomeTheme = BIOME_THEMES[0];
   private currentBiomeKey = "village";
   private pendingBiomeKey: string | null = null;
-  // Persistent texture voice (noise bed), built once per active biome and crossfaded at leg boundaries.
-  private noiseBedVoice: NoiseBedVoice | null = null;
+  // A master lowpass swept on biome changes to glide between themes (otherwise the cut is abrupt).
+  private musicSweepLP: BiquadFilterNode | null = null;
   // Run-mode song-form cursor; advanced once per bar at the bar boundary.
   private arranger: ArrangerState = {
     barCounter: 0,
@@ -475,11 +464,6 @@ export class ProceduralAudioService {
     this.isMusicPaused = false;
     this.nextStepIndex = 0;
     this.stopEngine();
-
-    if (this.noiseBedVoice) {
-      this.fadeOutNoiseBed(this.noiseBedVoice);
-      this.noiseBedVoice = null;
-    }
   }
 
   pauseMusic(): void {
@@ -542,6 +526,16 @@ export class ProceduralAudioService {
     this.applyEngineIntensity(); // live-nudge the intensity-driven params if the engine is running
   }
 
+  /**
+   * A momentary "downshift": pull the engine pitch + brightness down, then let it climb back over
+   * ~0.5 s — fired on lane changes, small mistakes and ability use so the motor breathes (and the
+   * car's power reads in the surge back up) instead of holding one constant drone.
+   */
+  engineDownshift(strength = 0.3): void {
+    this.engineDip = Math.min(0.6, this.engineDip + strength);
+    this.applyEngineIntensity();
+  }
+
   private startEngine(): void {
     if (this.engine) {
       return;
@@ -587,7 +581,7 @@ export class ProceduralAudioService {
     hp.type = "highpass";
     hp.frequency.value = 2400;
     const air = ctx.createGain();
-    air.gain.value = 0.008;
+    air.gain.value = 0.004;
 
     // Slow sport-sound tremolo so the harmony gently breathes/sings.
     const lfo = ctx.createOscillator();
@@ -618,6 +612,8 @@ export class ProceduralAudioService {
     inverter.start();
     noise.start();
     lfo.start();
+    this.engineDip = 0;
+    this.engineDipTime = ctx.currentTime;
     this.engine = { toneA, toneB, sub, inverter, noise, lfo, gA, gInv, air, lp, gain };
     this.applyEngineIntensity();
   }
@@ -648,19 +644,24 @@ export class ProceduralAudioService {
     if (!engine || !ctx) {
       return;
     }
-    const v = this.runIntensity;
     const t = ctx.currentTime;
     const p = this.engineProfile;
-    // Deep, singing two-tone harmony shaped by the car's profile: a low fundamental + an upper
-    // interval (a hair detuned for a slow chorus beat). pitchScale sets the register.
-    const fund = (55 + v * 205) * p.pitchScale; // ~55 Hz idle → ~430 Hz flat-out (deep, not a high whine)
+    // Decay the transient downshift dip toward 0 (real-time based → frame-rate independent, ~0.5 s).
+    const dt = this.engineDipTime > 0 ? Math.min(0.2, Math.max(0, t - this.engineDipTime)) : 0;
+    this.engineDipTime = t;
+    this.engineDip *= Math.exp(-dt / 0.5);
+    const dip = this.engineDip;
+    const v = this.runIntensity;
+    // Deep, singing two-tone harmony shaped by the car's profile. The dip pulls the pitch (and some
+    // brightness) down on a shift, then it surges back up as the dip decays — that's the "power" cue.
+    const fund = (55 + v * 205) * p.pitchScale * (1 - dip);
     engine.toneA.frequency.setTargetAtTime(fund, t, 0.09);
     engine.toneB.frequency.setTargetAtTime(fund * p.intervalB * p.detuneB, t, 0.09);
     engine.sub.frequency.setTargetAtTime(fund * 0.5, t, 0.09);
     engine.inverter.frequency.setTargetAtTime(1400 + v * 2400, t, 0.1);
     engine.gInv.gain.setTargetAtTime((0.003 + v * 0.01) * p.whineLevel, t, 0.12);
-    engine.lp.frequency.setTargetAtTime((700 + v * 1500) * p.brightness, t, 0.12); // warmth opens with speed
-    engine.air.gain.setTargetAtTime(0.005 + v * 0.03, t, 0.12);
+    engine.lp.frequency.setTargetAtTime((700 + v * 1500) * p.brightness * (1 - dip * 0.5), t, 0.12);
+    engine.air.gain.setTargetAtTime(0.003 + v * 0.015, t, 0.12); // reduced road hiss (less constant "rauschen")
     engine.lfo.frequency.setTargetAtTime(p.tremoloRate * (0.8 + v * 0.5), t, 0.2);
     engine.gain.gain.setTargetAtTime((0.032 + v * 0.026) * p.gainScale, t, 0.12); // sits behind the music
   }
@@ -843,6 +844,7 @@ export class ProceduralAudioService {
     this.layerGain = {};
     this.duckBus?.disconnect();
     this.autoScaleGain?.disconnect();
+    this.musicSweepLP?.disconnect();
     this.masterGain?.disconnect();
     this.musicGain?.disconnect();
     this.sfxGain?.disconnect();
@@ -852,6 +854,7 @@ export class ProceduralAudioService {
     this.context = null;
     this.duckBus = null;
     this.autoScaleGain = null;
+    this.musicSweepLP = null;
     this.masterGain = null;
     this.musicGain = null;
     this.sfxGain = null;
@@ -1704,113 +1707,43 @@ export class ProceduralAudioService {
     this.trackChain([{ node: osc, stop: time + 1.65 }], [lp, gain], time, "music");
   }
 
-  // ---- Persistent texture voice (Phase 4): noise bed, built once per active biome ----
-  // (The sustained tonal pad was removed — it muddied the mix and clashed with the EV engine drone.
-  //  Harmony now comes purely from the moving bass root + the lead over the beat.)
+  // ---- Harmony helper ----
+  // (The sustained tonal pad AND the continuous noise bed were removed — they muddied the mix and
+  //  resembled the EV engine drone. Harmony now comes from the moving bass root + the lead.)
 
   /** Chord-root semitone offset (from the active theme's tonic) → frequency. */
   private chordRootHz(semis: number): number {
     return this.theme.tonicHz * Math.pow(2, semis / 12);
   }
 
-  private buildNoiseBed(fadeSeconds: number): void {
-    const context = this.context;
-    if (!context) {
-      return;
-    }
-    const theme = this.theme;
-    if (theme.noiseBed === "none") {
-      this.noiseBedVoice = null;
-      return;
-    }
-    const now = context.currentTime;
-    const source = context.createBufferSource();
-    source.buffer = this.getNoiseBuffer(context);
-    source.loop = true;
-    const hp = context.createBiquadFilter();
-    hp.type = "highpass";
-    const lp = context.createBiquadFilter();
-    lp.type = "lowpass";
-    const gain = context.createGain();
-    gain.gain.value = 0.0001;
-
-    let level = 0.02;
-    if (theme.noiseBed === "vinyl") {
-      hp.frequency.value = 1500;
-      lp.frequency.value = 7000;
-      level = 0.012;
-    } else if (theme.noiseBed === "rain") {
-      hp.frequency.value = 400;
-      lp.frequency.value = 6000;
-      level = 0.02;
-    } else {
-      // wind
-      hp.frequency.value = 300;
-      lp.frequency.value = 1200;
-      level = 0.03;
-    }
-
-    source.connect(hp);
-    hp.connect(lp);
-    lp.connect(gain);
-    // Texture bed sits post-duck (not pumped) and very low.
-    gain.connect(this.autoScaleGain ?? this.layerDestination("L1"));
-    source.start();
-    gain.gain.setTargetAtTime(level, now, fadeSeconds);
-    this.noiseBedVoice = { source, gain, filters: [hp, lp], level };
-  }
-
-  private fadeOutNoiseBed(bed: NoiseBedVoice): void {
-    const context = this.context;
-    const disconnectAll = () => {
-      try {
-        bed.source.disconnect();
-      } catch {
-        // already gone
-      }
-      for (const f of bed.filters) {
-        try {
-          f.disconnect();
-        } catch {
-          // already gone
-        }
-      }
-      try {
-        bed.gain.disconnect();
-      } catch {
-        // already gone
-      }
-    };
-    if (!context) {
-      disconnectAll();
-      return;
-    }
-    const now = context.currentTime;
-    bed.gain.gain.cancelScheduledValues(now);
-    bed.gain.gain.setTargetAtTime(0.0001, now, 0.4);
-    bed.source.onended = () => disconnectAll();
-    try {
-      bed.source.stop(now + 1.6);
-    } catch {
-      disconnectAll();
-    }
-  }
-
-  /** Swap the active biome theme + crossfade its persistent voices (instant at run-start). */
+  /** Swap the active biome theme and, for in-run leg changes, smooth the cut with a master filter
+   *  sweep + a gentle engine downshift (so the transition glides instead of jumping). */
   private activateBiome(key: string, instant: boolean): void {
     const theme = BIOME_THEME_BY_KEY[key];
     if (!theme) {
       return;
     }
-    if (this.noiseBedVoice) {
-      this.fadeOutNoiseBed(this.noiseBedVoice);
-      this.noiseBedVoice = null;
-    }
     this.theme = theme;
     this.currentBiomeKey = key;
     this.arranger.chordRoot = theme.chordRootSemis[this.arranger.chordIdx % theme.chordRootSemis.length] ?? 0;
-    const fade = instant ? 0.3 : 1.2;
-    this.buildNoiseBed(fade);
+    if (!instant) {
+      this.sweepMusicTransition();
+      this.engineDownshift(0.2);
+    }
+  }
+
+  /** Briefly muffle then re-open the whole music bus — masks the hard cut between biome themes. */
+  private sweepMusicTransition(): void {
+    const lp = this.musicSweepLP;
+    const context = this.context;
+    if (!lp || !context) {
+      return;
+    }
+    const now = context.currentTime;
+    lp.frequency.cancelScheduledValues(now);
+    lp.frequency.setValueAtTime(Math.max(lp.frequency.value, 1), now);
+    lp.frequency.exponentialRampToValueAtTime(520, now + 0.18); // close into the change
+    lp.frequency.exponentialRampToValueAtTime(20000, now + 2); // open back over ~2 bars
   }
 
   /** Tell the music which macro-biome the run is in (0 village · 1 neon · 2 forest; autumn = village
@@ -1981,10 +1914,17 @@ export class ProceduralAudioService {
     duckBus.gain.value = 1;
     const autoScale = context.createGain();
     autoScale.gain.value = 0.9;
+    // A transparent-by-default lowpass we sweep shut + back open on biome changes to glide the cut.
+    const sweepLP = context.createBiquadFilter();
+    sweepLP.type = "lowpass";
+    sweepLP.frequency.value = 20000;
+    sweepLP.Q.value = 0.7;
     duckBus.connect(autoScale);
-    autoScale.connect(musicGain);
+    autoScale.connect(sweepLP);
+    sweepLP.connect(musicGain);
     this.duckBus = duckBus;
     this.autoScaleGain = autoScale;
+    this.musicSweepLP = sweepLP;
 
     this.layerGain = {};
     for (const id of LAYER_IDS) {
