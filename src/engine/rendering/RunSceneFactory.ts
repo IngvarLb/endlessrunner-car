@@ -766,6 +766,19 @@ export class RunSceneFactory {
       minkaHouse: () => models.createMinkaHouse(),
       nagayaRowHouse: () => models.createNagayaRowHouse(),
       kuraStorehouse: () => models.createKuraStorehouse(),
+      persimmonTree: () => models.createPersimmonTree(),
+      keyakiTree: () => models.createKeyakiTree(),
+      noboriBanner: () => models.createNoboriBanner(),
+      woodenCart: () => models.createWoodenCart(),
+      marketStall: () => models.createMarketStall(),
+      villageWell: () => models.createVillageWell(),
+      bambooFence: () => models.createBambooFence(),
+      sakeBarrels: () => models.createSakeBarrels(),
+      teaShrub: () => models.createTeaShrub(),
+      firewoodStack: () => models.createFirewoodStack(),
+      roadsideJizo: () => models.createRoadsideJizo(),
+      stoneWall: () => models.createStoneWall(),
+      fallenLeaves: () => models.createFallenLeaves(),
       cyberSlabTower: () => models.createCyberSlabTower(),
       cyberSetbackTower: () => models.createCyberSetbackTower(),
       cyberCapsuleTower: () => models.createCyberCapsuleTower(),
@@ -835,7 +848,9 @@ export class RunSceneFactory {
       "monorailPillar", "broadcastTower", "distantTowerCluster",
       // 奥山 tall trees / cliffs / landmarks exceed the ~40 m shadow frustum.
       "sugiCedar", "mountainPine", "bambooGrove", "shimenawaSacredTree", "cliffWall",
-      "waterfall", "trailheadTorii", "mistyPeaks", "cedarRidge", "distantWaterfall"
+      "waterfall", "trailheadTorii", "mistyPeaks", "cedarRidge", "distantWaterfall",
+      // 宿場町 village — tall thin bamboo, broad backdrop keyaki, flat leaf-litter.
+      "bambooCluster", "keyakiTree", "fallenLeaves"
     ]);
 
     for (let offset = 0; offset < biome.track.segmentCount; offset += 1) {

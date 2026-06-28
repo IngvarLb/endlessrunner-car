@@ -21,6 +21,9 @@ export class MaterialFactory {
   readonly mapleLeafRed = this.standard(0x4f9e3a, 0.95, 0.02);
   readonly mapleLeafOrange = this.standard(0x5aa83e, 0.95, 0.02);
   readonly mapleLeafGold = this.standard(0x74b23f, 0.95, 0.02);
+  // 柿 Persimmon fruit — a fixed saturated autumn orange (does NOT season-morph, so
+  // ripe fruit reads warm in both the green summer leg and the crimson autumn leg).
+  readonly persimmon = this.standard(0xe8651e, 0.85, 0.03);
 
   // ===== 電脳都市 Neon Cyber-City (blue hour) — structure (matte/metal/glass) + emissive neon =====
   // Matte concrete / asphalt / paint

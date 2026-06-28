@@ -624,19 +624,86 @@ export class ModelFactory {
 
   createBambooCluster(): THREE.Group {
     const group = new THREE.Group();
-    group.name = "deco_bamboo_cluster_fallback";
+    group.name = "deco_bamboo_cluster";
 
-    for (let index = 0; index < 5; index += 1) {
-      const height = 2.2 + index * 0.22;
+    // Madake clump: 8 thin tapered culms packed within a ~0.7 m footprint,
+    // alternating fresh/pale green, each leaning slightly with a small xz jitter.
+    // Fixed deterministic per-culm layout (jitter pulled in so the leaf-sprays
+    // stay within +/-0.4 m of centre and the top stays under the 3.6 m box).
+    const culms: Array<{
+      x: number;
+      z: number;
+      h: number;
+      pale: boolean;
+      leanZ: number;
+      spinY: number;
+    }> = [
+      { x: 0.0, z: 0.0, h: 3.52, pale: false, leanZ: 0.0, spinY: 0.0 },
+      { x: 0.13, z: 0.08, h: 3.22, pale: true, leanZ: -0.05, spinY: 0.8 },
+      { x: -0.12, z: 0.11, h: 3.34, pale: false, leanZ: 0.04, spinY: 1.7 },
+      { x: 0.16, z: -0.1, h: 3.0, pale: true, leanZ: -0.06, spinY: 2.5 },
+      { x: -0.15, z: -0.09, h: 3.12, pale: false, leanZ: 0.06, spinY: 3.3 },
+      { x: 0.05, z: 0.17, h: 2.9, pale: true, leanZ: 0.03, spinY: 4.1 },
+      { x: -0.07, z: -0.17, h: 2.82, pale: false, leanZ: -0.04, spinY: 5.0 },
+      { x: 0.19, z: 0.03, h: 2.86, pale: true, leanZ: -0.06, spinY: 5.8 }
+    ];
+
+    for (const culm of culms) {
+      const stalkMat = culm.pale ? this.materials.bambooStalkPale : this.materials.bambooStalk;
+
+      // Tapered culm — thinner at the top than the base.
       const stalk = this.mesh(
-        new THREE.CylinderGeometry(0.06, 0.08, height, 6),
-        index % 2 === 0 ? this.materials.foliage : this.materials.foliageDark,
-        [(index - 2) * 0.16, height * 0.5, (index % 2) * 0.18]
+        new THREE.CylinderGeometry(0.045, 0.06, culm.h, 6),
+        stalkMat,
+        [culm.x, culm.h * 0.5, culm.z]
       );
-      stalk.rotation.z = (index - 2) * 0.04;
+      stalk.rotation.y = culm.spinY;
+      stalk.rotation.z = culm.leanZ;
       group.add(stalk);
+
+      // The stalk mesh pivots about its CENTRE (at h/2), so the centreline x at a
+      // given height-fraction is offset by -sin(lean)*(h*frac - h/2). Track that so
+      // the node rings + leaf-spray ride the real stalk centreline (not its base).
+      const centerlineX = (frac: number): number =>
+        culm.x - Math.sin(culm.leanZ) * (culm.h * frac - culm.h * 0.5);
+
+      // 3-4 thin darkWood node-ring discs spaced up the height.
+      const nodeFracs = culm.h > 3.2 ? [0.22, 0.45, 0.68, 0.88] : [0.28, 0.55, 0.82];
+      for (const frac of nodeFracs) {
+        const ring = this.mesh(
+          new THREE.CylinderGeometry(0.05, 0.05, 0.04, 6),
+          this.materials.darkWood,
+          [centerlineX(frac), culm.h * frac, culm.z]
+        );
+        ring.rotation.y = culm.spinY;
+        ring.rotation.z = culm.leanZ;
+        group.add(ring);
+      }
+
+      // Small leaf-spray near the top: 3 tiny thin elongated boxes splayed up-out,
+      // alternating foliageDark / bambooStalkPale for a luminous fresh-green tuft.
+      // Lengths + tilts kept modest so leaf tips stay inside the +/-0.4 m footprint.
+      const leafFrac = 0.9;
+      const tx = centerlineX(leafFrac);
+      const ty = culm.h * leafFrac;
+      const sprays: Array<[number, number, number, THREE.Material]> = [
+        [0.16, 0.32, culm.spinY + 0.3, this.materials.foliageDark],
+        [-0.3, 0.3, culm.spinY + 2.2, this.materials.bambooStalkPale],
+        [0.42, 0.28, culm.spinY + 4.3, this.materials.foliageDark]
+      ];
+      for (const [tilt, len, yaw, leafMat] of sprays) {
+        const leaf = this.mesh(
+          new THREE.BoxGeometry(0.045, len, 0.14),
+          leafMat,
+          [tx, ty + len * 0.4, culm.z]
+        );
+        leaf.rotation.y = yaw;
+        leaf.rotation.z = tilt; // splay up-and-out from the culm tip
+        group.add(leaf);
+      }
     }
 
+    // Tall thin bamboo — deliberately skip enableShadows (per convention).
     return group;
   }
 
@@ -644,28 +711,59 @@ export class ModelFactory {
     const group = new THREE.Group();
     group.name = "deco_maple_tree";
 
-    const trunk = this.mesh(new THREE.CylinderGeometry(0.12, 0.2, 2.4, 6), this.materials.darkWood, [0, 1.2, 0]);
-    group.add(trunk);
-    const branchL = this.mesh(new THREE.CylinderGeometry(0.06, 0.09, 1.0, 5), this.materials.darkWood, [-0.28, 2.0, 0.05]);
-    branchL.rotation.z = 0.7;
-    const branchR = this.mesh(new THREE.CylinderGeometry(0.06, 0.09, 1.0, 5), this.materials.darkWood, [0.3, 2.05, -0.05]);
-    branchR.rotation.z = -0.8;
-    group.add(branchL, branchR);
+    // --- Trunk: short root flare at the base, then a tapered cedar-bark bole ---
+    group.add(
+      this.mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.22, 7), this.materials.cedarBark, [0, 0.11, 0]),
+      this.mesh(new THREE.CylinderGeometry(0.14, 0.26, 2.2, 7), this.materials.darkWood, [0, 1.28, 0])
+    );
+    // A faint moss skirt where the bark meets the ground.
+    const moss = this.mesh(new THREE.IcosahedronGeometry(0.2, 0), this.materials.mossGreen, [0.13, 0.18, 0.16]);
+    moss.rotation.set(0.4, 0.8, 0.2);
+    group.add(moss);
 
-    // Fiery faceted canopy: overlapping low-poly icosahedron blobs across the 3 maple
-    // materials so each tree blends crimson/orange/gold in autumn (green in summer).
-    const mats = [this.materials.mapleLeafRed, this.materials.mapleLeafOrange, this.materials.mapleLeafGold];
-    const blobs: Array<[number, number, number, number, number]> = [
-      [0, 2.7, 0, 1.15, 0],
-      [0.6, 3.05, 0.2, 0.82, 1],
-      [-0.62, 2.95, -0.18, 0.8, 2],
-      [0.1, 3.35, -0.35, 0.74, 1],
-      [-0.25, 3.4, 0.32, 0.66, 0],
-      [0.4, 2.55, -0.5, 0.6, 2]
+    // --- 4 angled branches splayed outward+up; the canopy rests ON these ---
+    // [x, y, z, length, rotZ, rotX]
+    const branches: Array<[number, number, number, number, number, number]> = [
+      [-0.26, 2.18, 0.06, 0.95, 0.72, -0.18],
+      [0.3, 2.24, -0.08, 1.05, -0.82, 0.16],
+      [0.06, 2.46, 0.28, 0.78, 0.12, -0.66],
+      [-0.12, 2.42, -0.24, 0.82, -0.2, 0.6]
     ];
-    for (const [x, y, z, r, mi] of blobs) {
-      const blob = this.mesh(new THREE.IcosahedronGeometry(r, 0), mats[mi], [x, y, z]);
-      blob.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    for (const [x, y, z, len, rz, rx] of branches) {
+      const branch = this.mesh(new THREE.CylinderGeometry(0.05, 0.09, len, 5), this.materials.cedarBark, [x, y, z]);
+      branch.rotation.z = rz;
+      branch.rotation.x = rx;
+      group.add(branch);
+    }
+
+    // --- Canopy: a deliberate rounded dome of momiji blobs.
+    // Wide lower ring (~y2.4) carrying the mass, mid mass, a smaller cap (~y2.9-3.1) closing the crown.
+    // Colours mixed evenly across the season-morphing trio + a moss blob for depth.
+    // EVERY centre kept within +/-0.6 and outer radius within +/-0.9 of x=0 (roadside-safe);
+    // depth (z) reined in to match so the crown never bulges toward road or houses.
+    const red = this.materials.mapleLeafRed;
+    const orange = this.materials.mapleLeafOrange;
+    const gold = this.materials.mapleLeafGold;
+    const moss2 = this.materials.mossGreen;
+    // [x, y, z, r, material, fixed facet rotation rx, ry, rz]
+    const blobs: Array<[number, number, number, number, THREE.Material, number, number, number]> = [
+      // lower ring
+      [-0.4, 2.42, 0.1, 0.46, red, 0.3, 0.5, 0.2],
+      [0.42, 2.4, -0.06, 0.46, orange, 0.5, 1.1, 0.4],
+      [0.1, 2.36, 0.42, 0.46, gold, 0.2, 2.0, 0.6],
+      [-0.14, 2.44, -0.42, 0.46, red, 0.7, 2.6, 0.1],
+      [0.3, 2.5, 0.3, 0.48, moss2, 0.4, 0.9, 0.5],
+      // mid mass
+      [-0.04, 2.62, 0.04, 0.58, orange, 0.6, 1.5, 0.3],
+      [-0.32, 2.74, -0.18, 0.5, gold, 0.1, 3.0, 0.7],
+      // upper cap
+      [0.18, 2.88, -0.16, 0.5, red, 0.5, 0.4, 0.6],
+      [-0.16, 2.92, 0.18, 0.48, gold, 0.3, 2.2, 0.2],
+      [0.04, 3.06, 0.0, 0.44, orange, 0.8, 1.8, 0.5]
+    ];
+    for (const [x, y, z, r, mat, rx, ry, rz] of blobs) {
+      const blob = this.mesh(new THREE.IcosahedronGeometry(r, 0), mat, [x, y, z]);
+      blob.rotation.set(rx, ry, rz);
       group.add(blob);
     }
 
@@ -675,16 +773,83 @@ export class ModelFactory {
 
   createStoneLantern(): THREE.Group {
     const group = new THREE.Group();
-    group.name = "deco_stone_lantern_fallback";
+    group.name = "deco_stone_lantern";
 
-    group.add(
-      this.mesh(new THREE.BoxGeometry(0.54, 0.18, 0.54), this.materials.stone, [0, 0.09, 0]),
-      this.mesh(new THREE.BoxGeometry(0.24, 0.68, 0.24), this.materials.stone, [0, 0.5, 0]),
-      this.mesh(new THREE.BoxGeometry(0.52, 0.38, 0.52), this.materials.stone, [0, 1.04, 0]),
-      this.mesh(new THREE.BoxGeometry(0.68, 0.16, 0.68), this.materials.torii, [0, 1.33, 0]),
-      this.mesh(new THREE.BoxGeometry(0.22, 0.16, 0.22), this.materials.ember, [0, 1.04, -0.27])
-    );
+    // ── Tier 1 — square base plinth (基礎): a chunky two-step footing in grey stone.
+    group.add(this.mesh(new THREE.BoxGeometry(0.7, 0.16, 0.7), this.materials.stone, [0, 0.08, 0]));
+    group.add(this.mesh(new THREE.BoxGeometry(0.56, 0.12, 0.56), this.materials.jizoStone, [0, 0.2, 0]));
 
+    // ── Tier 2 — short hexagonal shaft (竿): the slim weathered pillar.
+    const shaft = this.mesh(new THREE.CylinderGeometry(0.13, 0.155, 0.6, 6), this.materials.stone, [0, 0.55, 0]);
+    shaft.rotation.y = Math.PI / 6;
+    group.add(shaft);
+    // a carved ring band partway up the shaft for a hand-cut read
+    const band = this.mesh(new THREE.CylinderGeometry(0.165, 0.165, 0.06, 6), this.materials.jizoStone, [0, 0.62, 0]);
+    band.rotation.y = Math.PI / 6;
+    group.add(band);
+
+    // ── Tier 3 — flat stone platform disc (中台): a hexagonal table the fire-box rests on.
+    const platform = this.mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.12, 6), this.materials.stone, [0, 0.9, 0]);
+    platform.rotation.y = Math.PI / 6;
+    group.add(platform);
+    const platformLip = this.mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.05, 6), this.materials.jizoStone, [0, 0.835, 0]);
+    platformLip.rotation.y = Math.PI / 6;
+    group.add(platformLip);
+
+    // ── Tier 4 — the fire-box (火袋): hexagonal jizoStone chamber holding the light.
+    const fireBox = this.mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.34, 6), this.materials.jizoStone, [0, 1.11, 0]);
+    fireBox.rotation.y = Math.PI / 6;
+    group.add(fireBox);
+    // corner pilasters on the front-facing edges to frame the window opening
+    group.add(this.mesh(new THREE.BoxGeometry(0.05, 0.34, 0.05), this.materials.stone, [-0.2, 1.11, 0.16]));
+    group.add(this.mesh(new THREE.BoxGeometry(0.05, 0.34, 0.05), this.materials.stone, [0.2, 1.11, 0.16]));
+    // dark recessed window cut into the +Z face …
+    group.add(this.mesh(new THREE.BoxGeometry(0.22, 0.24, 0.06), this.materials.darkWood, [0, 1.11, 0.24]));
+    // … containing the warm glowing ember box (the actual lantern light).
+    group.add(this.mesh(new THREE.BoxGeometry(0.15, 0.17, 0.07), this.materials.ember, [0, 1.11, 0.27]));
+    // a faint ember sliver leaking out the back so the glow reads from both sides
+    group.add(this.mesh(new THREE.BoxGeometry(0.12, 0.13, 0.05), this.materials.ember, [0, 1.11, -0.25]));
+
+    // ── Tier 5 — wider hexagonal cap roof (笠): low cone-like sweep with an upturned eave.
+    const eave = this.mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.07, 6), this.materials.stone, [0, 1.31, 0]);
+    eave.rotation.y = Math.PI / 6;
+    group.add(eave);
+    const cap = this.mesh(new THREE.CylinderGeometry(0.12, 0.42, 0.3, 6), this.materials.jizoStone, [0, 1.47, 0]);
+    cap.rotation.y = Math.PI / 6;
+    group.add(cap);
+    // six tiny upturned corner knobs (蕨手) tucked under the eave edge for the curl read
+    for (let i = 0; i < 6; i += 1) {
+      const a = Math.PI / 6 + (i / 6) * Math.PI * 2;
+      const knob = this.mesh(
+        new THREE.IcosahedronGeometry(0.045, 0),
+        this.materials.stone,
+        [Math.cos(a) * 0.4, 1.35, Math.sin(a) * 0.4]
+      );
+      knob.rotation.set(0.3, a, 0.2);
+      group.add(knob);
+    }
+
+    // ── Tier 6 — finial: a small jewel-knob (宝珠) crowning the lantern.
+    group.add(this.mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.07, 6), this.materials.jizoStone, [0, 1.625, 0]));
+    const jewel = this.mesh(new THREE.IcosahedronGeometry(0.06, 0), this.materials.stone, [0, 1.65, 0]);
+    jewel.rotation.set(0.4, 0.3, 0);
+    group.add(jewel);
+
+    // ── Mottling — small mossGreen patches creeping over the base and cap.
+    const moss: Array<[number, number, number, number]> = [
+      [0.26, 0.1, 0.22, 0.07],   // moss on the base plinth corner
+      [-0.18, 0.22, 0.2, 0.055], // moss on the upper footing
+      [0.3, 1.3, -0.2, 0.06],    // moss on the shaded rear of the cap
+      [-0.24, 1.37, 0.18, 0.05]  // a fleck under the front eave
+    ];
+    for (const [x, y, z, r] of moss) {
+      const patch = this.mesh(new THREE.IcosahedronGeometry(r, 0), this.materials.mossGreen, [x, y, z]);
+      patch.rotation.set(x, y, z);
+      patch.scale.set(1, 0.45, 1);
+      group.add(patch);
+    }
+
+    this.enableShadows(group);
     return group;
   }
 
@@ -692,29 +857,85 @@ export class ModelFactory {
     const group = new THREE.Group();
     group.name = "deco_machiya_house_low_poly";
 
+    // ===== Foundations & two-storey body =====
     group.add(
-      this.mesh(new THREE.BoxGeometry(3.05, 1.65, 2.05), this.materials.plaster, [0, 0.825, 0]),
-      this.mesh(new THREE.BoxGeometry(3.16, 1.18, 0.08), this.materials.warmWood, [0, 0.7, 1.06]),
-      this.createGableRoof(3.62, 2.56, 0.58, 1.72, this.materials.roofTile),
-      this.mesh(new THREE.BoxGeometry(3.5, 0.1, 0.12), this.materials.darkWood, [0, 2.33, 0]),
-      this.mesh(new THREE.BoxGeometry(3.58, 0.12, 0.14), this.materials.darkWood, [0, 1.72, 1.34]),
-      this.mesh(new THREE.BoxGeometry(3.58, 0.12, 0.14), this.materials.darkWood, [0, 1.72, -1.34]),
-      this.mesh(new THREE.BoxGeometry(3.1, 0.1, 0.1), this.materials.darkWood, [0, 1.38, 1.11]),
-      this.mesh(new THREE.BoxGeometry(3.1, 0.1, 0.1), this.materials.darkWood, [0, 0.18, 1.11]),
-      this.mesh(new THREE.BoxGeometry(0.62, 1.1, 0.08), this.materials.darkWood, [-0.16, 0.68, 1.12]),
-      this.mesh(new THREE.BoxGeometry(0.38, 0.74, 0.04), this.materials.paperWindow, [-0.16, 0.75, 1.17]),
-      this.mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), this.materials.gold, [0.17, 0.72, 1.2]),
-      this.mesh(new THREE.BoxGeometry(0.3, 0.68, 0.08), this.materials.warmWood, [1.42, 1.08, 1.15]),
-      this.createHangingLantern([1.18, 1.28, 1.18], 0.92)
+      // Low stone sill the whole house sits on.
+      this.mesh(new THREE.BoxGeometry(3.12, 0.16, 2.12), this.materials.stone, [0, 0.08, 0]),
+      // Ground-floor plaster body (spec 3.0w x 1.7h x 2.05d).
+      this.mesh(new THREE.BoxGeometry(3.0, 1.7, 2.05), this.materials.plaster, [0, 1.01, 0]),
+      // Set-back upper storey (narrower + shallower + recessed in z so it reads as set back).
+      this.mesh(new THREE.BoxGeometry(2.85, 0.9, 1.85), this.materials.plaster, [0, 2.31, -0.06]),
+      // Wooden floor-band / dropped eave between the two storeys.
+      this.mesh(new THREE.BoxGeometry(3.06, 0.16, 2.1), this.materials.darkWood, [0, 1.84, 0]),
+      // Slim warmWood corner posts framing the ground-floor shopfront.
+      this.mesh(new THREE.BoxGeometry(0.12, 1.7, 0.12), this.materials.warmWood, [-1.46, 1.01, 0.98]),
+      this.mesh(new THREE.BoxGeometry(0.12, 1.7, 0.12), this.materials.warmWood, [1.46, 1.01, 0.98])
     );
 
-    for (const x of [-1.48, -0.52, 0.52, 1.48]) {
-      group.add(this.mesh(new THREE.BoxGeometry(0.1, 1.44, 0.12), this.materials.darkWood, [x, 0.86, 1.13]));
+    // ===== Gable roof, ridge beam & rafter tails =====
+    // Roof depth 2.28 -> +Z eave at ~1.14, just inside the ±1.15 budget so the
+    // 90deg-rotated, ~1.4x-scaled road-facing eave cannot reach the lane.
+    group.add(
+      this.createGableRoof(3.42, 2.28, 0.44, 2.42, this.materials.roofTile),
+      // Heavy darkWood ridge beam along the apex.
+      this.mesh(new THREE.BoxGeometry(3.36, 0.1, 0.12), this.materials.darkWood, [0, 2.86, 0]),
+      // Front & back eave fascia boards (pulled inside the roof eave line).
+      this.mesh(new THREE.BoxGeometry(3.46, 0.12, 0.12), this.materials.darkWood, [0, 2.42, 1.07]),
+      this.mesh(new THREE.BoxGeometry(3.46, 0.12, 0.12), this.materials.darkWood, [0, 2.42, -1.07])
+    );
+    // Row of exposed rafter tails poking out under the front eave (kept within ±1.15).
+    for (const x of [-1.5, -0.9, -0.3, 0.3, 0.9, 1.5]) {
+      const rafter = this.mesh(new THREE.BoxGeometry(0.08, 0.08, 0.34), this.materials.darkWood, [x, 2.38, 0.96]);
+      rafter.rotation.x = -0.16;
+      group.add(rafter);
     }
 
-    this.addFrontLatticePanel(group, [-1.02, 0.78, 1.15], [0.78, 0.92], this.materials.paperWindow, this.materials.darkWood, 4, 3);
-    this.addFrontLatticePanel(group, [0.95, 0.8, 1.15], [0.86, 0.86], this.materials.paperWindow, this.materials.darkWood, 5, 3);
-    this.addFrontLatticePanel(group, [0, 1.5, 1.13], [2.05, 0.36], this.materials.paperWindow, this.materials.darkWood, 8, 1);
+    // ===== Ground-floor 格子 koshi shopfront =====
+    // Continuous header & sill rails for the lattice run.
+    group.add(
+      this.mesh(new THREE.BoxGeometry(3.04, 0.1, 0.1), this.materials.darkWood, [0, 1.56, 1.0]),
+      this.mesh(new THREE.BoxGeometry(3.04, 0.1, 0.1), this.materials.darkWood, [0, 0.34, 1.0])
+    );
+    // Two bays of fine vertical koshi slats (paper behind darkWood frames).
+    this.addFrontLatticePanel(group, [-0.92, 0.95, 1.0], [0.92, 1.04], this.materials.paperWindow, this.materials.darkWood, 6, 2);
+    this.addFrontLatticePanel(group, [0.92, 0.95, 1.0], [0.92, 1.04], this.materials.paperWindow, this.materials.darkWood, 6, 2);
+    // Slender mid posts so the two bays read as a continuous shopfront.
+    for (const x of [-1.46, 0, 1.46]) {
+      group.add(this.mesh(new THREE.BoxGeometry(0.08, 1.16, 0.1), this.materials.darkWood, [x, 0.95, 1.02]));
+    }
+
+    // ===== Central recessed doorway + noren split-curtain =====
+    group.add(
+      // Recessed dark doorway reveal.
+      this.mesh(new THREE.BoxGeometry(0.6, 1.06, 0.06), this.materials.darkWood, [0, 0.66, 0.98]),
+      // Noren: a header band + two indigo cloth panels with a central split.
+      this.mesh(new THREE.BoxGeometry(0.74, 0.08, 0.04), this.materials.cloth, [0, 1.16, 1.05]),
+      this.mesh(new THREE.BoxGeometry(0.3, 0.46, 0.03), this.materials.cloth, [-0.18, 0.89, 1.05]),
+      this.mesh(new THREE.BoxGeometry(0.3, 0.46, 0.03), this.materials.cloth, [0.18, 0.89, 1.05])
+    );
+
+    // ===== Second-storey mushikomado window & balcony rail =====
+    // Slatted mushikomado (insect-cage) window panel, set into the upper plaster.
+    this.addFrontLatticePanel(group, [0, 2.34, 0.86], [1.0, 0.46], this.materials.paperWindow, this.materials.darkWood, 7, 1);
+    // Thin darkWood balcony rail across the front of the upper storey.
+    group.add(
+      this.mesh(new THREE.BoxGeometry(2.7, 0.06, 0.06), this.materials.darkWood, [0, 2.02, 0.9]),
+      this.mesh(new THREE.BoxGeometry(2.7, 0.05, 0.05), this.materials.darkWood, [0, 2.24, 0.9])
+    );
+    for (const x of [-1.2, -0.6, 0, 0.6, 1.2]) {
+      group.add(this.mesh(new THREE.BoxGeometry(0.04, 0.24, 0.04), this.materials.darkWood, [x, 2.13, 0.9]));
+    }
+
+    // ===== Hanging shop sign + lantern + gold accent =====
+    group.add(
+      // Bracket arm jutting from the body, with a warmWood signboard hanging below.
+      this.mesh(new THREE.BoxGeometry(0.06, 0.06, 0.22), this.materials.darkWood, [-1.34, 1.68, 0.98]),
+      this.mesh(new THREE.BoxGeometry(0.34, 0.5, 0.06), this.materials.warmWood, [-1.34, 1.36, 1.06]),
+      // Gold finial / mon crest accenting the signboard.
+      this.mesh(new THREE.BoxGeometry(0.1, 0.1, 0.04), this.materials.gold, [-1.34, 1.52, 1.1]),
+      // Glowing paper lantern hung under the eave on the other side.
+      this.createHangingLantern([1.28, 1.52, 1.0], 0.9)
+    );
 
     this.enableShadows(group);
     return group;
@@ -724,33 +945,91 @@ export class ModelFactory {
     const group = new THREE.Group();
     group.name = "deco_minka_house_low_poly";
 
+    // ---- Stone foundation course + earthWall/plaster timber-framed body ----
     group.add(
-      this.mesh(new THREE.BoxGeometry(3.76, 0.24, 2.26), this.materials.stone, [0, 0.12, 0]),
-      this.mesh(new THREE.BoxGeometry(3.54, 1.34, 2.06), this.materials.earthWall, [0, 0.91, 0]),
-      this.createHippedRoof(4.34, 3.12, 1.18, 1.46, this.materials.thatch, 0, 0.42),
-      this.mesh(new THREE.BoxGeometry(1.86, 0.1, 0.14), this.materials.darkWood, [0, 2.68, 0]),
-      this.mesh(new THREE.BoxGeometry(3.86, 0.12, 0.16), this.materials.darkWood, [0, 1.43, 1.35]),
-      this.mesh(new THREE.BoxGeometry(3.86, 0.12, 0.16), this.materials.darkWood, [0, 1.43, -1.35]),
-      this.mesh(new THREE.BoxGeometry(3.56, 0.12, 0.1), this.materials.darkWood, [0, 1.2, 1.09]),
-      this.mesh(new THREE.BoxGeometry(0.62, 1.04, 0.08), this.materials.darkWood, [0, 0.78, 1.13]),
-      this.mesh(new THREE.BoxGeometry(0.44, 0.72, 0.04), this.materials.paperWindow, [0, 0.86, 1.18]),
-      this.mesh(new THREE.BoxGeometry(0.8, 0.22, 0.08), this.materials.warmWood, [0, 1.32, 1.16])
+      this.mesh(new THREE.BoxGeometry(3.6, 0.24, 2.24), this.materials.stone, [0, 0.12, 0]),
+      this.mesh(new THREE.BoxGeometry(3.46, 0.12, 2.12), this.materials.stone, [0, 0.3, 0]),
+      // Main earthWall mass + a lighter plaster band reading two wattle-and-daub courses.
+      this.mesh(new THREE.BoxGeometry(3.5, 1.36, 2.04), this.materials.earthWall, [0, 1.02, 0]),
+      this.mesh(new THREE.BoxGeometry(3.54, 0.42, 2.08), this.materials.plaster, [0, 1.5, 0])
     );
 
-    for (const x of [-1.65, -0.55, 0.55, 1.65]) {
-      group.add(this.mesh(new THREE.BoxGeometry(0.12, 1.34, 0.14), this.materials.darkWood, [x, 0.79, 1.15]));
+    // ---- Bold exposed darkWood post-and-beam frame (corner posts + sills + plates) ----
+    group.add(
+      // Top wall plate (beam the roof sits on) + bottom sill, both faces.
+      this.mesh(new THREE.BoxGeometry(3.62, 0.14, 0.13), this.materials.darkWood, [0, 1.7, 1.02]),
+      this.mesh(new THREE.BoxGeometry(3.62, 0.14, 0.13), this.materials.darkWood, [0, 1.7, -1.02]),
+      this.mesh(new THREE.BoxGeometry(3.62, 0.12, 0.12), this.materials.darkWood, [0, 0.4, 1.02]),
+      this.mesh(new THREE.BoxGeometry(3.62, 0.12, 0.12), this.materials.darkWood, [0, 0.4, -1.02]),
+      // Side wall plates (running in Z) to close the frame read on the gable walls.
+      this.mesh(new THREE.BoxGeometry(0.13, 0.14, 2.1), this.materials.darkWood, [1.72, 1.7, 0]),
+      this.mesh(new THREE.BoxGeometry(0.13, 0.14, 2.1), this.materials.darkWood, [-1.72, 1.7, 0]),
+      // Mid rail across the front (nageshi) tying the posts at lintel height.
+      this.mesh(new THREE.BoxGeometry(3.5, 0.1, 0.1), this.materials.darkWood, [0, 1.16, 1.03])
+    );
+
+    // Four corner posts (front + back) reading the structural frame.
+    for (const x of [-1.71, 1.71]) {
+      for (const z of [1.01, -1.01]) {
+        group.add(this.mesh(new THREE.BoxGeometry(0.15, 1.34, 0.15), this.materials.darkWood, [x, 1.03, z]));
+      }
+    }
+    // Intermediate front posts dividing the facade into shoji bays.
+    for (const x of [-0.58, 0.58]) {
+      group.add(this.mesh(new THREE.BoxGeometry(0.11, 1.3, 0.12), this.materials.darkWood, [x, 1.01, 1.03]));
     }
 
-    for (const x of [-1.8, -1.08, -0.36, 0.36, 1.08, 1.8]) {
-      const rafter = this.mesh(new THREE.BoxGeometry(0.08, 0.08, 0.5), this.materials.darkWood, [x, 1.35, 1.48]);
-      rafter.rotation.x = -0.18;
+    // Diagonal brace boxes in the two outer gable bays (read the timber frame).
+    const braceL = this.mesh(new THREE.BoxGeometry(0.1, 1.32, 0.1), this.materials.darkWood, [-1.16, 1.02, 1.03]);
+    braceL.rotation.z = 0.62;
+    const braceR = this.mesh(new THREE.BoxGeometry(0.1, 1.32, 0.1), this.materials.darkWood, [1.16, 1.02, 1.03]);
+    braceR.rotation.z = -0.62;
+    group.add(braceL, braceR);
+
+    // ---- DEEP steep thatched 入母屋 (irimoya) roof via createHippedRoof, in thatch ----
+    // Heavy overhang in X (the down-road axis after the layout's 90° rotation, so it stays
+    // clear of the lane); depth kept tight (±1.25) so the road-facing eave clears the road.
+    group.add(
+      // Shallow thatch eave skirt sitting on the wall plate for visual thickness.
+      this.mesh(new THREE.BoxGeometry(3.96, 0.34, 2.46), this.materials.thatch, [0, 1.86, 0]),
+      this.createHippedRoof(4.42, 2.46, 0.82, 1.86, this.materials.thatch, 0, 0.4),
+      // Heavy darkWood ridge cap along the apex.
+      this.mesh(new THREE.BoxGeometry(2.0, 0.16, 0.2), this.materials.darkWood, [0, 2.64, 0]),
+      this.mesh(new THREE.BoxGeometry(1.86, 0.1, 0.1), this.materials.darkWood, [0, 2.74, 0])
+    );
+
+    // Small triangular gable vent (kemuri-dashi) at each end, tucked under the ridge.
+    for (const z of [1, -1]) {
+      const vent = this.mesh(new THREE.ConeGeometry(0.3, 0.46, 3), this.materials.darkWood, [0, 2.16, z * 0.95]);
+      vent.rotation.x = z > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+      const ventPaper = this.mesh(new THREE.BoxGeometry(0.26, 0.22, 0.03), this.materials.paperWindow, [0, 2.12, z * 1.06]);
+      group.add(vent, ventPaper);
+    }
+
+    // ---- Angled darkWood rafter tails fanning out under the deep front eave ----
+    for (const x of [-1.92, -1.28, -0.64, 0, 0.64, 1.28, 1.92]) {
+      const rafter = this.mesh(new THREE.BoxGeometry(0.07, 0.07, 0.44), this.materials.darkWood, [x, 1.78, 1.02]);
+      rafter.rotation.x = -0.34;
       group.add(rafter);
     }
 
-    this.addFrontLatticePanel(group, [-1.05, 0.84, 1.15], [0.82, 0.72], this.materials.paperWindow, this.materials.darkWood, 4, 2);
-    this.addFrontLatticePanel(group, [1.05, 0.84, 1.15], [0.82, 0.72], this.materials.paperWindow, this.materials.darkWood, 4, 2);
-    this.addFrontLatticePanel(group, [0, 1.28, 1.16], [0.62, 0.32], this.materials.paperWindow, this.materials.darkWood, 3, 1);
-    group.add(this.createHangingLantern([-1.62, 1.12, 1.23], 0.78));
+    // ---- Front facade: 3 sliding shoji screens under the deep eave ----
+    this.addFrontLatticePanel(group, [-1.14, 0.86, 1.08], [0.86, 0.92], this.materials.paperWindow, this.materials.darkWood, 4, 3);
+    this.addFrontLatticePanel(group, [0, 0.86, 1.08], [0.92, 0.92], this.materials.paperWindow, this.materials.darkWood, 4, 3);
+    this.addFrontLatticePanel(group, [1.14, 0.86, 1.08], [0.86, 0.92], this.materials.paperWindow, this.materials.darkWood, 4, 3);
+    // High transom (ranma) lattice strip over the screens.
+    this.addFrontLatticePanel(group, [0, 1.42, 1.06], [2.7, 0.22], this.materials.paperWindow, this.materials.darkWood, 9, 1);
+
+    // ---- Low engawa veranda: thin warmWood deck box + 2 short support posts ----
+    group.add(
+      this.mesh(new THREE.BoxGeometry(3.4, 0.1, 0.4), this.materials.warmWood, [0, 0.36, 1.0]),
+      this.mesh(new THREE.BoxGeometry(3.4, 0.06, 0.06), this.materials.warmWood, [0, 0.44, 1.18]),
+      this.mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), this.materials.darkWood, [-1.5, 0.16, 1.16]),
+      this.mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), this.materials.darkWood, [1.5, 0.16, 1.16])
+    );
+
+    // ---- Hanging lantern tucked under the eave on the front-right ----
+    group.add(this.createHangingLantern([1.5, 1.32, 1.06], 0.82));
 
     this.enableShadows(group);
     return group;
@@ -760,29 +1039,85 @@ export class ModelFactory {
     const group = new THREE.Group();
     group.name = "deco_nagaya_row_house_low_poly";
 
+    // ---- Foundation: a stone sill the whole length sits on ----
     group.add(
-      this.mesh(new THREE.BoxGeometry(4.08, 1.56, 1.86), this.materials.plaster, [0, 0.78, 0]),
-      this.mesh(new THREE.BoxGeometry(4.16, 0.18, 1.98), this.materials.stone, [0, 0.09, 0]),
-      this.createGableRoof(4.48, 2.42, 0.68, 1.56, this.materials.roofTile),
-      this.mesh(new THREE.BoxGeometry(4.34, 0.1, 0.12), this.materials.darkWood, [0, 2.27, 0]),
-      this.mesh(new THREE.BoxGeometry(4.44, 0.12, 0.14), this.materials.darkWood, [0, 1.56, 1.28]),
-      this.mesh(new THREE.BoxGeometry(4.44, 0.12, 0.14), this.materials.darkWood, [0, 1.56, -1.28]),
-      this.mesh(new THREE.BoxGeometry(4.08, 0.12, 0.1), this.materials.darkWood, [0, 1.34, 0.99])
+      this.mesh(new THREE.BoxGeometry(4.2, 0.2, 1.96), this.materials.stone, [0, 0.1, 0]),
+      this.mesh(new THREE.BoxGeometry(4.26, 0.08, 2.02), this.materials.stone, [0, 0.04, 0])
     );
 
-    for (const x of [-2.0, -0.68, 0.68, 2.0]) {
-      group.add(this.mesh(new THREE.BoxGeometry(0.1, 1.48, 0.12), this.materials.darkWood, [x, 0.82, 1.02]));
+    // ---- Main body: one continuous low plaster mass ----
+    group.add(
+      this.mesh(new THREE.BoxGeometry(4.1, 1.5, 1.85), this.materials.plaster, [0, 0.95, 0]),
+      // A timber base board (mizukiri) skirting the plaster just above the sill.
+      this.mesh(new THREE.BoxGeometry(4.14, 0.16, 1.89), this.materials.darkWood, [0, 0.28, 0]),
+      // The continuous header beam that the partition posts and eave rafters tie into.
+      this.mesh(new THREE.BoxGeometry(4.16, 0.16, 0.14), this.materials.warmWood, [0, 1.62, 0.9]),
+      this.mesh(new THREE.BoxGeometry(4.16, 0.16, 0.14), this.materials.warmWood, [0, 1.62, -0.9])
+    );
+
+    // ---- Continuous gable roof with a darkWood ridge beam ----
+    // Roof depth pulled to 2.10 so the front/back eave lands at z = +/-1.05 (spec cap)
+    // while still overhanging the 1.85-deep body and the 1.96 stone sill.
+    group.add(
+      this.createGableRoof(4.5, 2.1, 0.62, 1.7, this.materials.roofTile),
+      this.mesh(new THREE.BoxGeometry(4.6, 0.12, 0.16), this.materials.darkWood, [0, 2.3, 0])
+    );
+
+    // ---- Exposed rafter tails marching under both front and rear eaves ----
+    // Centred at z=0.88 (d=0.34) so the tail tip reaches exactly z=1.05.
+    const rafterXs = [-1.92, -1.5, -1.08, -0.66, -0.24, 0.24, 0.66, 1.08, 1.5, 1.92];
+    for (const rx of rafterXs) {
+      group.add(
+        this.mesh(new THREE.BoxGeometry(0.08, 0.1, 0.34), this.materials.warmWood, [rx, 1.72, 0.88]),
+        this.mesh(new THREE.BoxGeometry(0.08, 0.1, 0.34), this.materials.warmWood, [rx, 1.72, -0.88])
+      );
     }
 
-    for (const x of [-1.36, 0, 1.36]) {
+    // ---- darkWood partition posts dividing the front into units, run up to the eave ----
+    for (const px of [-2.03, -0.68, 0.68, 2.03]) {
       group.add(
-        this.mesh(new THREE.BoxGeometry(0.42, 1.04, 0.08), this.materials.darkWood, [x - 0.28, 0.62, 1.05]),
-        this.mesh(new THREE.BoxGeometry(0.9, 0.22, 0.06), this.materials.cloth, [x, 1.12, 1.08]),
-        this.createHangingLantern([x + 0.54, 1.17, 1.17], 0.62)
+        this.mesh(new THREE.BoxGeometry(0.13, 1.7, 0.16), this.materials.darkWood, [px, 0.95, 0.9]),
+        // Tiny capital where each post meets the header for a built read.
+        this.mesh(new THREE.BoxGeometry(0.2, 0.1, 0.2), this.materials.darkWood, [px, 1.78, 0.9])
       );
-      this.addFrontLatticePanel(group, [x + 0.28, 0.7, 1.08], [0.48, 0.78], this.materials.paperWindow, this.materials.darkWood, 3, 2);
-      this.addFrontLatticePanel(group, [x, 1.3, 1.07], [0.9, 0.28], this.materials.paperWindow, this.materials.darkWood, 5, 1);
     }
+
+    // ---- Three identical dwelling units across the +Z front ----
+    const unitCenters = [-1.355, 0, 1.355];
+    for (const cx of unitCenters) {
+      // Sliding door: a recessed darkWood-framed paper panel with two timber stiles.
+      group.add(
+        this.mesh(new THREE.BoxGeometry(0.84, 1.18, 0.06), this.materials.warmWood, [cx, 0.84, 0.9]),
+        this.mesh(new THREE.BoxGeometry(0.86, 0.1, 0.1), this.materials.darkWood, [cx, 1.42, 0.92]),
+        this.mesh(new THREE.BoxGeometry(0.86, 0.1, 0.1), this.materials.darkWood, [cx, 0.27, 0.92]),
+        this.mesh(new THREE.BoxGeometry(0.08, 1.2, 0.1), this.materials.darkWood, [cx - 0.42, 0.84, 0.92]),
+        this.mesh(new THREE.BoxGeometry(0.08, 1.2, 0.1), this.materials.darkWood, [cx + 0.42, 0.84, 0.92]),
+        // Centre meeting stile that splits the door into two leaves.
+        this.mesh(new THREE.BoxGeometry(0.06, 1.16, 0.1), this.materials.darkWood, [cx, 0.84, 0.93]),
+        // Small step / threshold stone at the door foot.
+        this.mesh(new THREE.BoxGeometry(0.9, 0.1, 0.28), this.materials.stone, [cx, 0.25, 0.86])
+      );
+
+      // Shoji lattice window beside the door (toward the unit's outer post).
+      this.addFrontLatticePanel(group, [cx + 0.5, 1.18, 0.9], [0.46, 0.5], this.materials.paperWindow, this.materials.darkWood, 2, 2);
+
+      // A high transom shoji strip spanning the unit for light above the door.
+      this.addFrontLatticePanel(group, [cx, 1.54, 0.9], [0.92, 0.22], this.materials.paperWindow, this.materials.darkWood, 5, 1);
+
+      // Short noren cloth curtain hanging over the top of the doorway.
+      group.add(
+        this.mesh(new THREE.BoxGeometry(0.86, 0.24, 0.04), this.materials.cloth, [cx, 1.3, 0.96]),
+        // The split slits of the noren (two darker gaps) suggested by thin dark slivers.
+        this.mesh(new THREE.BoxGeometry(0.03, 0.2, 0.05), this.materials.darkWood, [cx - 0.16, 1.28, 0.97]),
+        this.mesh(new THREE.BoxGeometry(0.03, 0.2, 0.05), this.materials.darkWood, [cx + 0.16, 1.28, 0.97])
+      );
+
+      // One small hanging lantern per unit, hung off the eave header.
+      group.add(this.createHangingLantern([cx + 0.5, 1.5, 0.98], 0.58));
+    }
+
+    // A faint lit accent at one shared eave end (lanternPaper glow strip) for warmth.
+    group.add(this.mesh(new THREE.BoxGeometry(0.5, 0.12, 0.05), this.materials.lanternPaper, [-1.9, 1.46, 0.98]));
 
     this.enableShadows(group);
     return group;
@@ -792,29 +1127,1460 @@ export class ModelFactory {
     const group = new THREE.Group();
     group.name = "deco_kura_storehouse_low_poly";
 
+    // --- Dimensions (pre-scale; caller scales ~1.4 and rotates 90°) ---
+    const bodyW = 2.2;   // plaster cube width
+    const bodyD = 1.78;  // depth kept tight (±0.9 here, ±1.1 incl. roof eaves)
+    const wallH = 1.9;   // plaster height (base course sits below)
+    const baseTop = 0.34; // top of the heavy stone plinth
+    const frontZ = bodyD * 0.5;
+
+    // --- Heavy stone base course (the kura sits on a thick masonry plinth) ---
     group.add(
-      this.mesh(new THREE.BoxGeometry(2.42, 0.3, 2.02), this.materials.stone, [0, 0.15, 0]),
-      this.mesh(new THREE.BoxGeometry(2.18, 1.86, 1.78), this.materials.plaster, [0, 1.08, 0]),
-      this.createGableRoof(2.86, 2.34, 0.62, 2.02, this.materials.roofTile),
-      this.mesh(new THREE.BoxGeometry(2.72, 0.1, 0.12), this.materials.darkWood, [0, 2.67, 0]),
-      this.mesh(new THREE.BoxGeometry(2.84, 0.12, 0.14), this.materials.darkWood, [0, 2.02, 1.24]),
-      this.mesh(new THREE.BoxGeometry(2.84, 0.12, 0.14), this.materials.darkWood, [0, 2.02, -1.24]),
-      this.mesh(new THREE.BoxGeometry(2.2, 0.12, 0.1), this.materials.darkWood, [0, 1.96, 0.93]),
-      this.mesh(new THREE.BoxGeometry(2.2, 0.1, 0.1), this.materials.darkWood, [0, 0.42, 0.93]),
-      this.mesh(new THREE.BoxGeometry(0.74, 1.28, 0.08), this.materials.darkWood, [0, 0.92, 0.94]),
-      this.mesh(new THREE.BoxGeometry(0.58, 0.1, 0.1), this.materials.darkMetal, [0, 1.16, 1.0]),
-      this.mesh(new THREE.BoxGeometry(0.58, 0.1, 0.1), this.materials.darkMetal, [0, 0.76, 1.0])
+      this.mesh(new THREE.BoxGeometry(bodyW + 0.36, baseTop, bodyD + 0.34), this.materials.stone, [0, baseTop * 0.5, 0]),
+      // chamfer / cap stones reading as cut blocks along the front + sides
+      this.mesh(new THREE.BoxGeometry(bodyW + 0.42, 0.07, bodyD + 0.4), this.materials.stone, [0, baseTop - 0.02, 0])
     );
 
-    for (const x of [-1.13, 1.13]) {
-      for (const z of [-0.93, 0.93]) {
-        group.add(this.mesh(new THREE.BoxGeometry(0.12, 1.92, 0.12), this.materials.darkWood, [x, 1.1, z]));
+    // --- Battered plaster body: wider at the bottom, tapering up ---
+    // Lower batter band (fattest), then the main wall slightly inset, then a thin top course.
+    group.add(
+      this.mesh(new THREE.BoxGeometry(bodyW + 0.14, 0.5, bodyD + 0.12), this.materials.plaster, [0, baseTop + 0.25, 0]),
+      this.mesh(new THREE.BoxGeometry(bodyW, wallH - 0.5, bodyD), this.materials.plaster, [0, baseTop + 0.5 + (wallH - 0.5) * 0.5, 0]),
+      // thick whitewashed cornice band under the eaves
+      this.mesh(new THREE.BoxGeometry(bodyW + 0.1, 0.12, bodyD + 0.1), this.materials.plaster, [0, baseTop + wallH - 0.02, 0])
+    );
+
+    const bodyTop = baseTop + wallH; // y of the wall head (~2.24)
+
+    // --- 海鼠壁 namako-kabe: diagonal raised battens over the lower-half plaster ---
+    // Square criss-cross lattice (two opposing diagonal families) on +Z and the two sides.
+    const namakoMat = this.materials.darkWood;
+    const battenT = 0.05;            // batten thickness (square section)
+    const battenLen = 0.34;          // short raised tile-joint length
+    const bandBottom = baseTop + 0.06;
+    const bandTop = baseTop + 0.92;  // lower-half coverage only
+    const diag = Math.PI / 4;
+
+    type Face = { axis: "z" | "x"; sign: 1 | -1; spanW: number; faceOff: number };
+    const faces: Face[] = [
+      { axis: "z", sign: 1, spanW: bodyW, faceOff: frontZ + 0.04 },
+      { axis: "x", sign: 1, spanW: bodyD, faceOff: bodyW * 0.5 + 0.04 },
+      { axis: "x", sign: -1, spanW: bodyD, faceOff: bodyW * 0.5 + 0.04 }
+    ];
+
+    for (const face of faces) {
+      const step = 0.3;
+      const halfSpan = face.spanW * 0.5 - 0.18;
+      for (let gy = bandBottom + 0.16; gy <= bandTop; gy += step) {
+        for (let gx = -halfSpan; gx <= halfSpan + 0.001; gx += step) {
+          // two crossing diagonals form the raised square grid
+          for (const dir of [diag, -diag]) {
+            let m: THREE.Mesh;
+            if (face.axis === "z") {
+              m = this.mesh(new THREE.BoxGeometry(battenLen, battenT, battenT), namakoMat, [gx, gy, face.faceOff]);
+              m.rotation.z = dir;
+            } else {
+              m = this.mesh(new THREE.BoxGeometry(battenT, battenT, battenLen), namakoMat, [face.sign * face.faceOff, gy, gx]);
+              m.rotation.x = dir;
+            }
+            group.add(m);
+          }
+        }
       }
     }
 
-    this.addFrontLatticePanel(group, [0.64, 1.54, 0.96], [0.46, 0.38], this.materials.paperWindow, this.materials.darkWood, 2, 1);
+    // --- Corner posts framing the namako field (read as edge battens) ---
+    for (const cx of [-1, 1] as const) {
+      for (const cz of [-1, 1] as const) {
+        group.add(
+          this.mesh(
+            new THREE.BoxGeometry(0.09, wallH - 0.2, 0.09),
+            namakoMat,
+            [cx * (bodyW * 0.5 + 0.02), baseTop + (wallH - 0.2) * 0.5, cz * (bodyD * 0.5 + 0.02)]
+          )
+        );
+      }
+    }
+    // horizontal mid-rail capping the namako band on the front + sides
+    group.add(
+      this.mesh(new THREE.BoxGeometry(bodyW + 0.12, 0.08, 0.06), namakoMat, [0, bandTop + 0.04, frontZ + 0.03]),
+      this.mesh(new THREE.BoxGeometry(0.06, 0.08, bodyD + 0.12), namakoMat, [bodyW * 0.5 + 0.03, bandTop + 0.04, 0]),
+      this.mesh(new THREE.BoxGeometry(0.06, 0.08, bodyD + 0.12), namakoMat, [-bodyW * 0.5 - 0.03, bandTop + 0.04, 0])
+    );
+
+    // --- Heavy iron-banded door, recessed and centred on +Z ---
+    const doorW = 0.72;
+    const doorH = 1.22;
+    const doorY = baseTop + doorH * 0.5 + 0.02;
+    group.add(
+      // recess shadow box (set slightly behind the face)
+      this.mesh(new THREE.BoxGeometry(doorW + 0.18, doorH + 0.18, 0.06), this.materials.darkWood, [0, doorY, frontZ - 0.01]),
+      // thick darkWood door leaf, proud of the recess
+      this.mesh(new THREE.BoxGeometry(doorW, doorH, 0.12), this.materials.darkWood, [0, doorY, frontZ + 0.05]),
+      // two horizontal darkMetal strap bands (iron reinforcement)
+      this.mesh(new THREE.BoxGeometry(doorW + 0.06, 0.1, 0.06), this.materials.darkMetal, [0, doorY + doorH * 0.28, frontZ + 0.11]),
+      this.mesh(new THREE.BoxGeometry(doorW + 0.06, 0.1, 0.06), this.materials.darkMetal, [0, doorY - doorH * 0.28, frontZ + 0.11]),
+      // central vertical iron strap
+      this.mesh(new THREE.BoxGeometry(0.07, doorH - 0.06, 0.05), this.materials.darkMetal, [0, doorY, frontZ + 0.11]),
+      // heavy iron lintel over the door head
+      this.mesh(new THREE.BoxGeometry(doorW + 0.26, 0.1, 0.1), this.materials.darkMetal, [0, doorY + doorH * 0.5 + 0.07, frontZ + 0.06]),
+      // tiny gold lock plate at centre
+      this.mesh(new THREE.BoxGeometry(0.12, 0.16, 0.05), this.materials.gold, [0, doorY - 0.04, frontZ + 0.13]),
+      this.mesh(new THREE.BoxGeometry(0.05, 0.06, 0.04), this.materials.darkMetal, [0, doorY - 0.12, frontZ + 0.15])
+    );
+
+    // --- One tiny high barred window on +Z (iron grille over a recess) ---
+    const winX = bodyW * 0.5 - 0.32;
+    const winY = bodyTop - 0.34;
+    this.addFrontLatticePanel(
+      group,
+      [winX, winY, frontZ + 0.02],
+      [0.36, 0.3],
+      this.materials.stone,        // dark cavity behind the bars
+      this.materials.darkMetal,    // iron bars + frame
+      2,
+      2
+    );
+
+    // --- Steep tiled gable roof with thick whitewashed ridge + bargeboards ---
+    // NOTE: createGableRoof's ridge runs along X (width); the gable triangles face ±Z.
+    const roofBaseY = bodyTop + 0.04;
+    const roofW = bodyW + 0.52; // tiled eave overhang on the gable ends (kept near the 2.5 width target)
+    const roofD = bodyD + 0.38; // depth overhang kept inside the ±1.1 limit (half ≈ 1.08)
+    const roofH = 0.62;         // steep pitch; crown lands at ~2.90 m (matches the ~2.8-2.9 target)
+    group.add(this.createGableRoof(roofW, roofD, roofH, roofBaseY, this.materials.roofTile));
+
+    // thick whitewashed plaster ridge capping the roof crown.
+    // The ridge runs along X, so the cap is long in X and thin in Z.
+    group.add(
+      this.mesh(new THREE.BoxGeometry(roofW + 0.06, 0.16, 0.18), this.materials.plaster, [0, roofBaseY + roofH - 0.04, 0]),
+      this.mesh(new THREE.BoxGeometry(roofW + 0.12, 0.07, 0.1), this.materials.plaster, [0, roofBaseY + roofH + 0.05, 0])
+    );
+
+    // eave fascia along the long (front/back) eaves — dark timber edge under the tiles
+    group.add(
+      this.mesh(new THREE.BoxGeometry(roofW, 0.08, 0.1), this.materials.darkWood, [0, roofBaseY - 0.02, roofD * 0.5]),
+      this.mesh(new THREE.BoxGeometry(roofW, 0.08, 0.1), this.materials.darkWood, [0, roofBaseY - 0.02, -roofD * 0.5])
+    );
+
+    // bargeboards: raking timber boards on both gable ends (the ±Z faces), set to the roof pitch
+    const rake = Math.atan2(roofH, roofW * 0.5);
+    const boardLen = Math.hypot(roofW * 0.5, roofH) + 0.05;
+    for (const gz of [roofD * 0.5, -roofD * 0.5] as const) {
+      for (const side of [-1, 1] as const) {
+        const board = this.mesh(
+          new THREE.BoxGeometry(boardLen, 0.12, 0.07),
+          this.materials.darkWood,
+          [side * roofW * 0.25, roofBaseY + roofH * 0.5, gz + Math.sign(gz) * 0.015]
+        );
+        board.rotation.z = side * rake;
+        group.add(board);
+      }
+    }
 
     this.enableShadows(group);
+    return group;
+  }
+
+  createPersimmonTree(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_persimmon_tree";
+
+    // Small root flare hugging the ground, then a substantial tapered trunk.
+    const rootFlare = this.mesh(new THREE.CylinderGeometry(0.22, 0.32, 0.22, 7), this.materials.cedarBark, [0, 0.11, 0]);
+    const trunk = this.mesh(new THREE.CylinderGeometry(0.13, 0.24, 2.0, 7), this.materials.darkWood, [0, 1.1, 0]);
+    group.add(rootFlare, trunk);
+
+    // 3-4 angled branch cylinders splitting from the crown of the trunk, fanning
+    // outward but kept tight (true rotated x/z extent <= ~0.56) so neither the
+    // branches nor the fruit nestled on their tips ever overhang the road.
+    const branches: Array<[number, number, number, number, number, number, number]> = [
+      // x, y, z, length, rotZ, rotX, radius
+      [-0.18, 1.95, 0.06, 0.95, 0.66, 0.1, 0.075],
+      [0.22, 2.0, -0.04, 0.9, -0.74, -0.08, 0.075],
+      [0.04, 2.1, 0.22, 0.82, 0.12, 0.62, 0.065],
+      [-0.08, 2.05, -0.2, 0.78, -0.18, -0.58, 0.065]
+    ];
+    const branchTips: Array<[number, number, number]> = [];
+    for (const [x, y, z, len, rz, rx, rad] of branches) {
+      const branch = this.mesh(
+        new THREE.CylinderGeometry(rad * 0.7, rad, len, 5),
+        this.materials.cedarBark,
+        [x, y, z]
+      );
+      branch.rotation.z = rz;
+      branch.rotation.x = rx;
+      group.add(branch);
+      // Approximate the outer tip of each branch (cylinder origin is its centre,
+      // local +Y is up before rotation) for nestling a few fruits on the ends.
+      branchTips.push([x + Math.sin(rz) * -len * 0.5, y + Math.cos(rz) * len * 0.5, z + Math.sin(rx) * len * 0.5]);
+    }
+
+    // Canopy: a tidy rounded dome of overlapping faceted blobs — a lower ring of
+    // deep-green foliage sitting on the branches plus a smaller cap on top. Each
+    // blob gets a SMALL fixed rotation so the facets read as foliage, not spheres.
+    // CAMERA-SAFETY: every blob keeps |centre| + radius <= 0.9 m on x AND z (the
+    // conservative icosahedron circumradius bound) so the crown can never clip the
+    // road or the neighbouring houses, and the dome tops out near ~3.2 m.
+    const canopyMats = [this.materials.foliage, this.materials.foliageDark];
+    const canopyBlobs: Array<[number, number, number, number, number, number, number, number]> = [
+      // x, y, z, radius, matIndex, rotX, rotY, rotZ
+      [0, 2.35, 0, 0.62, 0, 0.12, 0.3, -0.1],          // dense centre
+      [0.34, 2.32, 0.12, 0.5, 1, -0.18, 0.5, 0.14],    // lower ring
+      [-0.33, 2.34, -0.12, 0.5, 0, 0.2, -0.4, 0.1],
+      [0.12, 2.28, -0.36, 0.48, 1, 0.16, 0.7, -0.2],
+      [-0.16, 2.3, 0.34, 0.48, 0, -0.14, 0.2, 0.18],
+      [0.18, 2.66, 0.1, 0.46, 1, 0.1, 0.4, -0.12],     // upper cap
+      [-0.16, 2.69, -0.1, 0.44, 0, -0.16, 0.6, 0.08],
+      [0.04, 2.86, 0.02, 0.4, 1, 0.14, 0.25, -0.16]    // crown
+    ];
+    for (const [x, y, z, r, mi, rx, ry, rz] of canopyBlobs) {
+      const blob = this.mesh(new THREE.IcosahedronGeometry(r, 0), canopyMats[mi], [x, y, z]);
+      blob.rotation.set(rx, ry, rz);
+      group.add(blob);
+    }
+
+    // Ripe fruit: small orange (a couple gold) faceted blobs nestled across the
+    // canopy surface so they pop against the green. Fixed positions sit just on /
+    // proud of the lowered dome shell, plus a few on the outer branch tips.
+    const fruitSpots: Array<[number, number, number, number]> = [
+      // x, y, z, matIndex (0 persimmon, 1 mapleGold)
+      [0.3, 2.4, 0.34, 0],
+      [-0.34, 2.46, 0.22, 0],
+      [0.4, 2.52, -0.14, 0],
+      [-0.26, 2.34, -0.34, 1],
+      [0.12, 2.24, 0.42, 0],
+      [-0.42, 2.58, 0.02, 0],
+      [0.22, 2.74, 0.3, 0],
+      [-0.14, 2.82, -0.22, 1],
+      [0.36, 2.78, 0.08, 0],
+      [0.04, 2.22, -0.4, 0],
+      [-0.3, 2.86, 0.18, 0],
+      [0.24, 2.62, -0.3, 0]
+    ];
+    let fruitIndex = 0;
+    for (const [x, y, z, mi] of fruitSpots) {
+      const fruitMat = mi === 1 ? this.materials.mapleGold : this.materials.persimmon;
+      const fruit = this.mesh(new THREE.IcosahedronGeometry(0.1, 0), fruitMat, [x, y, z]);
+      // Tiny deterministic tumble per fruit so the facets catch light differently.
+      fruit.rotation.set(0.3 + fruitIndex * 0.21, fruitIndex * 0.47, 0.15 - fruitIndex * 0.13);
+      group.add(fruit);
+      fruitIndex += 1;
+    }
+
+    // A couple of fruits dangling right on the branch tips for that "heavy with
+    // fruit" silhouette where the branches bow outward.
+    for (let i = 0; i < branchTips.length; i += 1) {
+      const [tx, ty, tz] = branchTips[i];
+      const tipFruit = this.mesh(
+        new THREE.IcosahedronGeometry(0.1, 0),
+        i === 1 ? this.materials.mapleGold : this.materials.persimmon,
+        [tx, ty - 0.08, tz]
+      );
+      tipFruit.rotation.set(0.2 + i * 0.3, i * 0.5, -0.1 + i * 0.18);
+      group.add(tipFruit);
+    }
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createKeyakiTree(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_keyaki_tree";
+
+    // 欅 zelkova — a big broad village shade-tree for back-row depth behind the
+    // houses. Backdrop only (placed far off-road by the layout, x >= 11) so the
+    // crown is allowed to be wide. Skip enableShadows: it's a distant backdrop.
+
+    // --- Stout tapered trunk: thick at the base, narrowing as it rises to the
+    // crotch where the branches fan out in the classic zelkova vase shape.
+    const trunk = this.mesh(new THREE.CylinderGeometry(0.3, 0.5, 3.2, 7), this.materials.cedarBark, [0, 1.6, 0]);
+    group.add(trunk);
+    // A short darker root flare hugging the base for visual weight.
+    const rootFlare = this.mesh(new THREE.CylinderGeometry(0.46, 0.68, 0.5, 7), this.materials.darkWood, [0, 0.25, 0]);
+    group.add(rootFlare);
+
+    // --- Upward-fanning vase-shaped branches splitting high off the trunk.
+    // Fixed deterministic spread/lean so the silhouette reads as a fanning vase.
+    type Branch = [number, number, number, number, number, number, number];
+    // [x, y, z, length, radius, tiltZ, tiltX]
+    const branches: Branch[] = [
+      [0.0, 3.5, 0.0, 1.9, 0.16, 0.0, 0.0],
+      [-0.34, 3.4, 0.12, 1.7, 0.15, 0.55, -0.18],
+      [0.36, 3.42, -0.1, 1.7, 0.15, -0.5, 0.16],
+      [0.1, 3.46, 0.36, 1.6, 0.14, -0.22, -0.5],
+      [-0.16, 3.44, -0.34, 1.6, 0.14, 0.26, 0.52],
+      [-0.4, 3.36, -0.18, 1.45, 0.12, 0.72, 0.34]
+    ];
+    for (const [x, y, z, len, r, tz, tx] of branches) {
+      const branch = this.mesh(new THREE.CylinderGeometry(r * 0.55, r, len, 6), this.materials.cedarBark, [x, y, z]);
+      branch.rotation.z = tz;
+      branch.rotation.x = tx;
+      group.add(branch);
+    }
+
+    // --- Crown: a large billowing rounded dome of overlapping faceted blobs.
+    // Broad (~4.6 m across) and tall-shouldered, mixing foliage / foliageDark /
+    // mossGreen so the mass has depth rather than reading as one flat green ball.
+    // Apex tufts pulled down and far edges pulled in so the envelope lands near
+    // the authored 4.5 x 6.5 x 4.5 size note (top ~6.6 m, width ~4.7 m).
+    const mats = [this.materials.foliage, this.materials.foliageDark, this.materials.mossGreen];
+    // [x, y, z, radius, matIndex, rotX, rotY, rotZ]
+    const blobs: Array<[number, number, number, number, number, number, number, number]> = [
+      [0.0, 4.95, 0.0, 1.6, 0, 0.12, 0.4, -0.1],     // central core
+      [1.2, 4.85, 0.2, 1.25, 1, -0.2, 0.9, 0.15],    // right shoulder
+      [-1.25, 4.8, -0.15, 1.25, 1, 0.18, -0.7, -0.12], // left shoulder
+      [0.25, 5.05, 1.2, 1.15, 2, 0.3, 0.2, 0.22],    // front (+Z) lobe
+      [-0.2, 4.95, -1.25, 1.15, 1, -0.15, 1.2, -0.2], // back lobe
+      [0.9, 5.45, -0.8, 1.05, 0, 0.22, 0.6, 0.3],    // upper right-back
+      [-0.95, 5.4, 0.75, 1.05, 2, -0.25, -0.5, 0.18], // upper left-front
+      [0.0, 5.75, 0.1, 1.3, 0, 0.1, 0.3, -0.15],     // crown apex
+      [0.6, 5.95, 0.5, 0.95, 1, 0.28, 0.8, -0.22],   // apex right tuft
+      [-0.55, 5.9, -0.45, 0.95, 2, -0.2, -0.9, 0.2], // apex left tuft
+      [1.5, 5.25, -0.3, 0.9, 2, 0.16, 0.5, 0.26],    // far right edge
+      [-1.55, 5.2, 0.25, 0.9, 0, -0.18, -0.4, -0.24], // far left edge
+      [0.4, 4.5, 0.95, 0.95, 1, 0.34, 0.7, 0.12],    // low front skirt
+      [-0.45, 4.45, -0.9, 0.92, 2, -0.3, -0.6, -0.1] // low back skirt
+    ];
+    for (const [x, y, z, r, mi, rx, ry, rz] of blobs) {
+      const blob = this.mesh(new THREE.IcosahedronGeometry(r, 0), mats[mi], [x, y, z]);
+      blob.rotation.set(rx, ry, rz);
+      group.add(blob);
+    }
+
+    // Backdrop tree — intentionally no enableShadows (matches the keyaki spec).
+    return group;
+  }
+
+  createNoboriBanner(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_nobori_banner";
+
+    // A 幟 nobori festival/shop banner: a slim darkWood pole on a small cross-foot
+    // base, with a tall narrow vertical cloth banner laced down ONE side of the
+    // pole by little tie rings, edged with a shideWhite border strip, marked with
+    // a few darkWood/gold crest blocks suggesting kanji, and topped with a small
+    // gold finial ball. The whole prop is kept inside a strict ±0.3 m footprint:
+    // the cloth's laced (hoist) edge sits at the pole and the cloth flies out to
+    // +x, ending at exactly x = 0.30 so it never busts the envelope.
+
+    // --- Cross-foot base at y=0: two stout darkWood feet + a low centre boss ---
+    // Crossed so the slim pole reads as free-standing, not stuck in the ground.
+    // (footA width 0.5 rotated 0.18 rad → x-extent ≈ 0.257 m, inside ±0.3.)
+    const footA = this.mesh(new THREE.BoxGeometry(0.5, 0.07, 0.12), this.materials.darkWood, [0, 0.035, 0]);
+    footA.rotation.y = 0.18;
+    const footB = this.mesh(new THREE.BoxGeometry(0.12, 0.07, 0.46), this.materials.darkWood, [0, 0.035, 0]);
+    footB.rotation.y = 0.18;
+    group.add(
+      footA,
+      footB,
+      // Centre boss that the pole socket sits in.
+      this.mesh(new THREE.BoxGeometry(0.16, 0.1, 0.16), this.materials.darkWood, [0, 0.1, 0]),
+      // Tiny gold collar ring where pole meets boss — a flash of festival metal.
+      this.mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.04, 8), this.materials.gold, [0, 0.16, 0])
+    );
+
+    // --- Main pole: a slim darkWood mast ~2.6 m tall, faint lean for life ---
+    const poleH = 2.56;
+    const poleY = 0.18 + poleH * 0.5;
+    const pole = this.mesh(new THREE.CylinderGeometry(0.035, 0.045, poleH, 8), this.materials.darkWood, [0, poleY, 0]);
+    pole.rotation.z = 0.012;
+    group.add(pole);
+
+    // --- Top cross-arm: a short horizontal spar the banner's top edge hangs from,
+    // jutting toward the road (+Z) so the cloth faces the camera. ---
+    const armZ = 0.16;
+    group.add(
+      this.mesh(new THREE.BoxGeometry(0.03, 0.03, 0.34), this.materials.darkWood, [0, 2.6, armZ - 0.01]),
+      // little darkWood lashing knot where the arm crosses the pole
+      this.mesh(new THREE.BoxGeometry(0.06, 0.06, 0.05), this.materials.darkWood, [0, 2.6, 0])
+    );
+
+    // --- Gold finial ball on the pole top + a thin neck ring beneath it ---
+    // Lowered so the ball's top sits at exactly y = 2.80 (the size-note ceiling).
+    group.add(
+      this.mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.05, 8), this.materials.gold, [0, 2.66, 0]),
+      this.mesh(new THREE.IcosahedronGeometry(0.06, 0), this.materials.gold, [0, 2.74, 0])
+    );
+
+    // --- The banner cloth: a thin tall BoxGeometry standing proud of the pole on
+    // the camera (+Z) side. Its laced HOIST edge runs along the pole (x ≈ -0.06)
+    // and the cloth flies out to +x, ending at x = 0.30 — full ~0.4 read while
+    // staying inside the ±0.3 m footprint. Split into two faintly angled stacked
+    // panels so it doesn't read as a dead-flat slab. ---
+    const clothW = 0.36;
+    const clothZ = 0.07; // stand the cloth proud of the pole, toward the road
+    const clothX = 0.12; // centre → spans x ∈ [-0.06, +0.30]
+    const clothMat = this.materials.redBib; // vermillion festival cloth
+
+    // Upper panel (from just under the cross-arm down to mid-height).
+    const upper = this.mesh(new THREE.BoxGeometry(clothW, 1.04, 0.04), clothMat, [clothX, 2.04, clothZ]);
+    upper.rotation.y = -0.06;
+    group.add(upper);
+    // Lower panel, hinged a touch further out for a hanging-billow feel.
+    const lower = this.mesh(new THREE.BoxGeometry(clothW, 0.84, 0.04), clothMat, [clothX + 0.012, 1.12, clothZ + 0.015]);
+    lower.rotation.y = -0.11;
+    group.add(lower);
+
+    // --- shideWhite border strips framing the cloth (hoist, fly & hems) ---
+    // A bright paper-white edge reads as the classic nobori trim. The fly strip's
+    // outer face lands at x ≈ 0.295 and the hems at exactly x = 0.30.
+    const flyX = clothX + clothW * 0.5 - 0.02; // outer (fly) vertical edge ≈ 0.28
+    group.add(
+      // outer fly-edge strip running the full drop
+      this.mesh(new THREE.BoxGeometry(0.03, 1.9, 0.05), this.materials.shideWhite, [flyX, 1.55, clothZ + 0.005]),
+      // top hem just below the cross-arm (width = cloth width → right edge = 0.30)
+      this.mesh(new THREE.BoxGeometry(clothW, 0.05, 0.05), this.materials.shideWhite, [clothX, 2.54, clothZ]),
+      // bottom hem with a couple of little weighted tabs
+      this.mesh(new THREE.BoxGeometry(clothW, 0.05, 0.05), this.materials.shideWhite, [clothX, 0.66, clothZ + 0.02]),
+      this.mesh(new THREE.BoxGeometry(0.04, 0.07, 0.04), this.materials.shideWhite, [clothX - 0.09, 0.6, clothZ + 0.02]),
+      this.mesh(new THREE.BoxGeometry(0.04, 0.07, 0.04), this.materials.shideWhite, [clothX + 0.09, 0.6, clothZ + 0.02])
+    );
+
+    // --- Crest / kanji marks down the cloth: alternating darkWood blocks and a
+    // gold accent, each set just proud of the cloth face so they catch light.
+    // Column runs near the hoist edge, like real vertical kanji. Fixed per-mark
+    // offsets (deterministic) so the "characters" read the same every spawn. ---
+    const markX = clothX - 0.03; // hoist-side column
+    const marks: Array<[number, number, number, number, THREE.Material]> = [
+      // x, y, size, fixed-tilt, material
+      [markX, 2.18, 0.13, 0.03, this.materials.darkWood],
+      [markX - 0.008, 1.86, 0.15, -0.04, this.materials.gold],
+      [markX, 1.5, 0.16, 0.02, this.materials.darkWood],
+      [markX + 0.006, 1.14, 0.16, -0.03, this.materials.darkWood]
+    ];
+    for (const [mx, my, mw, tilt, mat] of marks) {
+      const mark = this.mesh(new THREE.BoxGeometry(mw, mw, 0.02), mat, [mx, my, clothZ + 0.03]);
+      mark.rotation.y = -0.08;
+      mark.rotation.z = tilt; // tiny fixed jitter so the column isn't a ruler line
+      group.add(mark);
+      // a small cross-stroke gold fleck on the darkWood crests to hint brushwork
+      if (mat === this.materials.darkWood) {
+        group.add(
+          this.mesh(new THREE.BoxGeometry(mw * 0.62, 0.015, 0.015), this.materials.gold, [mx, my, clothZ + 0.045])
+        );
+      }
+    }
+
+    // --- Tie rings lacing the cloth's hoist edge to the pole ---
+    // Small darkWood loops at intervals, the way a nobori threads onto its mast.
+    for (const ty of [2.42, 2.06, 1.7, 1.34, 0.98]) {
+      const ring = this.mesh(new THREE.TorusGeometry(0.035, 0.01, 4, 8), this.materials.darkWood, [-0.02, ty, clothZ * 0.6]);
+      ring.rotation.y = Math.PI / 2;
+      group.add(ring);
+    }
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createWoodenCart(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_wooden_cart";
+
+    // --- Geometry of the rig --------------------------------------------------
+    // A 大八車 hand-cart: two big wooden wheels at the REAR (-Z), a flat plank
+    // bed tilted slightly nose-down, and two long pull-shafts running forward
+    // (+Z, toward the road) that rest their tips on the ground at the front.
+    const wheelR = 0.45;        // big wheel radius
+    const axleY = wheelR;       // axle/hub sits one radius up
+    const halfTrack = 0.47;     // half the wheel-to-wheel spacing
+    const wheelZ = -0.42;       // wheels sit toward the rear
+    const bedTilt = 0.13;       // nose-down tilt of the whole bed/load (radians, +Z end drops)
+
+    // --- Rear axle beam (spans between the two wheels) -----------------------
+    group.add(
+      this.mesh(new THREE.BoxGeometry(halfTrack * 2 + 0.18, 0.09, 0.1), this.materials.darkWood, [0, axleY, wheelZ])
+    );
+
+    // --- Two large spoked WOODEN wheels (rims laid vertical, axle along X) ----
+    for (const side of [-1, 1]) {
+      const wheel = new THREE.Group();
+      wheel.position.set(side * halfTrack, axleY, wheelZ);
+
+      // Outer rim: a wide felloe ring made of a wooden cylinder laid on its side
+      const rim = this.mesh(
+        new THREE.CylinderGeometry(wheelR, wheelR, 0.1, 14),
+        this.materials.warmWood,
+        [0, 0, 0]
+      );
+      rim.rotation.z = Math.PI * 0.5;
+      // Inner darkWood ring face to read the felloe joint / iron tyre band
+      const tyre = this.mesh(
+        new THREE.CylinderGeometry(wheelR * 0.9, wheelR * 0.9, 0.12, 14),
+        this.materials.darkWood,
+        [0, 0, 0]
+      );
+      tyre.rotation.z = Math.PI * 0.5;
+      // Central hub
+      const hub = this.mesh(
+        new THREE.CylinderGeometry(0.1, 0.1, 0.2, 8),
+        this.materials.darkWood,
+        [0, 0, 0]
+      );
+      hub.rotation.z = Math.PI * 0.5;
+      wheel.add(rim, tyre, hub);
+
+      // Six chunky darkWood spokes radiating from the hub to the felloe.
+      // A box's local +Y is its length axis; rotation.x = (PI/2 - angle) aligns
+      // that length axis with the radial direction (0, sin a, cos a) of the
+      // spoke's mid-point, so every spoke points cleanly out from the hub.
+      const spokeCount = 6;
+      const spokeLen = wheelR * 0.84;
+      for (let i = 0; i < spokeCount; i += 1) {
+        const angle = (i / spokeCount) * Math.PI * 2;
+        const spoke = this.mesh(
+          new THREE.BoxGeometry(0.055, spokeLen, 0.055),
+          this.materials.darkWood,
+          [0, Math.sin(angle) * spokeLen * 0.5, Math.cos(angle) * spokeLen * 0.5]
+        );
+        spoke.rotation.x = Math.PI * 0.5 - angle;
+        wheel.add(spoke);
+      }
+      group.add(wheel);
+    }
+
+    // --- Tilted bed + frame + load, all in one pivot so they share the rake ---
+    const cart = new THREE.Group();
+    cart.position.set(0, axleY + 0.07, wheelZ); // pivot at the rear axle, just above it
+    cart.rotation.x = bedTilt;
+
+    // Longitudinal frame rails (run front-back under the planks)
+    for (const side of [-1, 1]) {
+      cart.add(
+        this.mesh(new THREE.BoxGeometry(0.1, 0.1, 1.62), this.materials.darkWood, [side * 0.34, -0.02, 0.18])
+      );
+    }
+    // Cross-members tying the rails together
+    for (const cz of [-0.62, -0.1, 0.42, 0.92]) {
+      cart.add(
+        this.mesh(new THREE.BoxGeometry(0.82, 0.08, 0.12), this.materials.darkWood, [0, -0.02, cz])
+      );
+    }
+
+    // Flat plank bed — five warmWood planks with thin dark gaps between them
+    const plankCount = 5;
+    const bedW = 0.9;
+    const plankW = bedW / plankCount;
+    for (let i = 0; i < plankCount; i += 1) {
+      const px = -bedW * 0.5 + plankW * (i + 0.5);
+      cart.add(
+        this.mesh(new THREE.BoxGeometry(plankW - 0.02, 0.07, 1.58), this.materials.warmWood, [px, 0.07, 0.18])
+      );
+    }
+    // Low side-boards / lips so the load looks contained
+    for (const side of [-1, 1]) {
+      cart.add(
+        this.mesh(new THREE.BoxGeometry(0.05, 0.14, 1.58), this.materials.wood, [side * (bedW * 0.5 + 0.01), 0.16, 0.18])
+      );
+    }
+    // Rear tail-board
+    cart.add(
+      this.mesh(new THREE.BoxGeometry(bedW + 0.06, 0.18, 0.05), this.materials.wood, [0, 0.18, -0.62])
+    );
+
+    // --- Load on the bed: straw bales / rice sacks + a barrel ----------------
+    const bedTop = 0.105; // top surface of the planks in cart-local space
+
+    // Two thatch straw bales lying lengthwise side by side at the rear
+    for (const side of [-1, 1]) {
+      const bale = this.mesh(
+        new THREE.BoxGeometry(0.34, 0.26, 0.66),
+        this.materials.thatch,
+        [side * 0.22, bedTop + 0.13, -0.18]
+      );
+      bale.rotation.y = side * 0.06;
+      cart.add(bale);
+      // Two binding ropes across each bale (thin dark bands)
+      for (const bz of [-0.34, -0.02]) {
+        cart.add(
+          this.mesh(new THREE.BoxGeometry(0.37, 0.04, 0.06), this.materials.darkWood, [side * 0.22, bedTop + 0.13, bz])
+        );
+      }
+    }
+    // A third bale stacked on top, crosswise, for a heaped look
+    const topBale = this.mesh(
+      new THREE.BoxGeometry(0.7, 0.22, 0.32),
+      this.materials.thatch,
+      [0, bedTop + 0.37, -0.18]
+    );
+    topBale.rotation.z = 0.04;
+    cart.add(topBale);
+    cart.add(
+      this.mesh(new THREE.BoxGeometry(0.74, 0.04, 0.34), this.materials.darkWood, [0, bedTop + 0.37, -0.18])
+    );
+
+    // A wood barrel standing upright toward the front of the bed
+    const barrelY = bedTop + 0.24;
+    cart.add(
+      this.mesh(new THREE.CylinderGeometry(0.21, 0.19, 0.46, 12), this.materials.wood, [0.0, barrelY, 0.5])
+    );
+    // Two darkWood hoop bands around the barrel
+    for (const hy of [-0.13, 0.13]) {
+      cart.add(
+        this.mesh(new THREE.CylinderGeometry(0.215, 0.215, 0.045, 12), this.materials.darkWood, [0.0, barrelY + hy, 0.5])
+      );
+    }
+    // Barrel lid
+    cart.add(
+      this.mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.04, 12), this.materials.warmWood, [0.0, barrelY + 0.24, 0.5])
+    );
+
+    group.add(cart);
+
+    // --- Two long pull-shafts angling forward and down to the ground ---------
+    // They run from under the front of the bed out past the nose and rest their
+    // tips on the verge at the front (+Z): rotation.x = +0.42 dips the forward
+    // (+Z) end down to the ground while the rear end tucks up under the bed.
+    const shaftLen = 1.5;
+    for (const side of [-1, 1]) {
+      const shaft = this.mesh(
+        new THREE.BoxGeometry(0.07, 0.07, shaftLen),
+        this.materials.darkWood,
+        [side * 0.33, axleY * 0.46, wheelZ + 1.18]
+      );
+      shaft.rotation.x = 0.42; // dip the forward (+Z) tip toward the ground
+      group.add(shaft);
+      // Worn warmWood grip cap on the end of each shaft
+      const grip = this.mesh(
+        new THREE.BoxGeometry(0.09, 0.09, 0.22),
+        this.materials.warmWood,
+        [side * 0.33, 0.05, wheelZ + 1.88]
+      );
+      grip.rotation.x = 0.42;
+      group.add(grip);
+    }
+    // Cross-bar handle joining the two shaft tips
+    group.add(
+      this.mesh(new THREE.BoxGeometry(0.82, 0.06, 0.07), this.materials.warmWood, [0, 0.06, wheelZ + 1.96])
+    );
+
+    // --- A weathered stone chock under one shaft tip (parked / braked) -------
+    group.add(
+      this.mesh(new THREE.BoxGeometry(0.24, 0.14, 0.2), this.materials.stone, [0.33, 0.07, wheelZ + 1.7])
+    );
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createMarketStall(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_market_stall";
+
+    // ---- Footprint constants (local space: base centre at y=0, open front toward +Z) ----
+    const halfW = 1.1;          // posts at x = ±1.1  → ~2.2 m span
+    const frontZ = 0.7;         // open counter / awning front edge
+    const backZ = -0.7;         // back plank wall
+    const postH = 1.62;         // top of the corner posts (eave height)
+    const postR = 0.05;         // chunky stall-post half-thickness
+
+    // ---- Four darkWood corner posts holding up the awning ----
+    for (const px of [-halfW, halfW]) {
+      for (const pz of [frontZ, backZ]) {
+        group.add(this.mesh(new THREE.BoxGeometry(postR * 2, postH, postR * 2), this.materials.darkWood, [px, postH * 0.5, pz]));
+      }
+    }
+    // Eave tie-beams front & back linking the post tops (darkWood lintels).
+    group.add(
+      this.mesh(new THREE.BoxGeometry(halfW * 2 + 0.16, 0.1, 0.08), this.materials.darkWood, [0, postH + 0.04, frontZ]),
+      this.mesh(new THREE.BoxGeometry(halfW * 2 + 0.16, 0.1, 0.08), this.materials.darkWood, [0, postH + 0.04, backZ]),
+      // Two side rails running front-to-back to carry the roof rafters.
+      this.mesh(new THREE.BoxGeometry(0.07, 0.08, frontZ - backZ + 0.1), this.materials.darkWood, [-halfW, postH + 0.02, 0]),
+      this.mesh(new THREE.BoxGeometry(0.07, 0.08, frontZ - backZ + 0.1), this.materials.darkWood, [halfW, postH + 0.02, 0])
+    );
+
+    // ---- Simple pitched awning roof (warmWood gable) + thatch ridge cap ----
+    // Gable helper ridges along Z; roof base sits just above the eave beams.
+    const roof = this.createGableRoof(halfW * 2 + 0.5, frontZ - backZ + 0.6, 0.52, postH + 0.08, this.materials.warmWood);
+    group.add(roof);
+    // Thatched ridge / under-eave fringe for a market-shack texture.
+    group.add(
+      this.mesh(new THREE.BoxGeometry(0.18, 0.16, frontZ - backZ + 0.62), this.materials.thatch, [0, postH + 0.58, 0]),
+      this.mesh(new THREE.BoxGeometry(halfW * 2 + 0.52, 0.12, 0.1), this.materials.thatch, [0, postH + 0.1, frontZ + 0.28])
+    );
+
+    // ---- Noren cloth valance hanging from the front eave across the top of the opening ----
+    group.add(this.mesh(new THREE.BoxGeometry(halfW * 2 + 0.04, 0.34, 0.03), this.materials.cloth, [0, postH - 0.18, frontZ + 0.02]));
+    // Three slit panels read by overlapping a paperWindow sign placard above the cloth.
+    group.add(this.mesh(new THREE.BoxGeometry(0.62, 0.2, 0.04), this.materials.paperWindow, [0, postH - 0.12, frontZ + 0.03]));
+
+    // ---- Back wall of vertical warmWood planks ----
+    const wallY = 0.84;
+    const wallH = 1.5;
+    for (let i = -3; i <= 3; i += 1) {
+      const plankX = i * 0.31;
+      const tall = wallH - (Math.abs(i) % 2) * 0.06; // tiny deterministic stagger
+      group.add(this.mesh(new THREE.BoxGeometry(0.28, tall, 0.04), this.materials.warmWood, [plankX, wallY, backZ - 0.02]));
+    }
+    // Back-wall cross-brace for structure.
+    group.add(this.mesh(new THREE.BoxGeometry(halfW * 2, 0.08, 0.05), this.materials.darkWood, [0, wallH + 0.04, backZ - 0.03]));
+
+    // ---- Open counter: a warmWood plank bench (~1.8 wide) across the +Z front ----
+    const counterY = 0.78;
+    group.add(
+      // Counter top.
+      this.mesh(new THREE.BoxGeometry(1.84, 0.08, 0.5), this.materials.warmWood, [0, counterY, frontZ - 0.18]),
+      // Front apron / skirt board facing the road.
+      this.mesh(new THREE.BoxGeometry(1.84, 0.34, 0.05), this.materials.darkWood, [0, counterY - 0.22, frontZ + 0.02]),
+      // Two stubby counter legs at the open front.
+      this.mesh(new THREE.BoxGeometry(0.08, counterY - 0.04, 0.08), this.materials.darkWood, [-0.82, (counterY - 0.04) * 0.5, frontZ + 0.0]),
+      this.mesh(new THREE.BoxGeometry(0.08, counterY - 0.04, 0.08), this.materials.darkWood, [0.82, (counterY - 0.04) * 0.5, frontZ + 0.0]),
+      // Gold price-tag accent strip along the counter edge.
+      this.mesh(new THREE.BoxGeometry(1.6, 0.03, 0.04), this.materials.gold, [0, counterY - 0.04, frontZ + 0.05])
+    );
+
+    // ---- Goods on display: colourful produce boxes & faceted veg on the counter top ----
+    const topY = counterY + 0.04;
+    // Crate-style produce bins (boxes) of warmWood holding heaps.
+    const bins: Array<[number, number]> = [[-0.62, 0.32], [0.0, 0.34], [0.64, 0.3]];
+    for (const [bx, bw] of bins) {
+      group.add(this.mesh(new THREE.BoxGeometry(bw, 0.12, 0.34), this.materials.warmWood, [bx, topY + 0.06, frontZ - 0.2]));
+    }
+    // Persimmon-orange round produce heaped in the bins (icos = stylised fruit).
+    const fruit: Array<[number, number, number, number, THREE.Material]> = [
+      [-0.68, topY + 0.18, frontZ - 0.24, 0.1, this.materials.persimmon],
+      [-0.55, topY + 0.17, frontZ - 0.14, 0.09, this.materials.persimmon],
+      [-0.7, topY + 0.16, frontZ - 0.12, 0.08, this.materials.persimmon],
+      [-0.04, topY + 0.18, frontZ - 0.22, 0.1, this.materials.foliage],
+      [0.08, topY + 0.17, frontZ - 0.14, 0.09, this.materials.foliage],
+      [-0.1, topY + 0.16, frontZ - 0.1, 0.08, this.materials.foliage],
+      [0.58, topY + 0.18, frontZ - 0.24, 0.1, this.materials.gold],
+      [0.7, topY + 0.17, frontZ - 0.14, 0.09, this.materials.persimmon],
+      [0.6, topY + 0.16, frontZ - 0.12, 0.08, this.materials.gold]
+    ];
+    for (const [fx, fy, fz, fr, fmat] of fruit) {
+      const f = this.mesh(new THREE.IcosahedronGeometry(fr, 0), fmat, [fx, fy, fz]);
+      f.rotation.set(0.35, 0.6, 0.2);
+      group.add(f);
+    }
+
+    // ---- A couple of stacked crates beside the counter (ground level, open front) ----
+    group.add(
+      this.mesh(new THREE.BoxGeometry(0.42, 0.4, 0.42), this.materials.warmWood, [-0.84, 0.2, frontZ - 0.2]),
+      this.mesh(new THREE.BoxGeometry(0.42, 0.38, 0.42), this.materials.warmWood, [-0.84, 0.59, frontZ - 0.24])
+    );
+    // Slat lines on the crates (darkWood) + a spill of gold/persimmon goods on top.
+    group.add(
+      this.mesh(new THREE.BoxGeometry(0.44, 0.03, 0.44), this.materials.darkWood, [-0.84, 0.4, frontZ - 0.2]),
+      this.mesh(new THREE.BoxGeometry(0.44, 0.03, 0.44), this.materials.darkWood, [-0.84, 0.78, frontZ - 0.24])
+    );
+    const crateTop = this.mesh(new THREE.IcosahedronGeometry(0.11, 0), this.materials.persimmon, [-0.84, 0.86, frontZ - 0.24]);
+    crateTop.rotation.set(0.4, 0.3, 0.5);
+    group.add(crateTop);
+
+    // Hanging goods string: a small gold accent under the eave on the open side.
+    group.add(this.mesh(new THREE.BoxGeometry(0.05, 0.18, 0.05), this.materials.gold, [0.78, postH - 0.4, frontZ - 0.04]));
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createVillageWell(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_village_well";
+
+    // --- Stone curb wall (hexagonal stacked drum) around a dark water mouth ---
+    // Two stacked octagonal stone rings give a chunky mossy kerb without a perfect cylinder look.
+    const lowerCurb = this.mesh(new THREE.CylinderGeometry(0.58, 0.6, 0.34, 8), this.materials.stone, [0, 0.17, 0]);
+    lowerCurb.rotation.y = Math.PI / 8;
+    const upperCurb = this.mesh(new THREE.CylinderGeometry(0.55, 0.57, 0.26, 8), this.materials.wetRock, [0, 0.45, 0]);
+    upperCurb.rotation.y = Math.PI / 8;
+    // Flat coping lip the bucket sits over.
+    const coping = this.mesh(new THREE.CylinderGeometry(0.6, 0.58, 0.08, 8), this.materials.stone, [0, 0.6, 0]);
+    coping.rotation.y = Math.PI / 16;
+    group.add(lowerCurb, upperCurb, coping);
+
+    // Recessed dark water hole inside the mouth (sits just below the coping lip).
+    const water = this.mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 8), this.materials.wetRock, [0, 0.5, 0]);
+    water.rotation.y = Math.PI / 8;
+    const waterInnerRing = this.mesh(new THREE.CylinderGeometry(0.46, 0.44, 0.12, 8), this.materials.darkWood, [0, 0.55, 0]);
+    waterInnerRing.rotation.y = Math.PI / 8;
+    group.add(waterInnerRing, water);
+
+    // A couple of faceted moss patches clinging to the stone.
+    const moss1 = this.mesh(new THREE.IcosahedronGeometry(0.14, 0), this.materials.mossGreen, [-0.46, 0.3, 0.34]);
+    moss1.rotation.set(0.4, 0.2, 0.3);
+    moss1.scale.set(1, 0.5, 0.9);
+    const moss2 = this.mesh(new THREE.IcosahedronGeometry(0.11, 0), this.materials.mossGreen, [0.4, 0.18, -0.38]);
+    moss2.rotation.set(0.2, 0.5, 0.6);
+    moss2.scale.set(1, 0.55, 1);
+    const moss3 = this.mesh(new THREE.IcosahedronGeometry(0.09, 0), this.materials.mossGreen, [0.28, 0.5, 0.48]);
+    moss3.rotation.set(0.5, 0.1, 0.2);
+    moss3.scale.set(1, 0.5, 0.85);
+    group.add(moss1, moss2, moss3);
+
+    // --- Two darkWood uprights either side holding the windlass ---
+    for (const sx of [-1, 1]) {
+      // Stone footing pad under each post.
+      group.add(this.mesh(new THREE.BoxGeometry(0.2, 0.1, 0.2), this.materials.stone, [sx * 0.6, 0.05, 0]));
+      // The upright post.
+      group.add(this.mesh(new THREE.BoxGeometry(0.11, 1.7, 0.11), this.materials.darkWood, [sx * 0.6, 0.85 + 0.05, 0]));
+      // Short angled brace from post into the curb for a sturdier read.
+      const brace = this.mesh(new THREE.BoxGeometry(0.07, 0.5, 0.07), this.materials.darkWood, [sx * 0.6, 0.4, 0.18]);
+      brace.rotation.x = 0.5;
+      group.add(brace);
+    }
+
+    // --- Horizontal warmWood roller / windlass axle spanning the posts ---
+    const roller = this.mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.16, 8), this.materials.warmWood, [0, 1.18, 0]);
+    roller.rotation.z = Math.PI / 2;
+    group.add(roller);
+    // End collars where the axle meets the posts.
+    for (const sx of [-1, 1]) {
+      const collar = this.mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 8), this.materials.darkWood, [sx * 0.52, 1.18, 0]);
+      collar.rotation.z = Math.PI / 2;
+      group.add(collar);
+    }
+
+    // --- Crank handle on the +Z, right side: stub + grip ---
+    const crankStub = this.mesh(new THREE.BoxGeometry(0.06, 0.06, 0.24), this.materials.warmWood, [0.62, 1.18, 0.13]);
+    const crankGrip = this.mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 6), this.materials.warmWood, [0.62, 1.08, 0.24]);
+    group.add(crankStub, crankGrip);
+
+    // --- Bucket hanging on a rope over the mouth ---
+    // Thin rope cylinder from the roller down to the bucket.
+    const rope = this.mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.46, 5), this.materials.shimenawaRope, [-0.05, 0.92, 0.06]);
+    group.add(rope);
+    // Small warmWood bucket (slightly tapered) with a dark rim.
+    const bucket = this.mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.2, 8), this.materials.warmWood, [-0.05, 0.6, 0.06]);
+    const bucketRim = this.mesh(new THREE.CylinderGeometry(0.14, 0.13, 0.04, 8), this.materials.darkWood, [-0.05, 0.69, 0.06]);
+    const bucketBase = this.mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.03, 8), this.materials.darkWood, [-0.05, 0.51, 0.06]);
+    // Arched bucket handle (thin bar bridging the rim).
+    const bucketHandle = this.mesh(new THREE.BoxGeometry(0.26, 0.025, 0.025), this.materials.darkWood, [-0.05, 0.73, 0.06]);
+    group.add(bucket, bucketRim, bucketBase, bucketHandle);
+
+    // --- Tiny pitched shelter roof on the two posts (~1.9 m) ---
+    // Cross beam tying the post tops together to carry the roof.
+    group.add(this.mesh(new THREE.BoxGeometry(1.4, 0.08, 0.1), this.materials.darkWood, [0, 1.72, 0]));
+    // Pitched gable roof in roofTile, ridge running across the well (X).
+    group.add(this.createGableRoof(1.5, 1.2, 0.34, 1.72, this.materials.roofTile));
+    // Warm wood ridge cap and eave trim for richness.
+    group.add(this.mesh(new THREE.BoxGeometry(1.52, 0.06, 0.07), this.materials.warmWood, [0, 2.06, 0]));
+    group.add(this.mesh(new THREE.BoxGeometry(1.54, 0.05, 0.06), this.materials.darkWood, [0, 1.72, 0.6]));
+    group.add(this.mesh(new THREE.BoxGeometry(1.54, 0.05, 0.06), this.materials.darkWood, [0, 1.72, -0.6]));
+    // A moss patch creeping onto the roof.
+    const roofMoss = this.mesh(new THREE.IcosahedronGeometry(0.1, 0), this.materials.mossGreen, [0.42, 1.86, 0.32]);
+    roofMoss.rotation.set(0.3, 0.4, 0.2);
+    roofMoss.scale.set(1, 0.4, 0.9);
+    group.add(roofMoss);
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createBambooFence(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_bamboo_fence";
+
+    // ----- Run geometry (length along +Z, centred at origin) -----
+    const length = 7.0;          // total run along Z
+    const halfLen = length / 2;  // -3.5 .. +3.5
+    const railY1 = 0.18;         // bottom rail height
+    const railY2 = 0.66;         // top rail height
+    const picketTop = 0.7;       // bamboo picket length
+    const picketCenterY = 0.41;  // sits so its top peeks above the top rail
+    const facing = 0.0;          // pickets centred on x=0; layout places the run at the verge
+
+    // ----- Horizontal darkWood rails (top & bottom), one continuous beam each -----
+    // Slim square-section timber running the whole length.
+    const bottomRail = this.mesh(
+      new THREE.BoxGeometry(0.07, 0.05, length),
+      this.materials.darkWood,
+      [facing, railY1, 0]
+    );
+    const topRail = this.mesh(
+      new THREE.BoxGeometry(0.07, 0.05, length),
+      this.materials.darkWood,
+      [facing, railY2, 0]
+    );
+    group.add(bottomRail, topRail);
+
+    // ----- Vertical bamboo pickets lashed between the rails (~0.18 m apart) -----
+    // Alternate the two fresh-green bamboo tones for subtle variety; deterministic.
+    const picketSpacing = 0.18;
+    const picketCount = Math.floor(length / picketSpacing) + 1; // ~40 pickets
+    const startZ = -((picketCount - 1) * picketSpacing) / 2;
+    for (let i = 0; i < picketCount; i += 1) {
+      const z = startZ + i * picketSpacing;
+      const pale = i % 2 === 0;
+      const picket = this.mesh(
+        new THREE.CylinderGeometry(0.04, 0.045, picketTop, 6),
+        pale ? this.materials.bambooStalkPale : this.materials.bambooStalk,
+        [facing, picketCenterY, z]
+      );
+      // CylinderGeometry is already +Y; tiny deterministic lean so the run reads
+      // hand-built rather than machined.
+      picket.rotation.z = (i % 3 - 1) * 0.012;
+      group.add(picket);
+
+      // A nub of cut bamboo poking just above the top rail (node cap), every picket.
+      const cap = this.mesh(
+        new THREE.CylinderGeometry(0.046, 0.046, 0.03, 6),
+        pale ? this.materials.bambooStalk : this.materials.bambooStalkPale,
+        [facing, picketCenterY + picketTop * 0.5 + 0.015, z]
+      );
+      group.add(cap);
+    }
+
+    // ----- Lashing detail: thin dark bands wrapping each rail at intervals -----
+    // Read as the shuro-nawa lashings of a real 竹垣; placed deterministically.
+    for (let i = 0; i < picketCount; i += 4) {
+      const z = startZ + i * picketSpacing;
+      const lashTop = this.mesh(
+        new THREE.BoxGeometry(0.1, 0.04, 0.05),
+        this.materials.darkWood,
+        [facing, railY2, z]
+      );
+      const lashBottom = this.mesh(
+        new THREE.BoxGeometry(0.1, 0.04, 0.05),
+        this.materials.darkWood,
+        [facing, railY1, z]
+      );
+      group.add(lashTop, lashBottom);
+    }
+
+    // ----- Taller bamboo posts every ~1.6 m for structure -----
+    const postSpacing = 1.6;
+    const postHeight = 0.85;
+    for (let z = -halfLen; z <= halfLen + 0.001; z += postSpacing) {
+      const post = this.mesh(
+        new THREE.CylinderGeometry(0.06, 0.07, postHeight, 7),
+        this.materials.bambooStalk,
+        [facing, postHeight * 0.5, z]
+      );
+      group.add(post);
+      // Rounded cut cap on each post crown.
+      const postCap = this.mesh(
+        new THREE.CylinderGeometry(0.062, 0.062, 0.05, 7),
+        this.materials.bambooStalkPale,
+        [facing, postHeight + 0.01, z]
+      );
+      group.add(postCap);
+      // A darker node ring midway up each post.
+      const node = this.mesh(
+        new THREE.CylinderGeometry(0.072, 0.072, 0.035, 7),
+        this.materials.darkWood,
+        [facing, postHeight * 0.55, z]
+      );
+      group.add(node);
+    }
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createSakeBarrels(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_sake_barrels";
+
+    // ---- Shared cask builder ----------------------------------------------
+    // One 菰樽 offering-cask: a pale shideWhite straw-mat cylinder, two darkWood
+    // hoop rings, a bold painted band (redBib / cloth), a small gold crest on the
+    // +Z front face, and a warm warmWood lid. Returns a small Group placed at
+    // [x, baseY, z] with a tiny per-cask yaw so the stack reads hand-built.
+    const buildCask = (
+      x: number,
+      baseY: number,
+      z: number,
+      yaw: number,
+      bandMat: THREE.Material
+    ): THREE.Group => {
+      const cask = new THREE.Group();
+      const r = 0.32; // mean radius of the 0.34/0.30 taper
+      const h = 0.5;
+      const cy = baseY + h / 2;
+
+      // Pale straw-mat body (the komo wrap), gently barrel-tapered.
+      cask.add(this.mesh(new THREE.CylinderGeometry(0.34, 0.3, h, 10), this.materials.shideWhite, [x, cy, z]));
+
+      // Two darkWood hoop rings binding the mat — upper and lower thirds.
+      cask.add(this.mesh(new THREE.CylinderGeometry(0.345, 0.345, 0.05, 10), this.materials.darkWood, [x, cy + 0.15, z]));
+      cask.add(this.mesh(new THREE.CylinderGeometry(0.345, 0.345, 0.05, 10), this.materials.darkWood, [x, cy - 0.15, z]));
+
+      // Bold painted band wrapping the mid-belly (slightly proud of the mat).
+      cask.add(this.mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.13, 10), bandMat, [x, cy, z]));
+
+      // Warm wooden lid: a wide warmWood disc capping the top, plus a small bung knob.
+      cask.add(this.mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.05, 10), this.materials.warmWood, [x, baseY + h + 0.02, z]));
+      cask.add(this.mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 8), this.materials.darkWood, [x, baseY + h + 0.05, z]));
+
+      // Gold crest medallion on the FRONT face (+Z, toward road/camera):
+      // a thin gold disc with a darker centre boss so it reads as an emblem.
+      const crest = this.mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.03, 12), this.materials.gold, [x, cy + 0.02, z + r + 0.02]);
+      crest.rotation.x = Math.PI / 2; // face flat outward toward +Z
+      cask.add(crest);
+      const crestBoss = this.mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 8), this.materials.darkWood, [x, cy + 0.02, z + r + 0.03]);
+      crestBoss.rotation.x = Math.PI / 2;
+      cask.add(crestBoss);
+
+      // A short shideWhite straw-rope tail dangling off the lower hoop (front-left),
+      // tying the festive offering look together.
+      cask.add(this.mesh(new THREE.BoxGeometry(0.05, 0.16, 0.05), this.materials.shideWhite, [x - 0.18, cy - 0.18, z + 0.24]));
+
+      cask.rotation.y = yaw;
+      return cask;
+    };
+
+    // ---- Low plank base -----------------------------------------------------
+    // A couple of warmWood boards the whole offering sits on, with darkWood end caps.
+    group.add(this.mesh(new THREE.BoxGeometry(1.36, 0.06, 0.86), this.materials.warmWood, [0, 0.03, 0]));
+    group.add(this.mesh(new THREE.BoxGeometry(0.08, 0.07, 0.86), this.materials.darkWood, [-0.66, 0.035, 0]));
+    group.add(this.mesh(new THREE.BoxGeometry(0.08, 0.07, 0.86), this.materials.darkWood, [0.66, 0.035, 0]));
+
+    // ---- Pyramid stack: 2 on the bottom + 1 on top (the hero trio) ---------
+    // Bottom pair, nestled toward the front of the plank.
+    group.add(buildCask(-0.34, 0.06, 0.16, 0.08, this.materials.redBib));
+    group.add(buildCask(0.34, 0.06, 0.16, -0.06, this.materials.redBib));
+    // Crowning cask resting in the saddle between them.
+    group.add(buildCask(0.0, 0.56, 0.12, 0.04, this.materials.redBib));
+
+    // ---- Side pair: a couple of casks beside the stack ---------------------
+    // One stood beside on the base (slightly back), wearing a cloth band for contrast.
+    group.add(buildCask(0.0, 0.06, -0.28, 0.18, this.materials.cloth));
+    // One toppled on its side at the foot, lying along Z so its lid faces front.
+    const lying = buildCask(0, 0, 0, 0, this.materials.cloth);
+    lying.rotation.x = Math.PI / 2; // lay it down
+    lying.position.set(-0.5, 0.34, -0.22);
+    group.add(lying);
+
+    // ---- Festive shide paper streamers -------------------------------------
+    // Two small zig-zag shideWhite paper folds tucked against the front of the top
+    // cask, the signature white lightning streaks of a shrine offering.
+    const shideA = this.mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), this.materials.shideWhite, [-0.14, 0.74, 0.42]);
+    shideA.rotation.z = 0.25;
+    const shideB = this.mesh(new THREE.BoxGeometry(0.04, 0.22, 0.04), this.materials.shideWhite, [0.14, 0.73, 0.42]);
+    shideB.rotation.z = -0.2;
+    group.add(shideA, shideB);
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createTeaShrub(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_tea_shrub";
+
+    // Tiny soil/moss base the clipped dome sits on — keeps it from floating.
+    group.add(
+      this.mesh(new THREE.CylinderGeometry(0.4, 0.48, 0.12, 8), this.materials.darkWood, [0, 0.06, 0]),
+      this.mesh(new THREE.CylinderGeometry(0.44, 0.4, 0.08, 8), this.materials.mossGreen, [0, 0.15, 0])
+    );
+
+    // Neatly clipped rounded dome: overlapping faceted Icosahedron(0.34..0.5,0) blobs.
+    // A broad foliage core, a low skirt ring of foliageDark/mossGreen for a manicured
+    // hedge silhouette, then a crown that rounds the top off at ~0.9m. Fixed per-blob
+    // rotations give faceted structure deterministically (mi: 0=foliage 1=foliageDark 2=mossGreen).
+    // Radii/offsets kept tight so the dome stays within the 1.3 x 0.9 x 1.3 footprint.
+    const mats = [this.materials.foliage, this.materials.foliageDark, this.materials.mossGreen];
+    const blobs: Array<[number, number, number, number, number, number]> = [
+      // [x, y, z, radius, materialIndex, fixedRotation]
+      [0.0, 0.4, 0.0, 0.5, 0, 0.4], // broad core
+      [0.26, 0.3, 0.14, 0.4, 1, 1.1], // skirt — shaded base ring
+      [-0.28, 0.3, -0.1, 0.4, 2, 2.0], // skirt
+      [0.08, 0.28, -0.28, 0.38, 1, 0.7], // skirt back
+      [-0.14, 0.29, 0.28, 0.38, 2, 2.6], // skirt front
+      [0.18, 0.52, -0.12, 0.36, 0, 1.5], // upper shoulder
+      [-0.2, 0.5, 0.14, 0.36, 0, 0.2], // upper shoulder
+      [0.0, 0.62, 0.03, 0.34, 1, 1.8] // rounded crown
+    ];
+    for (const [x, y, z, r, mi, rot] of blobs) {
+      const blob = this.mesh(new THREE.IcosahedronGeometry(r, 0), mats[mi], [x, y, z]);
+      blob.rotation.set(rot * 0.6, rot, rot * 0.3);
+      group.add(blob);
+    }
+
+    // A couple of golden new-growth tips flecked across the crown.
+    const tipA = this.mesh(new THREE.IcosahedronGeometry(0.14, 0), this.materials.mapleGold, [0.2, 0.6, 0.16]);
+    tipA.rotation.set(0.5, 1.2, 0.3);
+    const tipB = this.mesh(new THREE.IcosahedronGeometry(0.11, 0), this.materials.mapleGold, [-0.17, 0.55, -0.18]);
+    tipB.rotation.set(1.4, 0.6, 0.9);
+    group.add(tipA, tipB);
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createFirewoodStack(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_firewood_stack";
+
+    // --- Two ground skids (darkWood beams) the stack rests on, running along X ---
+    const skidY = 0.045;
+    const skidLen = 1.62;
+    [-0.18, 0.18].forEach((sz) => {
+      const skid = this.mesh(new THREE.BoxGeometry(skidLen, 0.09, 0.1), this.materials.darkWood, [0, skidY, sz]);
+      group.add(skid);
+    });
+
+    // --- Stacked split logs: cut round ends face +Z, logs lie along X ---
+    // Rotate the default Y-axis cylinder onto X with rotation.z = PI/2.
+    const logMats = [this.materials.warmWood, this.materials.wood, this.materials.darkWood];
+    const logLen = 0.6;
+    const rowCount = 7;        // ~0.85m of stacked log height
+    const rowH = 0.117;        // vertical pitch between rows
+    const baseRowY = 0.152;    // first row centre, just above the skids
+    const stackHalfW = 0.78;   // half of the ~1.56m wide wall of log-ends
+
+    let seed = 0;
+    const rnd = () => {
+      // small deterministic pseudo-random for tidy-but-organic variety
+      seed += 1;
+      return ((Math.sin(seed * 12.9898) * 43758.5453) % 1 + 1) % 1;
+    };
+
+    for (let row = 0; row < rowCount; row += 1) {
+      const y = baseRowY + row * rowH;
+      // Alternate rows nudge sideways slightly so the cut-ends interlock like real stacking.
+      const rowShift = (row % 2 === 0 ? 0.035 : -0.035);
+      // Upper rows hold a touch fewer logs (the pile tapers in very slightly).
+      const logsInRow = row < rowCount - 1 ? 9 : 8;
+      for (let i = 0; i < logsInRow; i += 1) {
+        const t = i / (logsInRow - 1);
+        const x = -stackHalfW + t * (stackHalfW * 2) + rowShift;
+        const mat = logMats[(i + row) % logMats.length];
+        const r = rnd();
+        // Slight per-log length + depth jitter so the ends aren't a flat plane.
+        const len = logLen + (r - 0.5) * 0.06;
+        const radTop = 0.066 + r * 0.012;
+        const radBot = radTop + 0.012;
+        const log = this.mesh(
+          new THREE.CylinderGeometry(radTop, radBot, len, 7),
+          mat,
+          [x, y, (r - 0.5) * 0.045]
+        );
+        log.rotation.z = Math.PI * 0.5;                 // lay along X
+        log.rotation.x = (r - 0.5) * 0.06;              // tiny tilt for hand-stacked look
+        group.add(log);
+      }
+    }
+
+    // --- Two end uprights (darkWood) bracing the stack so it doesn't topple ---
+    [-stackHalfW - 0.05, stackHalfW + 0.05].forEach((px) => {
+      const post = this.mesh(
+        new THREE.CylinderGeometry(0.032, 0.037, rowCount * rowH + 0.14, 6),
+        this.materials.darkWood,
+        [px, baseRowY + (rowCount * rowH) * 0.5 - 0.03, 0]
+      );
+      group.add(post);
+    });
+
+    // --- Lean-to cover: an angled plank board with a thin thatch overlay to shed rain ---
+    // Keep the cover low and shallow so total H stays ~1.0m and D stays ~0.7m.
+    const coverY = baseRowY + (rowCount - 1) * rowH + 0.085;
+    const coverPlank = this.mesh(new THREE.BoxGeometry(1.7, 0.035, 0.62), this.materials.wood, [0, coverY, 0]);
+    coverPlank.rotation.x = -0.2;                        // tilt so front edge sits lower, rain runs off toward +Z
+    group.add(coverPlank);
+
+    const coverThatch = this.mesh(new THREE.BoxGeometry(1.74, 0.05, 0.66), this.materials.thatch, [0, coverY + 0.045, 0]);
+    coverThatch.rotation.x = -0.2;
+    group.add(coverThatch);
+
+    // A darkWood batten pinning the cover at the back so the wind can't lift it.
+    const batten = this.mesh(new THREE.BoxGeometry(1.5, 0.045, 0.06), this.materials.darkWood, [0, coverY + 0.075, -0.27]);
+    batten.rotation.x = -0.2;
+    group.add(batten);
+
+    // A couple of loose logs tumbled at the base for a lived-in look (kept within the depth budget).
+    const loose1 = this.mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.58, 7), this.materials.warmWood, [-0.46, 0.105, 0.27]);
+    loose1.rotation.z = Math.PI * 0.5;
+    loose1.rotation.y = 0.12;
+    const loose2 = this.mesh(new THREE.CylinderGeometry(0.066, 0.078, 0.55, 7), this.materials.darkWood, [-0.42, 0.105, 0.32]);
+    loose2.rotation.z = Math.PI * 0.5;
+    loose2.rotation.y = -0.08;
+    group.add(loose1, loose2);
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createRoadsideJizo(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_roadside_jizo";
+
+    // --- Low mossy stone plinth -------------------------------------------------
+    // A flat weathered `stone` slab the guardians sit on, with a thin mossGreen
+    // cap creeping over the top edge and a sunken front lip facing the road (+Z).
+    const plinth = this.mesh(new THREE.BoxGeometry(1.04, 0.13, 0.42), this.materials.stone, [0, 0.065, 0]);
+    const plinthMoss = this.mesh(new THREE.BoxGeometry(1.0, 0.04, 0.38), this.materials.mossGreen, [0, 0.14, 0.01]);
+    plinthMoss.scale.set(1.0, 1.0, 0.96);
+    // A worn lower step poking out under the slab so the base reads as built-up masonry.
+    const step = this.mesh(new THREE.BoxGeometry(1.1, 0.06, 0.48), this.materials.stone, [0, 0.03, 0.02]);
+    group.add(step, plinth, plinthMoss);
+
+    // A couple of rounded `stone` cobbles spilling off the front-left corner,
+    // each with a small mossGreen patch, for an unkempt roadside-shrine look.
+    const cobble = this.mesh(new THREE.IcosahedronGeometry(0.1, 0), this.materials.stone, [-0.46, 0.1, 0.21]);
+    cobble.rotation.set(0.4, 0.7, 0.2);
+    const cobbleMoss = this.mesh(new THREE.IcosahedronGeometry(0.07, 0), this.materials.mossGreen, [-0.45, 0.14, 0.23]);
+    cobbleMoss.rotation.set(0.6, 0.3, 0.4);
+    cobbleMoss.scale.set(1.0, 0.6, 1.0);
+    group.add(cobble, cobbleMoss);
+
+    // --- Three little jizo statues in a gentle row ------------------------------
+    // [x, yaw, scale, knitCap?] — tiny per-statue variation so the trio feels hand-carved.
+    const statues: Array<[number, number, number, boolean]> = [
+      [-0.34, 0.14, 0.96, false],
+      [0.0, -0.06, 1.04, true],
+      [0.36, 0.1, 0.9, false]
+    ];
+
+    for (const [sx, yaw, s, knitCap] of statues) {
+      const statue = new THREE.Group();
+      const baseY = 0.13; // sits on the mossy plinth top
+
+      // Stacked stone shaft: a square jizoStone footing + a rounded tapering pillar body.
+      const footing = this.mesh(new THREE.BoxGeometry(0.24 * s, 0.07 * s, 0.22 * s), this.materials.jizoStone, [0, baseY + 0.035 * s, 0]);
+      const shaft = this.mesh(new THREE.CylinderGeometry(0.1 * s, 0.13 * s, 0.36 * s, 8), this.materials.jizoStone, [0, baseY + 0.25 * s, 0]);
+      // A subtle shoulder ring where the body meets the head.
+      const shoulders = this.mesh(new THREE.CylinderGeometry(0.13 * s, 0.11 * s, 0.07 * s, 8), this.materials.jizoStone, [0, baseY + 0.45 * s, 0]);
+
+      // Smooth rounded icosahedron head, slightly squashed into a soft pebble of a face.
+      const head = this.mesh(new THREE.IcosahedronGeometry(0.14 * s, 0), this.materials.jizoStone, [0, baseY + 0.56 * s, 0]);
+      head.scale.set(1.0, 1.12, 0.94);
+      head.rotation.set(0.14, yaw * 1.5, 0);
+      statue.add(footing, shaft, shoulders, head);
+
+      // Hands pressed together (gassho): two slim jizoStone boxlets meeting on the +Z front.
+      const handL = this.mesh(new THREE.BoxGeometry(0.05 * s, 0.13 * s, 0.05 * s), this.materials.jizoStone, [-0.035 * s, baseY + 0.34 * s, 0.11 * s]);
+      const handR = this.mesh(new THREE.BoxGeometry(0.05 * s, 0.13 * s, 0.05 * s), this.materials.jizoStone, [0.035 * s, baseY + 0.34 * s, 0.11 * s]);
+      handL.rotation.z = 0.18;
+      handR.rotation.z = -0.18;
+      statue.add(handL, handR);
+
+      // Little red cloth bib over the shoulders/chest — a slim box angled on the +Z front.
+      const bib = this.mesh(new THREE.BoxGeometry(0.2 * s, 0.18 * s, 0.06 * s), this.materials.redBib, [0, baseY + 0.32 * s, 0.105 * s]);
+      bib.rotation.x = -0.12;
+      // A thin red collar tucked under the chin tying the bib on.
+      const collar = this.mesh(new THREE.BoxGeometry(0.18 * s, 0.05 * s, 0.16 * s), this.materials.redBib, [0, baseY + 0.45 * s, 0]);
+      statue.add(bib, collar);
+
+      if (knitCap) {
+        // The middle statue wears a knitted cap: a redBib box pulled over the crown plus a little brim,
+        // topped with a tiny pom-pom.
+        const cap = this.mesh(new THREE.BoxGeometry(0.24 * s, 0.12 * s, 0.22 * s), this.materials.redBib, [0, baseY + 0.65 * s, 0]);
+        const brim = this.mesh(new THREE.BoxGeometry(0.28 * s, 0.05 * s, 0.26 * s), this.materials.redBib, [0, baseY + 0.58 * s, 0]);
+        const pom = this.mesh(new THREE.IcosahedronGeometry(0.05 * s, 0), this.materials.redBib, [0, baseY + 0.73 * s, 0]);
+        statue.add(cap, brim, pom);
+      }
+
+      // Moss creeping up the footing: a small mossGreen blob hugging the stone base.
+      const baseMoss = this.mesh(new THREE.IcosahedronGeometry(0.09 * s, 0), this.materials.mossGreen, [0.07 * s, baseY + 0.05 * s, 0.07 * s]);
+      baseMoss.rotation.set(0.5, yaw * 2.0, 0.3);
+      baseMoss.scale.set(1.0, 0.6, 1.0);
+      statue.add(baseMoss);
+
+      statue.position.x = sx;
+      statue.rotation.y = yaw;
+      group.add(statue);
+    }
+
+    // --- Offering bowl + candle on the front lip --------------------------------
+    // A tiny stone offering bowl: a shallow ring of `stone` with a dark hollow,
+    // set on the plinth front toward the road.
+    const bowl = this.mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.06, 10), this.materials.stone, [-0.18, 0.16, 0.16]);
+    const bowlRim = this.mesh(new THREE.TorusGeometry(0.075, 0.018, 6, 12), this.materials.stone, [-0.18, 0.19, 0.16]);
+    bowlRim.rotation.x = Math.PI / 2;
+    group.add(bowl, bowlRim);
+
+    // A small candle with an `ember` flame glow beside the bowl — a stone stub
+    // capped by a glowing ember cone, the votive light of the roadside shrine.
+    const candleStub = this.mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.07, 8), this.materials.stone, [0.16, 0.165, 0.17]);
+    const flame = this.mesh(new THREE.ConeGeometry(0.028, 0.08, 6), this.materials.ember, [0.16, 0.24, 0.17]);
+    const glow = this.mesh(new THREE.IcosahedronGeometry(0.045, 0), this.materials.ember, [0.16, 0.23, 0.17]);
+    glow.scale.set(1.0, 1.3, 1.0);
+    group.add(candleStub, flame, glow);
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createStoneWall(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_stone_wall";
+
+    // 石垣 — a low dry-stone retaining wall running along +Z, centred at origin.
+    // Built as stacked courses of irregular fitted blocks, battered slightly
+    // inward toward the top, capped by a flatter capstone course, with moss
+    // tucked into the gaps. ~7 m long, ~0.65 m tall.
+    const length = 7;
+    const stoneMats = [this.materials.stone, this.materials.wetRock, this.materials.cliffStone];
+
+    // Three battered courses: each higher course is set back (thinner & narrower)
+    // and the stones grow a touch smaller, so the face leans inward.
+    const courses = [
+      { y: 0.13, h: 0.26, depth: 0.4, blockW: 0.46, jitter: 0.05 }, // footing — biggest stones
+      { y: 0.36, h: 0.22, depth: 0.34, blockW: 0.4, jitter: 0.045 }, // middle course
+      { y: 0.53, h: 0.16, depth: 0.28, blockW: 0.34, jitter: 0.04 } // upper course — smallest
+    ];
+
+    let matCursor = 0;
+    courses.forEach((course, courseIndex) => {
+      // Offset every other course so vertical joints don't line up (running bond).
+      const stagger = courseIndex % 2 === 0 ? 0 : course.blockW * 0.5;
+      let z = -length * 0.5 + course.blockW * 0.5 + stagger * 0.4;
+
+      while (z < length * 0.5 - course.blockW * 0.25) {
+        // Deterministic-ish irregular block size from a cheap hash of position.
+        const seed = Math.sin((z + courseIndex * 3.7) * 12.9898) * 43758.5453;
+        const wobble = seed - Math.floor(seed); // 0..1 pseudo-random
+        const blockLen = course.blockW * (0.78 + wobble * 0.5);
+        const heightJit = (wobble - 0.5) * course.jitter * 1.4;
+        const yJit = (wobble - 0.5) * 0.02;
+
+        const stone = this.mesh(
+          new THREE.BoxGeometry(course.depth, course.h + heightJit, blockLen),
+          stoneMats[matCursor % stoneMats.length],
+          [0, course.y + yJit, z]
+        );
+        // Slight per-stone tilt + tiny yaw so the wall reads hand-fitted, not gridded.
+        stone.rotation.x = (wobble - 0.5) * 0.1;
+        stone.rotation.y = (wobble - 0.5) * 0.14;
+        stone.rotation.z = (wobble - 0.5) * 0.08;
+        group.add(stone);
+        matCursor += 1;
+
+        // Occasional small filler chock wedged into the gap above larger stones.
+        if (wobble > 0.62 && courseIndex < 2) {
+          const chock = this.mesh(
+            new THREE.BoxGeometry(course.depth * 0.7, 0.1, blockLen * 0.4),
+            stoneMats[(matCursor + 1) % stoneMats.length],
+            [(wobble - 0.5) * 0.06, course.y + course.h * 0.5 + 0.02, z + blockLen * 0.3]
+          );
+          chock.rotation.z = (wobble - 0.5) * 0.2;
+          group.add(chock);
+        }
+
+        z += blockLen * (0.9 + wobble * 0.18);
+      }
+    });
+
+    // Flatter capstone course along the very top — wider, lower stones laid flat.
+    let capZ = -length * 0.5 + 0.32;
+    let capCursor = 0;
+    while (capZ < length * 0.5 - 0.16) {
+      const seed = Math.sin(capZ * 7.317) * 24634.6345;
+      const wobble = seed - Math.floor(seed);
+      const capLen = 0.4 + wobble * 0.34;
+      const cap = this.mesh(
+        new THREE.BoxGeometry(0.34, 0.1, capLen),
+        stoneMats[(capCursor + 2) % stoneMats.length],
+        [0, 0.66, capZ]
+      );
+      cap.rotation.y = (wobble - 0.5) * 0.06;
+      cap.rotation.z = (wobble - 0.5) * 0.04;
+      group.add(cap);
+      capCursor += 1;
+      capZ += capLen + 0.015;
+    }
+
+    // Moss tufts tucked into the joints on the road-facing (+Z front) face.
+    const mossSpots: Array<[number, number, number, number]> = [
+      // [zPos, y, scale, faceX]
+      [-2.7, 0.24, 0.09, 0.21],
+      [-1.4, 0.4, 0.07, 0.19],
+      [-0.3, 0.18, 0.1, 0.22],
+      [0.9, 0.35, 0.08, 0.2],
+      [1.8, 0.5, 0.065, 0.16],
+      [2.9, 0.22, 0.085, 0.21],
+      [-2.0, 0.55, 0.06, 0.15],
+      [0.2, 0.52, 0.07, 0.16]
+    ];
+    mossSpots.forEach(([z, y, scale, faceX], i) => {
+      const moss = this.mesh(
+        new THREE.IcosahedronGeometry(scale, 0),
+        this.materials.mossGreen,
+        [faceX, y, z]
+      );
+      moss.scale.set(1, 0.6, 1.3);
+      moss.rotation.set(i * 0.31, i * 0.5, i * 0.21);
+      group.add(moss);
+    });
+
+    this.enableShadows(group);
+    return group;
+  }
+
+  createFallenLeaves(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = "deco_fallen_leaves";
+
+    // A flat autumn leaf-litter decal: a drift of crisp red-orange-gold leaves
+    // settled on the ground over a ~2 m patch. Built from very thin flattened
+    // boxes (the leaf "blades") laid at slight overlaps with random flat
+    // Y-rotations, hugging y ~= 0.03, plus a few tiny flat faceted leaves for
+    // a hand-scattered, broken-edge silhouette. Fixed warm palette so it suits
+    // the autumn leg. Flat ground prop — intentionally no enableShadows().
+
+    // Warm leaf palette cycled across the drift; a touch more ember/gold so the
+    // litter reads as sun-faded maple rather than uniformly red.
+    const palette = [
+      this.materials.mapleEmber,
+      this.materials.mapleGold,
+      this.materials.persimmon,
+      this.materials.mapleEmber,
+      this.materials.mapleGold,
+      this.materials.redBib
+    ];
+
+    // --- Main leaf blades: thin BoxGeometry quads scattered across the patch.
+    // [w, d, x, z, yRot, paletteIndex]. Deterministic structure with a tiny
+    // per-leaf random jitter layered on top so no two instances tile identically.
+    const blades: Array<[number, number, number, number, number, number]> = [
+      [0.62, 0.5, 0.0, 0.0, 0.2, 0],
+      [0.5, 0.46, 0.4, -0.32, 0.9, 1],
+      [0.56, 0.42, -0.46, 0.3, -0.5, 2],
+      [0.44, 0.5, 0.18, 0.5, 1.4, 3],
+      [0.5, 0.4, -0.3, -0.46, -1.1, 4],
+      [0.4, 0.38, 0.62, 0.24, 0.4, 0],
+      [0.46, 0.44, -0.64, -0.2, 2.1, 1],
+      [0.38, 0.42, 0.34, 0.74, -0.7, 5],
+      [0.42, 0.36, -0.18, 0.66, 1.7, 2],
+      [0.36, 0.4, 0.74, -0.62, -0.3, 3]
+    ];
+    for (const [w, d, x, z, yRot, pi] of blades) {
+      // Tiny height stagger (~0.03 m band) so overlapping decals layer cleanly
+      // instead of z-fighting on one plane — closer leaves sit a hair higher.
+      const y = 0.022 + Math.random() * 0.016;
+      const leaf = this.mesh(
+        new THREE.BoxGeometry(w, 0.03, d),
+        palette[pi],
+        [x + (Math.random() - 0.5) * 0.08, y, z + (Math.random() - 0.5) * 0.08]
+      );
+      leaf.rotation.y = yRot + (Math.random() - 0.5) * 0.3;
+      // Whisper-thin random tilt so the odd leaf reads as half-curled/lifted.
+      leaf.rotation.x = (Math.random() - 0.5) * 0.1;
+      leaf.rotation.z = (Math.random() - 0.5) * 0.1;
+      group.add(leaf);
+    }
+
+    // --- A few tiny flat faceted leaves (squashed icos) tucked into the gaps,
+    // breaking the rectangular edges of the box blades into a crisper, more
+    // organic scatter. Flattened hard on Y so they stay a ground decal.
+    const flecks: Array<[number, number, number, number]> = [
+      [0.13, 0.12, -0.1, 0],
+      [-0.28, 0.1, -0.34, 2],
+      [0.46, 0.11, 0.46, 1],
+      [-0.5, 0.09, 0.12, 3],
+      [0.08, 0.1, -0.66, 4]
+    ];
+    for (const [x, r, z, pi] of flecks) {
+      const fleck = this.mesh(
+        new THREE.IcosahedronGeometry(r, 0),
+        palette[pi],
+        [x, 0.03, z]
+      );
+      fleck.scale.y = 0.28;
+      fleck.rotation.set(
+        Math.random() * Math.PI,
+        Math.random() * Math.PI,
+        Math.random() * Math.PI
+      );
+      group.add(fleck);
+    }
+
+    // Flat autumn leaf-litter — intentionally no enableShadows().
     return group;
   }
 

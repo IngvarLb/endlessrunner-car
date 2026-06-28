@@ -9,6 +9,20 @@ export type DecorationKind =
   | "minkaHouse"
   | "nagayaRowHouse"
   | "kuraStorehouse"
+  // 宿場町 Feudal village — enrichment props (autumn-leg shared pool)
+  | "persimmonTree"
+  | "keyakiTree"
+  | "noboriBanner"
+  | "woodenCart"
+  | "marketStall"
+  | "villageWell"
+  | "bambooFence"
+  | "sakeBarrels"
+  | "teaShrub"
+  | "firewoodStack"
+  | "roadsideJizo"
+  | "stoneWall"
+  | "fallenLeaves"
   // 電脳都市 Neon Cyber-City props
   | "cyberSlabTower"
   | "cyberSetbackTower"
@@ -188,92 +202,115 @@ export const FEUDAL_JAPAN_BIOME_CONTENT: BiomeContentDefinition = {
   ]
 };
 
+// 宿場町 Feudal post-town street, laid out in clean concentric bands so nothing glitches
+// into anything (the old layout let scaled houses reach x≈4.1 while maples at x≈5–6 with a
+// wide canopy speared through their roofs). Reading out from the road centre:
+//   road corridor (kept clear)  ±3.2
+//   verge border (fence / wall)  ±3.15  (low, runs along Z)
+//   inner clutter (lanterns, jizo, banners, shrubs, casks, leaf-litter)  ±3.8–4.3
+//   front planted row (momiji / persimmon / bamboo, TIGHT canopies)  ±4.4–5.0
+//   roadside stalls / cart / well  ±4.6
+//   the house wall (set back so the planted verge fits in front)  ±8.2
+//   backdrop zelkova grove (rises above the rooftops for depth)  ±13–14.5
+// Every roadside prop is jittered OUTWARD by up to 0.7 m and scaled up to 1.3× at runtime
+// (jitterDecoration), so each band's outer reach is budgeted to clear the band behind it
+// even at that worst case. Houses sit at ±8.2 with a modest scale to leave the verge room.
 function createFeudalJapanDecorations(): DecorationPlacement[] {
-  const decorations: DecorationPlacement[] = [];
-  const loopLength = FEUDAL_JAPAN_CONTENT_LOOP_LENGTH;
-  const leftHouseX = -6.95;
-  const rightHouseX = 6.95;
+  const d: DecorationPlacement[] = [];
+  const loop = FEUDAL_JAPAN_CONTENT_LOOP_LENGTH;
   const houseKinds: DecorationKind[] = ["machiyaHouse", "nagayaRowHouse", "minkaHouse", "kuraStorehouse"];
 
-  // Torii as occasional landmarks (every 60 m, evenly across the loop) rather
-  // than a continuous tunnel of arches.
-  for (let z = 8; z < loopLength; z += 60) {
-    decorations.push({
-      kind: "torii",
-      x: 0,
-      z
+  // Torii landmarks every 60 m (a gate you pass under — a classic, kept).
+  for (let z = 8; z < loop; z += 60) {
+    d.push({ kind: "torii", x: 0, z });
+  }
+
+  // Low verge border: bamboo fence ↔ dry-stone wall, alternating sides, length-7 segments
+  // with the odd gap so it never reads as a sealed corridor (you see through to the houses).
+  for (let i = 0, z = 0; z < loop; i += 1, z += 7) {
+    if (i % 4 === 3) continue; // occasional opening
+    d.push({ kind: i % 2 === 0 ? "bambooFence" : "stoneWall", x: -3.15, z: z + 3.5 });
+    d.push({ kind: i % 2 === 0 ? "stoneWall" : "bambooFence", x: 3.15, z: z + 3.5 });
+  }
+
+  // Front planted row — momiji maples, persimmons, bamboo clumps, staggered both sides.
+  // Canopies authored within ±0.85 m of trunk; placement scale ≤0.9 keeps the worst-case
+  // jittered reach (≈6.1 m) clear of the house wall front (≈6.3 m) and the road (3.2 m).
+  const frontKinds: DecorationKind[] = ["mapleTree", "bambooCluster", "persimmonTree", "bambooCluster"];
+  for (let i = 0, z = 5; z < loop; i += 1, z += 6) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const k1 = frontKinds[i % frontKinds.length];
+    d.push({
+      kind: k1,
+      x: side * (k1 === "bambooCluster" ? 5.0 : 4.4),
+      z,
+      rotationY: i * 1.7,
+      scale: k1 === "bambooCluster" ? 0.95 + (i % 3) * 0.05 : 0.82 + (i % 3) * 0.04
+    });
+    const k2 = frontKinds[(i + 2) % frontKinds.length];
+    d.push({
+      kind: k2,
+      x: -side * (k2 === "bambooCluster" ? 5.0 : 4.4),
+      z: z + 3,
+      rotationY: i * 2.3 + 1,
+      scale: k2 === "bambooCluster" ? 0.95 + (i % 2) * 0.06 : 0.84 + (i % 4) * 0.03
     });
   }
 
-  for (let index = 0, z = 4; z < loopLength; index += 1, z += 5) {
-    decorations.push(
-      {
-        kind: "bambooCluster",
-        x: -4.5 - (index % 3) * 0.25,
-        z
-      },
-      {
-        kind: "bambooCluster",
-        x: 4.5 + (index % 2) * 0.25,
-        z: z + 2.2
-      }
-    );
-
-    if (index % 3 === 0) {
-      decorations.push({
-        kind: "stoneLantern",
-        x: index % 2 === 0 ? -3.6 : 3.6,
-        z: z + 1
-      });
-    }
+  // Inner-verge clutter (all small, ≤1 m half-width) — the lived-in details right at the
+  // roadside, between the border and the tree row.
+  const clutter: DecorationKind[] = [
+    "stoneLantern", "roadsideJizo", "noboriBanner", "teaShrub",
+    "sakeBarrels", "firewoodStack", "fallenLeaves", "teaShrub"
+  ];
+  for (let i = 0, z = 7; z < loop; i += 1, z += 7.5) {
+    const side = i % 2 === 0 ? 1 : -1;
+    const kind = clutter[i % clutter.length];
+    d.push({ kind, x: side * (3.9 + (i % 3) * 0.16), z, rotationY: side > 0 ? -0.35 : 0.35 });
   }
 
-  // 紅葉 Momiji maples lining the road just inside the houses — leafy green in the
-  // village leg, blazing crimson/orange/gold in the autumn leg. Staggered both sides.
-  for (let index = 0, z = 6; z < loopLength; index += 1, z += 9.5) {
-    const side = index % 2 === 0 ? -1 : 1;
-    decorations.push(
-      {
-        kind: "mapleTree",
-        x: side * (5.0 + (index % 3) * 0.3),
-        z,
-        rotationY: index * 1.3,
-        scale: 1.0 + (index % 4) * 0.12
-      },
-      {
-        kind: "mapleTree",
-        x: -side * (5.2 + (index % 2) * 0.4),
-        z: z + 4.5,
-        rotationY: index * 2.1 + 1,
-        scale: 0.92 + (index % 3) * 0.14
-      }
-    );
+  // Roadside stalls / cart / well — bigger lived-in props, modest scale so the back barely
+  // grazes a house front (realistic shopfronts). Sparse cadence, both sides.
+  const stalls: DecorationKind[] = ["marketStall", "woodenCart", "villageWell"];
+  for (let i = 0, z = 13; z < loop; i += 1, z += 19) {
+    const side = i % 2 === 0 ? -1 : 1;
+    d.push({ kind: stalls[i % stalls.length], x: side * 4.6, z, rotationY: side < 0 ? 0.4 : -0.4, scale: 0.86 });
   }
 
-  for (let index = 0, z = 0; z < loopLength + 4; index += 1, z += 4) {
-    decorations.push(
-      {
-        kind: houseKinds[index % houseKinds.length],
-        x: leftHouseX - (index % 2) * 0.18,
-        z,
-        rotationY: Math.PI * 0.5,
-        scale: getHouseScale(index)
-      },
-      {
-        kind: houseKinds[(index + 2) % houseKinds.length],
-        x: rightHouseX + (index % 2) * 0.18,
-        z: z + 2,
-        rotationY: -Math.PI * 0.5,
-        scale: getHouseScale(index + 2)
-      }
-    );
+  // House wall, set back behind the verge — continuous both sides, modest scale.
+  for (let i = 0, z = 0; z < loop + 4; i += 1, z += 4) {
+    d.push({
+      kind: houseKinds[i % houseKinds.length],
+      x: -8.2 - (i % 2) * 0.2,
+      z,
+      rotationY: Math.PI * 0.5,
+      scale: getHouseScale(i)
+    });
+    d.push({
+      kind: houseKinds[(i + 2) % houseKinds.length],
+      x: 8.2 + (i % 2) * 0.2,
+      z: z + 2,
+      rotationY: -Math.PI * 0.5,
+      scale: getHouseScale(i + 2)
+    });
   }
 
-  return decorations;
+  // Backdrop zelkova grove behind the rooftops — broad crowns rising above the houses give
+  // the village real depth (you look past the roofs into a tree line), placed far enough out
+  // (≥13 m) that even jittered they stay clear of the house backs.
+  for (let i = 0, z = 9; z < loop; i += 1, z += 15) {
+    const side = i % 2 === 0 ? -1 : 1;
+    d.push({ kind: "keyakiTree", x: side * (13.2 + (i % 2) * 1.1), z, rotationY: i * 1.1, scale: 0.9 + (i % 3) * 0.1 });
+    d.push({ kind: "keyakiTree", x: -side * (14.0 + (i % 3) * 0.6), z: z + 7.5, rotationY: i * 0.7 + 2, scale: 0.85 + (i % 2) * 0.12 });
+  }
+
+  return d;
 }
 
 function getHouseScale(index: number): number {
-  const scales = [1.72, 1.56, 1.64, 1.82];
+  // Smaller than the old 1.6–1.8 so the houses sit back behind the planted verge instead of
+  // crowding the road (their road-facing eave used to reach x≈4.1 and swallow the trees).
+  const scales = [1.32, 1.38, 1.34, 1.42];
   return scales[index % scales.length];
 }
 
