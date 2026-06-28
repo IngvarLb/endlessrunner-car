@@ -310,7 +310,8 @@ export class GameApp {
     this.runScene.setPassiveHooks({
       onWeakFail: () => this.runAbilities?.onWeakFail() ?? { type: "normal" },
       onApproachCar: () => this.runAbilities?.onApproachCar() ?? false,
-      catchWindowSec: () => this.runAbilities?.catchWindowSec()
+      catchWindowSec: () => this.runAbilities?.catchWindowSec(),
+      onCrash: (side) => this.resolveCrash(side)
     });
     this.stateMachine.transition("countdown", reason);
     this.runNumericCountdown();
@@ -454,31 +455,13 @@ export class GameApp {
         this.runScene.clearSiphonVfx(); // police gone — hide the mini black holes
       }
 
+      // Crashes no longer end the run (they cost speed; a rescue passive negates the loss —
+      // see resolveCrash). The only game-over is the police arrest, which arrives via
+      // consumeGameOver — Phase 3 wires it to the rivals escaping into the fog.
       const gameOver = this.runScene.consumeGameOver();
-      if (gameOver) {
-        // 狐 Zweites Leben saves a fatal collision; 将 Draufgänger survives it but
-        // brings the police down on you (a mistake during the chase ends the run).
-        const outcome =
-          gameOver.reason === "obstacle"
-            ? this.runAbilities?.onFatalHit(this.runScene.isPursued(), this.runScene.wasHitFromSide())
-            : undefined;
-        if (outcome?.survived) {
-          this.runScene.penalizeSpeed(); // a saved crash bleeds speed — you lose ground for it
-          if (outcome.pursuitSec !== undefined) {
-            this.audio?.playBoost(); // 将 powers through the wreck
-            this.runScene.openPursuit(outcome.pursuitSec);
-            this.showHudToast("将", "DRAUFGÄNGER", "POLIZEI!");
-          } else if (outcome.reason === "crumple") {
-            this.audio?.playSave(); // 赤 Knautschzone absorbs the crash
-            this.showHudToast("赤", "KNAUTSCHZONE", "ABGEFANGEN");
-          } else {
-            this.audio?.playSave(); // 狐 second-life rescue chime
-            this.showHudToast("狐", "ZWEITES LEBEN", "GERETTET");
-          }
-        } else if (this.stateMachine.canTransition("gameOver")) {
-          this.lastRunStats = this.runScene.getRunStats();
-          this.stateMachine.transition("gameOver", gameOver.reason);
-        }
+      if (gameOver && this.stateMachine.canTransition("gameOver")) {
+        this.lastRunStats = this.runScene.getRunStats();
+        this.stateMachine.transition("gameOver", gameOver.reason);
       }
     }
 
@@ -1873,6 +1856,27 @@ export class GameApp {
       this.hudSpeedoNum.textContent = String(Math.round(kmh));
     }
     this.hudSpeedo?.classList.toggle("is-redline", ratio > 0.82);
+  }
+
+  /**
+   * A crash happened — a rescue passive (狐 Zweites Leben / 将 Draufgänger / 赤 Knautschzone)
+   * now PROTECTS YOUR MOMENTUM instead of saving you from death: if it fires, the crash costs
+   * no speed (negated). Otherwise the crash bleeds a big chunk of speed (handled in the scene).
+   */
+  private resolveCrash(side: boolean): { negated: boolean } {
+    const outcome = this.runAbilities?.onFatalHit(false, side);
+    if (outcome?.survived) {
+      this.audio?.playSave();
+      if (outcome.reason === "crumple") {
+        this.showHudToast("赤", "KNAUTSCHZONE", "TEMPO GEHALTEN");
+      } else if (outcome.reason === "secondLife") {
+        this.showHudToast("狐", "ZWEITES LEBEN", "TEMPO GERETTET");
+      } else {
+        this.showHudToast("将", "DRAUFGÄNGER", "DURCHGEBRETTERT");
+      }
+      return { negated: true };
+    }
+    return { negated: false };
   }
 
   /** Per-frame: charge-ring fill/ready state + mastery level-up toast. */

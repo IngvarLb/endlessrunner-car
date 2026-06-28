@@ -32,6 +32,8 @@ export type PassiveHooks = {
   onApproachCar(): boolean;
   /** 龍 Zu schnell: catch-window length (s) after a weak fail, or undefined for the default. */
   catchWindowSec(): number | undefined;
+  /** A crash happened — a rescue passive (狐/将/赤) may protect your momentum (negated:true → no speed loss). */
+  onCrash(side: boolean): { negated: boolean };
 };
 import { CameraController } from "./CameraController";
 import { LightingRig } from "./LightingRig";
@@ -51,8 +53,6 @@ export type RunScene = AppScene & {
   getSpeedRatio(): number;
   /** Current display speed in arcade km/h — drives the bottom-left speedometer. */
   getSpeedKmh(): number;
-  /** Shave speed for a moment (an ability-saved crash) — drives the tacho dip + lost ground. */
-  penalizeSpeed(): void;
   consumeGameOver(): GameOverInfo | undefined;
   /** Capability bridge for ability effects (see RunAbilityController). */
   getEffectContext(): RunEffectContext;
@@ -424,9 +424,7 @@ export class RunSceneFactory {
       () => getRunSpeed() * runnerController.getSpeedMultiplier(),
       trafficDirector,
       ({ side }) => {
-        lastHitWasSide = side;
-        scoreSystem.resetCombo();
-        registerStrongFail("obstacle");
+        registerCrash(side);
       },
       ({ car, coins, cause }) => {
         cameraController.shake(0.18, 0.08);
@@ -1702,21 +1700,20 @@ export class RunSceneFactory {
       return merged;
     }
 
+    // A SMALL mistake (steered into the lane edge). No longer ends the run — it just shaves a
+    // little speed and slides the police up behind you (visible pressure). 赤 Knautschzone
+    // instead protects your momentum (no speed loss). [Phase 3: the lost ground is what lets
+    // the rivals escape into the fog → arrest.]
     function registerLightMistake(direction: -1 | 1): void {
       if (gameOverInfo) {
         return;
       }
 
-      // Any slip — whether an ability eats it or the police get a window — briefly costs
-      // speed (felt on the tacho; later it means losing ground to the rival racers).
-      runnerController.dipForMistake();
-
       const outcome = passiveHooks?.onWeakFail() ?? { type: "normal" };
       if (outcome.type === "absorbed") {
-        // 赤 Knautschzone: buffer eats the mistake — small stumble, no police window.
+        // 赤 Knautschzone: momentum protected — just a small stumble, no speed loss.
         runnerController.applyStumble(direction);
         cameraController.shake(0.18, 0.1);
-        cleanRunTimer = 0;
         events?.emit("runner:hit", {
           hit: {
             source: "chaser",
@@ -1729,17 +1726,17 @@ export class RunSceneFactory {
         return;
       }
       if (outcome.type === "coins" && outcome.amount > 0) {
-        scoreSystem.spendCoins(outcome.amount); // 桜 Sparbüchse: the mistake costs coins (then proceeds normally)
+        scoreSystem.spendCoins(outcome.amount); // 桜 Sparbüchse: the slip costs coins instead
       }
 
-      if (lightMistakeWindowTimer > 0) {
-        weakFails = 2;
-        registerStrongFail("weak-fails");
-        return;
-      }
-
-      weakFails = 1;
-      pressure = Math.max(pressure, 64);
+      runnerController.dipSmall();
+      weakFails = Math.min(2, weakFails + 1);
+      pressure = Math.max(pressure, 50);
+      // 龍 Zu schnell shrinks this window — the police slide up from behind for a shorter time.
+      lightMistakeWindowTimer = passiveHooks?.catchWindowSec() ?? lightMistakeCatchWindow;
+      cleanRunTimer = 0;
+      runnerController.applyStumble(direction);
+      cameraController.shake(0.26, 0.16);
       events?.emit("runner:hit", {
         hit: {
           source: "chaser",
@@ -1753,24 +1750,46 @@ export class RunSceneFactory {
         shieldConsumed: false,
         pressureAfter: pressure
       });
-      // 龍 Zu schnell shrinks this window (10 s → 1 s) — the police barely get a second chance.
-      lightMistakeWindowTimer = passiveHooks?.catchWindowSec() ?? lightMistakeCatchWindow;
-      cleanRunTimer = 0;
-      runnerController.applyStumble(direction);
-      cameraController.shake(0.26, 0.16);
     }
 
-    function registerStrongFail(reason: GameOverInfo["reason"]): void {
+    // A BIG mistake — a crash into a car. No longer an instant game over: it shaves a big
+    // chunk of speed (and rebuilds slowly) while the police bear down. A rescue passive
+    // (狐/将/赤) can negate the speed loss entirely — you barrel through with your momentum.
+    function registerCrash(side: boolean): void {
       if (gameOverInfo) {
         return;
       }
+      lastHitWasSide = side;
 
-      gameOverInfo = { reason };
+      const outcome = passiveHooks?.onCrash(side) ?? { negated: false };
+      if (outcome.negated) {
+        // Momentum protected — a hard jolt, but no speed loss.
+        runnerController.applyStumble(side ? 1 : -1);
+        cameraController.shake(0.34, 0.18);
+        events?.emit("runner:hit", {
+          hit: {
+            source: "obstacle",
+            severity: "minor",
+            worldPosition: { x: runnerController.getPosition().x, y: 0.45, z: runnerController.getPosition().z }
+          },
+          shieldConsumed: true,
+          pressureAfter: pressure
+        });
+        return;
+      }
+
+      runnerController.dipBig();
+      runnerController.applyStrongHit();
+      scoreSystem.resetCombo();
+      weakFails = Math.min(2, weakFails + 1);
       pressure = 100;
+      lightMistakeWindowTimer = lightMistakeCatchWindow;
+      cleanRunTimer = 0;
+      cameraController.shake(0.56, 0.34);
       events?.emit("runner:hit", {
         hit: {
-          source: reason === "weak-fails" ? "chaser" : "obstacle",
-          severity: "fatal",
+          source: "obstacle",
+          severity: "major",
           worldPosition: {
             x: runnerController.getPosition().x,
             y: 0.45,
@@ -1780,10 +1799,6 @@ export class RunSceneFactory {
         shieldConsumed: false,
         pressureAfter: pressure
       });
-      scoreSystem.resetCombo();
-      lightMistakeWindowTimer = lightMistakeCatchWindow;
-      runnerController.applyStrongHit();
-      cameraController.shake(0.58, 0.36);
     }
 
     function getRunStats(): RunStats {
@@ -1806,7 +1821,6 @@ export class RunSceneFactory {
       getRunStats,
       getSpeedRatio: () => (getRunSpeed() * runnerController.getSpeedMultiplier()) / maxSpeed,
       getSpeedKmh: () => getRunSpeed() * runnerController.getSpeedMultiplier() * SPEED_TO_KMH,
-      penalizeSpeed: () => runnerController.dipForMistake(),
       consumeGameOver,
       getEffectContext: () => effectContext,
       setPassiveHooks: (hooks: PassiveHooks) => {

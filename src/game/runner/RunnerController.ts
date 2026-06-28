@@ -29,14 +29,15 @@ const defaultOptions: RunnerControllerOptions = {
 // How long after a lane change a collision still counts as a "side" contact (not a rear-end).
 const LANE_CHANGE_GRACE = 0.4;
 
-// Speed-penalty model — every slip briefly shaves speed, which then eases back to full.
-// This makes long, clean stretches genuinely feel faster than choppy ones and gives each
-// mistake a tangible cost (the groundwork for losing ground to the rival racers later).
-const SPEED_RECOVER_K = 2.8; // exponential ease-back rate toward full speed
-const LANE_CHANGE_DIP = 0.085; // a lane switch shaves a little (weaving compounds it)
-const LANE_CHANGE_FLOOR = 0.68; // …but no single weave can drop you below this
-const MISTAKE_DIP = 0.5; // a mistake / ability-saved crash shaves a big chunk
-const MISTAKE_FLOOR = 0.5;
+// Speed-penalty model — mistakes shave speed, which then climbs back LINEARLY at a constant
+// rate, so a deeper loss takes proportionally longer to rebuild. A crash costs ~2× a small
+// slip → two small slips ≈ one crash. Lane changes are FREE (only mistakes/braking cost
+// speed). Speed never floors to a standstill (you keep crawling). The rival racers turn this
+// lost ground into the actual fail condition; numbers get tuned once they exist.
+const SPEED_RECOVER_RATE = 0.2; // penalty units regained per second (linear)
+const SMALL_MISTAKE_DIP = 0.24; // a small slip (steered into the lane edge)
+const BIG_MISTAKE_DIP = 0.48; // a crash into a car — ~2× a small slip
+const SPEED_PENALTY_FLOOR = 0.25; // even stacked crashes leave you crawling, not stopped
 
 export class RunnerController implements Collidable {
   readonly id = "runner";
@@ -90,10 +91,7 @@ export class RunnerController implements Collidable {
       this.laneChangeTimer = Math.max(0, this.laneChangeTimer - dt);
     }
     if (this.speedPenalty < 1) {
-      this.speedPenalty += (1 - this.speedPenalty) * Math.min(1, dt * SPEED_RECOVER_K);
-      if (this.speedPenalty > 0.999) {
-        this.speedPenalty = 1;
-      }
+      this.speedPenalty = Math.min(1, this.speedPenalty + SPEED_RECOVER_RATE * dt);
     }
 
     if (this.recoilTimer > 0) {
@@ -220,18 +218,18 @@ export class RunnerController implements Collidable {
     return this.speedPenalty;
   }
 
-  private dipSpeed(amount: number, floor: number): void {
-    this.speedPenalty = Math.max(floor, this.speedPenalty - amount);
+  private dipSpeed(amount: number): void {
+    this.speedPenalty = Math.max(SPEED_PENALTY_FLOOR, this.speedPenalty - amount);
   }
 
-  /** A lane change briefly shaves a little speed (weaving compounds it, down to a floor). */
-  dipForLaneChange(): void {
-    this.dipSpeed(LANE_CHANGE_DIP, LANE_CHANGE_FLOOR);
+  /** A small slip (steering into the lane edge) shaves a little speed. */
+  dipSmall(): void {
+    this.dipSpeed(SMALL_MISTAKE_DIP);
   }
 
-  /** A mistake or ability-saved crash shaves a big chunk of speed for a moment. */
-  dipForMistake(): void {
-    this.dipSpeed(MISTAKE_DIP, MISTAKE_FLOOR);
+  /** A crash shaves a big chunk — ~2× a small slip, so it takes much longer to rebuild. */
+  dipBig(): void {
+    this.dipSpeed(BIG_MISTAKE_DIP);
   }
 
   private moveLane(direction: -1 | 1): RunnerMoveResult {
@@ -248,7 +246,6 @@ export class RunnerController implements Collidable {
     this.lane = this.laneSystem.move(this.lane, direction);
     this.targetX = this.laneSystem.getLaneX(this.lane);
     this.laneChangeTimer = LANE_CHANGE_GRACE;
-    this.dipForLaneChange(); // a switch costs a little speed — clean straights feel fastest
 
     return {
       moved: true,
