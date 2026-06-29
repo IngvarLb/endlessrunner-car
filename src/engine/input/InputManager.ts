@@ -12,6 +12,10 @@ export class InputManager {
   private touchStart?: TouchPoint;
   private lastTapAt = 0;
   private enabled = true;
+  // Braking is a CONTINUOUS held action (not a one-shot buffered one): S / ArrowDown held,
+  // or a touch swiped down and held. `braking` mirrors the live held state.
+  private braking = false;
+  private brakingTouch = false; // the current touch became a downward brake-hold
 
   constructor(
     private readonly target: Window,
@@ -20,15 +24,26 @@ export class InputManager {
 
   bind(): void {
     this.target.addEventListener("keydown", this.handleKeyDown);
+    this.target.addEventListener("keyup", this.handleKeyUp);
     this.target.addEventListener("touchstart", this.handleTouchStart, { passive: true });
+    this.target.addEventListener("touchmove", this.handleTouchMove, { passive: false });
     this.target.addEventListener("touchend", this.handleTouchEnd, { passive: false });
   }
 
   unbind(): void {
     this.target.removeEventListener("keydown", this.handleKeyDown);
+    this.target.removeEventListener("keyup", this.handleKeyUp);
     this.target.removeEventListener("touchstart", this.handleTouchStart);
+    this.target.removeEventListener("touchmove", this.handleTouchMove);
     this.target.removeEventListener("touchend", this.handleTouchEnd);
     this.bufferedActions.length = 0;
+    this.braking = false;
+    this.brakingTouch = false;
+  }
+
+  /** True while the brake is held (S / ArrowDown, or a touch swiped down and held). */
+  isBraking(): boolean {
+    return this.enabled && this.braking;
   }
 
   update(): void {
@@ -56,17 +71,36 @@ export class InputManager {
 
   clearBuffer(): void {
     this.bufferedActions.length = 0;
+    this.braking = false;
+    this.brakingTouch = false;
   }
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (!enabled) {
       this.bufferedActions.length = 0;
+      this.braking = false;
+      this.brakingTouch = false;
     }
   }
 
+  private isBrakeKey(event: KeyboardEvent): boolean {
+    return event.key === "ArrowDown" || event.key.toLowerCase() === "s";
+  }
+
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (!this.enabled || !this.config.keyboardEnabled || event.repeat || this.isTypingTarget(event.target)) {
+    if (!this.enabled || !this.config.keyboardEnabled || this.isTypingTarget(event.target)) {
+      return;
+    }
+
+    // Brake (S / ArrowDown): a held action — set the state and keep it while the key repeats.
+    if (this.isBrakeKey(event)) {
+      this.braking = true;
+      event.preventDefault();
+      return;
+    }
+
+    if (event.repeat) {
       return;
     }
 
@@ -82,6 +116,12 @@ export class InputManager {
     this.bufferAction(action, "keyboard");
   };
 
+  private readonly handleKeyUp = (event: KeyboardEvent): void => {
+    if (this.isBrakeKey(event)) {
+      this.braking = false;
+    }
+  };
+
   private readonly handleTouchStart = (event: TouchEvent): void => {
     if (!this.enabled || !this.config.touchEnabled || event.changedTouches.length === 0) {
       return;
@@ -93,9 +133,37 @@ export class InputManager {
       y: touch.clientY,
       time: performance.now()
     };
+    this.brakingTouch = false;
+  };
+
+  private readonly handleTouchMove = (event: TouchEvent): void => {
+    if (!this.enabled || !this.config.touchEnabled || !this.touchStart || event.changedTouches.length === 0) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaY = touch.clientY - this.touchStart.y;
+    const deltaX = touch.clientX - this.touchStart.x;
+    // A downward, predominantly-vertical drag past the threshold engages the brake; holding
+    // the finger down keeps it engaged (release = touchend = brake off).
+    if (!this.brakingTouch && deltaY > this.config.swipeThresholdPx && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+      this.brakingTouch = true;
+    }
+    if (this.brakingTouch) {
+      this.braking = true;
+      event.preventDefault(); // keep the brake-drag from scrolling the page
+    }
   };
 
   private readonly handleTouchEnd = (event: TouchEvent): void => {
+    if (this.brakingTouch) {
+      // The touch was a brake-hold — release the brake and don't also fire a swipe action.
+      this.braking = false;
+      this.brakingTouch = false;
+      this.touchStart = undefined;
+      return;
+    }
+
     if (!this.enabled || !this.config.touchEnabled || !this.touchStart || event.changedTouches.length === 0) {
       return;
     }

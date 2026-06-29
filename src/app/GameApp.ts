@@ -1342,6 +1342,9 @@ export class GameApp {
       return;
     }
 
+    // Brake is a held action (S / ArrowDown / swipe-down-hold) — mirror the live state each frame.
+    this.runScene.setBraking(this.input.isBraking());
+
     if (this.input.consumeAction("moveLeft")) {
       this.runScene.moveLane(1);
     }

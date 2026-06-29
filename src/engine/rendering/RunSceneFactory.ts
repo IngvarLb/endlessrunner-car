@@ -53,6 +53,8 @@ export type RunScene = AppScene & {
   getSpeedRatio(): number;
   /** Current display speed in arcade km/h — drives the bottom-left speedometer. */
   getSpeedKmh(): number;
+  /** Hold the brake (S / ArrowDown / swipe-down) — sheds speed with a realistic braking distance. */
+  setBraking(on: boolean): void;
   /** Current macro-biome leg (0 village · 1 neon · 2 forest) + whether the village is in its autumn season — drives the per-biome soundtrack. */
   getMacroBiome(): { legIndex: number; autumn: boolean };
   consumeGameOver(): GameOverInfo | undefined;
@@ -84,6 +86,14 @@ const linearSpeedRampDistance = 300;
 const linearSpeedGain = 3.5;
 const maxSpeed = 26; // very fast late game (was 18.5)
 const lateRampDistance = 680;
+// Braking — a held brake sheds real speed with a car-like feel: roughly constant deceleration
+// (so braking DISTANCE grows ∝ v² — long from high speed), eased gentler at the very top end
+// and firmer as you slow; releasing spools you back up to cruise. You never fully stop (it's a race).
+const BRAKE_DECEL = 11; // base deceleration, m/s²
+const BRAKE_HISPEED_EASE = 0.45; // at top speed the brake bites only (1-this) as hard → longer high-speed braking
+const BRAKE_FAST_REF = 28; // speed (m/s) at which the high-speed easing reaches full
+const BRAKE_MIN_SPEED = 4; // brake down to ~32 km/h, never to a standstill
+const BRAKE_ENGINE_REGAIN = 12; // m/s² you spool back up after releasing the brake
 const introChaserDuration = 4.8;
 const lightMistakeCatchWindow = 10;
 const introChaserZ = -3.15;
@@ -408,6 +418,11 @@ export class RunSceneFactory {
     let distance = 0;
     let pressure = 0;
     let weakFails = 0;
+    let braking = false; // S / ArrowDown / swipe-down held — the brake
+    let brakeLoss = 0; // m/s the held brake has shaved off cruise speed (eases back on release)
+    // The car's real current speed: distance-ramped cruise × multipliers, minus what the brake has shed.
+    const currentSpeed = (): number =>
+      Math.max(0, getRunSpeed() * runnerController.getSpeedMultiplier() - brakeLoss);
     let gameOverInfo: GameOverInfo | undefined;
     let cleanRunTimer = 0;
     let introChaserTimer = introChaserDuration;
@@ -423,7 +438,7 @@ export class RunSceneFactory {
       laneSystem,
       collisionSystem,
       () => distance,
-      () => getRunSpeed() * runnerController.getSpeedMultiplier(),
+      () => currentSpeed(),
       trafficDirector,
       ({ side }) => {
         registerCrash(side);
@@ -928,6 +943,8 @@ export class RunSceneFactory {
       scoreSystem.reset();
       pressure = 0;
       weakFails = 0;
+      braking = false;
+      brakeLoss = 0;
       gameOverInfo = undefined;
       cleanRunTimer = 0;
       introChaserTimer = introChaserDuration;
@@ -1025,7 +1042,18 @@ export class RunSceneFactory {
 
     const update = (dt: number, elapsed: number, state: GameState): void => {
       const isRunning = state === "running";
-      const activeSpeed = isRunning ? getRunSpeed() * runnerController.getSpeedMultiplier() : 0;
+      const cruiseSpeed = isRunning ? getRunSpeed() * runnerController.getSpeedMultiplier() : 0;
+      // Braking: while held, shed speed at a (mostly) constant deceleration — eased gentler at
+      // the very top so high-speed braking takes much more road (distance ∝ v²); releasing spools
+      // back up to cruise. Capped so the car never drops below a slow crawl.
+      if (isRunning && braking) {
+        const vNow = Math.max(0, cruiseSpeed - brakeLoss);
+        const decel = BRAKE_DECEL * (1 - BRAKE_HISPEED_EASE * Math.min(1, vNow / BRAKE_FAST_REF));
+        brakeLoss = Math.min(Math.max(0, cruiseSpeed - BRAKE_MIN_SPEED), brakeLoss + decel * dt);
+      } else {
+        brakeLoss = Math.max(0, brakeLoss - BRAKE_ENGINE_REGAIN * dt);
+      }
+      const activeSpeed = Math.max(0, cruiseSpeed - brakeLoss);
 
       if (isRunning) {
         distance += activeSpeed * dt;
@@ -1284,7 +1312,7 @@ export class RunSceneFactory {
         restoreLanes: (minReactionSec) => {
           // Convert reaction time to a distance via the current closing speed
           // (player speed minus traffic's ~5 m/s) so the safe band is fair at any speed.
-          const closing = Math.max(2, getRunSpeed() * runnerController.getSpeedMultiplier() - 5);
+          const closing = Math.max(2, currentSpeed() - 5);
           trafficSystem.restoreLanes(minReactionSec * closing);
         },
         setRamMode: (coins) => trafficSystem.setRamMode(coins),
@@ -1821,8 +1849,11 @@ export class RunSceneFactory {
       moveLane,
       activateBoost,
       getRunStats,
-      getSpeedRatio: () => (getRunSpeed() * runnerController.getSpeedMultiplier()) / maxSpeed,
-      getSpeedKmh: () => getRunSpeed() * runnerController.getSpeedMultiplier() * SPEED_TO_KMH,
+      getSpeedRatio: () => currentSpeed() / maxSpeed,
+      getSpeedKmh: () => currentSpeed() * SPEED_TO_KMH,
+      setBraking: (on: boolean) => {
+        braking = on;
+      },
       getMacroBiome: () => {
         const legIndex = biomeManager.biomeIndexForZ(distance);
         return { legIndex, autumn: legIndex === 0 && seasonTarget >= 0.5 };
