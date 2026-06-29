@@ -109,7 +109,7 @@ const introChaserSideOffset = 1.05;
 // closer you get the harder they defend (up past your pace), so you can never overtake. Slip
 // up and your real speed drops below their cruise → you fall back and must earn the gap again.
 const RIVAL_START_GAP = 15; // m ahead at the start (clearly in view)
-const RIVAL_BASE_FRACTION = 0.88; // far-away cruise as a fraction of your clean pace (you're faster when clean)
+const RIVAL_BASE_FRACTION = 0.95; // far-away cruise as a fraction of your clean pace (you're faster when clean)
 const RIVAL_DEFEND_FRACTION = 1.16; // right on their bumper they accelerate to this × pace → never overtakeable
 const RIVAL_PROX_GAP = 18; // within this gap they start defending (ramping up toward DEFEND)
 const RIVAL_MIN_GAP = 8; // closest you can get — full defend here
@@ -139,7 +139,7 @@ export class RunSceneFactory {
     const scene = new THREE.Scene();
     scene.name = "run_scene";
     scene.background = new THREE.Color(0x58c7f3);
-    scene.fog = new THREE.Fog(0x58c7f3, 24, 72);
+    scene.fog = new THREE.Fog(0x58c7f3, 28, 104);
 
     const sceneLights = LightingRig.addTo(scene, config.quality);
     // 将 Nachtjagd night fade — lerp lights + sky/fog between day and a deep indigo night.
@@ -204,7 +204,7 @@ export class RunSceneFactory {
       sky: new THREE.Color(0xaebfbd), sun: new THREE.Color(0xcfe0d2), hemi: new THREE.Color(0x9fc0b8),
       hemiGround: new THREE.Color(0x2f3d2c), hemiScale: 0.92, sunScale: 0.5,
       path: new THREE.Color(0x6f7857), grass: new THREE.Color(0x4f7a3a), line: new THREE.Color(0x6e7a5e),
-      fogNear: 17, fogFar: 48 // tight misty fog — distant cedars/peaks dissolve into the haze
+      fogNear: 20, fogFar: 66 // misty fog — distant cedars/peaks dissolve into the haze
     };
     // Village preset, rebuilt each frame from seasonLevel (summer ↔ autumn momiji).
     const villagePreset: AtmoPreset = {

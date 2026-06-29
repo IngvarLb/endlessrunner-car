@@ -8,7 +8,7 @@ const CAM_FOLLOW = 0.62; // how far the camera body shifts toward the player's l
 const TARGET_FOLLOW = 0.82; // how far the look-at point shifts (keeps the player framed)
 
 export class CameraController {
-  readonly camera = new THREE.PerspectiveCamera(58, 1, 0.1, 120);
+  readonly camera = new THREE.PerspectiveCamera(58, 1, 0.1, 140);
   private readonly target = new THREE.Vector3(0, 1.25, 8);
   private readonly desiredPosition = new THREE.Vector3(0, 4.7, -8.4);
   private followX = 0;
