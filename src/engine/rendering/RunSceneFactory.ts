@@ -384,17 +384,23 @@ export class RunSceneFactory {
       bounds: vehicle.run.bounds
     });
     // 好敵手 The two rivals you race — sporty cars the rubber-band holds just ahead, in the
-    // outer lanes. (Placeholder models; Phase 4 gives them a dedicated unlockable car.)
+    // outer lanes. (Placeholder models; Phase 4 gives them a dedicated unlockable car.) Each
+    // wears a bright floating beacon so you can pick them out of traffic + track them into the fog.
+    const rivalBeaconMat = new THREE.MeshBasicMaterial({ color: 0x2ff0ff });
+    const rivalBeaconGeo = new THREE.ConeGeometry(0.32, 0.5, 4);
     const rivals = [
-      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), laneX: laneSystem.getLaneX(-1), ahead: 0 },
-      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), laneX: laneSystem.getLaneX(1), ahead: RIVAL_LANE_OFFSET }
+      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), beacon: new THREE.Mesh(rivalBeaconGeo, rivalBeaconMat), laneX: laneSystem.getLaneX(-1), ahead: 0 },
+      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), beacon: new THREE.Mesh(rivalBeaconGeo, rivalBeaconMat), laneX: laneSystem.getLaneX(1), ahead: RIVAL_LANE_OFFSET }
     ];
     for (const r of rivals) {
       r.mesh.rotation.y = vehicle.run.forwardRotationY; // drive the same way as the player
       r.mesh.scale.setScalar(0.92);
       r.mesh.visible = false;
+      r.beacon.rotation.x = Math.PI; // point the little pyramid DOWN at the car (a chevron marker)
+      r.beacon.visible = false;
     }
     let rivalGap = RIVAL_START_GAP; // m the nearer rival sits ahead of the player
+    let rivalBeaconPhase = 0; // drives the beacon bob/spin
     const scoreSystem = new ScoreSystem();
     const biome = FEUDAL_JAPAN_BIOME_CONTENT;
     const trackLoopLength = biome.track.segmentLength * biome.track.segmentCount;
@@ -548,7 +554,7 @@ export class RunSceneFactory {
     });
 
     world.name = "playable_feudal_japan_world";
-    scene.add(world, runner, chaser, speedLines, blackHole, rivals[0].mesh, rivals[1].mesh);
+    scene.add(world, runner, chaser, speedLines, blackHole, rivals[0].mesh, rivals[1].mesh, rivals[0].beacon, rivals[1].beacon);
     collisionSystem.register(runnerController);
 
     chaser.position.set(introChaserSideOffset, 0, introChaserZ);
@@ -971,6 +977,7 @@ export class RunSceneFactory {
       rivalGap = RIVAL_START_GAP;
       for (const r of rivals) {
         r.mesh.visible = false;
+        r.beacon.visible = false;
       }
       gameOverInfo = undefined;
       cleanRunTimer = 0;
@@ -1576,6 +1583,7 @@ export class RunSceneFactory {
       if (!isRunning) {
         for (const r of rivals) {
           r.mesh.visible = false;
+          r.beacon.visible = false;
         }
         return;
       }
@@ -1584,9 +1592,15 @@ export class RunSceneFactory {
       let rivalSpeed = pace - RIVAL_RUBBER_K * (rivalGap - RIVAL_TARGET_GAP);
       rivalSpeed = Math.max(pace * RIVAL_SPEED_MIN, Math.min(pace * RIVAL_SPEED_MAX, rivalSpeed));
       rivalGap = Math.max(RIVAL_MIN_GAP, rivalGap + (rivalSpeed - player) * dt);
+      rivalBeaconPhase += dt;
+      const bob = Math.sin(rivalBeaconPhase * 3) * 0.12;
       for (const r of rivals) {
+        const z = rivalGap + r.ahead;
         r.mesh.visible = true;
-        r.mesh.position.set(r.laneX, 0, rivalGap + r.ahead); // ahead in scene space; fog fades them as the gap grows
+        r.mesh.position.set(r.laneX, 0, z); // ahead in scene space; fog fades them as the gap grows
+        r.beacon.visible = true;
+        r.beacon.position.set(r.laneX, 2.3 + bob, z); // a bright chevron hovering over the car
+        r.beacon.rotation.y = rivalBeaconPhase * 2; // slow spin so it reads as a live marker
       }
     }
 
