@@ -103,16 +103,16 @@ const chaserHideZ = -9.5; // hide once it has slid off the bottom (just behind t
 const chaserApproachLerp = 5.2; // fast to appear
 const chaserRecedeSpeed = 0.9; // metres/second — slow, steady fall-back (takes several seconds)
 const introChaserSideOffset = 1.05;
-// 好敵手 Rivals — two pace cars racing AHEAD. Rubber-banded BOTH ways around the race pace
-// (= the clean distance-ramped speed): the closer you get the faster they go (never
-// overtakeable), the further you fall the more they ease off (catchable when you drive clean).
-// Mistakes + braking drop your real speed below the pace → they pull toward the fog.
+// 好敵手 Rivals — two pace cars racing AHEAD. Their speed depends ONLY on how close you are
+// (no reverse rubber-band — they never slow down to wait for you). Far away they cruise at a
+// fraction of YOUR clean pace, so a clean run reels them in by being genuinely faster; the
+// closer you get the harder they defend (up past your pace), so you can never overtake. Slip
+// up and your real speed drops below their cruise → you fall back and must earn the gap again.
 const RIVAL_START_GAP = 15; // m ahead at the start (clearly in view)
-const RIVAL_TARGET_GAP = 20; // m ahead they settle at when you match the pace
-const RIVAL_RUBBER_K = 0.18; // rubber-band strength: speed adjust (m/s) per metre of gap error
-const RIVAL_SPEED_MIN = 0.82; // rival speed floor as a fraction of pace (they keep going — no waiting)
-const RIVAL_SPEED_MAX = 1.16; // …and ceiling (they edge ahead, never run off absurdly)
-const RIVAL_MIN_GAP = 8; // they never let you pull right onto their bumper
+const RIVAL_BASE_FRACTION = 0.88; // far-away cruise as a fraction of your clean pace (you're faster when clean)
+const RIVAL_DEFEND_FRACTION = 1.16; // right on their bumper they accelerate to this × pace → never overtakeable
+const RIVAL_PROX_GAP = 18; // within this gap they start defending (ramping up toward DEFEND)
+const RIVAL_MIN_GAP = 8; // closest you can get — full defend here
 const RIVAL_LANE_OFFSET = 6; // the second rival rides this far further ahead
 // 鬼 Schwarzes Loch: a fixed point high in the sky (scene space) that tapped cars are sucked UP into.
 const BLACK_HOLE_POS = { x: 0, y: 9, z: 13 };
@@ -383,24 +383,43 @@ export class RunSceneFactory {
       forwardRotationY: vehicle.run.forwardRotationY,
       bounds: vehicle.run.bounds
     });
-    // 好敵手 The two rivals you race — sporty cars the rubber-band holds just ahead, in the
-    // outer lanes. (Placeholder models; Phase 4 gives them a dedicated unlockable car.) Each
-    // wears a bright floating beacon so you can pick them out of traffic + track them into the fog.
-    const rivalBeaconMat = new THREE.MeshBasicMaterial({ color: 0x2ff0ff });
-    const rivalBeaconGeo = new THREE.ConeGeometry(0.32, 0.5, 4);
+    // 好敵手 The two rivals you race — sporty cars held just ahead, in the outer lanes.
+    // (Placeholder models; Phase 4 gives them a dedicated unlockable car.) Each floats its
+    // licence-plate number above it (just the text, no plate) so you can pick it out of traffic
+    // + track it into the fog. A billboard sprite from a canvas texture — always faces the camera.
+    const makePlateLabel = (text: string): THREE.Sprite => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d")!;
+      ctx.font = "900 64px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 11;
+      ctx.strokeStyle = "rgba(8,10,16,0.92)"; // dark outline so the bare text reads on any background
+      ctx.strokeText(text, 128, 70);
+      ctx.fillStyle = "#eafdff"; // bright plate text
+      ctx.fillText(text, 128, 70);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      tex.anisotropy = 4;
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+      sprite.scale.set(2.4, 1.2, 1);
+      return sprite;
+    };
     const rivals = [
-      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), beacon: new THREE.Mesh(rivalBeaconGeo, rivalBeaconMat), laneX: laneSystem.getLaneX(-1), ahead: 0 },
-      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), beacon: new THREE.Mesh(rivalBeaconGeo, rivalBeaconMat), laneX: laneSystem.getLaneX(1), ahead: RIVAL_LANE_OFFSET }
+      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), plate: makePlateLabel("わ 12-34"), laneX: laneSystem.getLaneX(-1), ahead: 0 },
+      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), plate: makePlateLabel("を 56-78"), laneX: laneSystem.getLaneX(1), ahead: RIVAL_LANE_OFFSET }
     ];
     for (const r of rivals) {
       r.mesh.rotation.y = vehicle.run.forwardRotationY; // drive the same way as the player
       r.mesh.scale.setScalar(0.92);
       r.mesh.visible = false;
-      r.beacon.rotation.x = Math.PI; // point the little pyramid DOWN at the car (a chevron marker)
-      r.beacon.visible = false;
+      r.plate.visible = false;
     }
     let rivalGap = RIVAL_START_GAP; // m the nearer rival sits ahead of the player
-    let rivalBeaconPhase = 0; // drives the beacon bob/spin
+    let rivalBeaconPhase = 0; // drives the plate's gentle bob
     const scoreSystem = new ScoreSystem();
     const biome = FEUDAL_JAPAN_BIOME_CONTENT;
     const trackLoopLength = biome.track.segmentLength * biome.track.segmentCount;
@@ -554,7 +573,7 @@ export class RunSceneFactory {
     });
 
     world.name = "playable_feudal_japan_world";
-    scene.add(world, runner, chaser, speedLines, blackHole, rivals[0].mesh, rivals[1].mesh, rivals[0].beacon, rivals[1].beacon);
+    scene.add(world, runner, chaser, speedLines, blackHole, rivals[0].mesh, rivals[1].mesh, rivals[0].plate, rivals[1].plate);
     collisionSystem.register(runnerController);
 
     chaser.position.set(introChaserSideOffset, 0, introChaserZ);
@@ -977,7 +996,7 @@ export class RunSceneFactory {
       rivalGap = RIVAL_START_GAP;
       for (const r of rivals) {
         r.mesh.visible = false;
-        r.beacon.visible = false;
+        r.plate.visible = false;
       }
       gameOverInfo = undefined;
       cleanRunTimer = 0;
@@ -1583,24 +1602,25 @@ export class RunSceneFactory {
       if (!isRunning) {
         for (const r of rivals) {
           r.mesh.visible = false;
-          r.beacon.visible = false;
+          r.plate.visible = false;
         }
         return;
       }
       const pace = getRunSpeed(); // the clean, distance-ramped race pace
       const player = currentSpeed(); // your real speed (penalty + braking folded in)
-      let rivalSpeed = pace - RIVAL_RUBBER_K * (rivalGap - RIVAL_TARGET_GAP);
-      rivalSpeed = Math.max(pace * RIVAL_SPEED_MIN, Math.min(pace * RIVAL_SPEED_MAX, rivalSpeed));
+      // Proximity-only speed: far → BASE_FRACTION of pace (slower than a clean you); on their
+      // bumper → DEFEND_FRACTION (faster than you). No floor below BASE → they never wait for you.
+      const defend = Math.max(0, Math.min(1, (RIVAL_PROX_GAP - rivalGap) / (RIVAL_PROX_GAP - RIVAL_MIN_GAP)));
+      const rivalSpeed = pace * (RIVAL_BASE_FRACTION + (RIVAL_DEFEND_FRACTION - RIVAL_BASE_FRACTION) * defend);
       rivalGap = Math.max(RIVAL_MIN_GAP, rivalGap + (rivalSpeed - player) * dt);
       rivalBeaconPhase += dt;
-      const bob = Math.sin(rivalBeaconPhase * 3) * 0.12;
+      const bob = Math.sin(rivalBeaconPhase * 3) * 0.1;
       for (const r of rivals) {
         const z = rivalGap + r.ahead;
         r.mesh.visible = true;
         r.mesh.position.set(r.laneX, 0, z); // ahead in scene space; fog fades them as the gap grows
-        r.beacon.visible = true;
-        r.beacon.position.set(r.laneX, 2.3 + bob, z); // a bright chevron hovering over the car
-        r.beacon.rotation.y = rivalBeaconPhase * 2; // slow spin so it reads as a live marker
+        r.plate.visible = true;
+        r.plate.position.set(r.laneX, 2.55 + bob, z); // the plate number floats over the car
       }
     }
 
