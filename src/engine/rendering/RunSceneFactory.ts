@@ -986,6 +986,98 @@ export class RunSceneFactory {
       }
     }
 
+    // 制動痕 Braking skid marks (Bremsspur): two dark strips the rear tires lay on the asphalt
+    // while braking hard at speed. Parented to `world` so each mark stays put on the road, scrolls
+    // backward as the car drives on, and fades out. Pooled ring buffer — no per-frame allocation.
+    const SKID_POOL = 120; // mark segments (60 left/right pairs)
+    const SKID_EMIT_STEP = 0.5; // metres of travel between emitted pairs → near-continuous strips
+    const SKID_MIN_SPEED = 3; // m/s — marks persist through most of a hard brake (it sheds speed fast)
+    const SKID_ARM_DELAY = 0.1; // s of held brake before the trail begins (feather-taps don't mark)
+    const SKID_FADE = 1.6; // s for a laid segment to fade from full to gone
+    const SKID_REAR_OFFSET = 0.55; // rear tires sit at x = runnerX ± this
+    const SKID_BASE_OPACITY = 0.72; // opacity of a fresh mark at moderate braking
+    const skidGeo = new THREE.PlaneGeometry(0.22, 0.45); // ~tire-width × short segment
+    skidGeo.rotateX(-Math.PI / 2); // lay it flat on the road
+    type SkidMark = { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; localZ: number; age: number; peak: number; active: boolean };
+    const skidMarks: SkidMark[] = [];
+    for (let i = 0; i < SKID_POOL; i += 1) {
+      const mat = new THREE.MeshBasicMaterial({ color: 0x120f0c, transparent: true, opacity: 0, depthWrite: false });
+      const mesh = new THREE.Mesh(skidGeo, mat);
+      mesh.position.y = 0.04; // just above the road to avoid z-fighting
+      mesh.visible = false;
+      world.add(mesh);
+      skidMarks.push({ mesh, mat, localZ: 0, age: 0, peak: 0, active: false });
+    }
+    let skidNext = 0; // ring-buffer cursor
+    let skidSinceEmit = 0; // metres travelled since the last emitted pair
+    let skidBrakeHeld = 0; // s the brake has been continuously held at speed
+
+    const clearSkidMarks = (): void => {
+      for (const s of skidMarks) {
+        s.active = false;
+        s.mesh.visible = false;
+        s.mat.opacity = 0;
+      }
+      skidNext = 0;
+      skidSinceEmit = 0;
+      skidBrakeHeld = 0;
+    };
+
+    // Lay one segment at (x, localZ) and stamp its starting opacity (harder braking → darker).
+    const laySkidSegment = (x: number, localZ: number, peak: number): void => {
+      const s = skidMarks[skidNext];
+      skidNext = (skidNext + 1) % SKID_POOL;
+      s.mesh.position.x = x;
+      s.mesh.position.z = localZ;
+      s.localZ = localZ;
+      s.age = 0;
+      s.peak = peak;
+      s.active = true;
+      s.mesh.visible = true;
+      s.mat.opacity = peak;
+    };
+
+    function updateSkidMarks(dt: number, isRunning: boolean): void {
+      if (!isRunning) {
+        if (skidMarks.some((s) => s.active)) clearSkidMarks(); // hide all marks off-run
+        return;
+      }
+      const speed = currentSpeed();
+      const skidding = braking && speed > SKID_MIN_SPEED;
+      if (skidding) {
+        skidBrakeHeld += dt;
+        if (skidBrakeHeld >= SKID_ARM_DELAY) {
+          skidSinceEmit += speed * dt;
+          // Harder braking (more shed speed) → darker, up to a cap.
+          const peak = Math.min(0.92, SKID_BASE_OPACITY + brakeLoss * 0.02);
+          const runnerX = runnerController.getPosition().x;
+          while (skidSinceEmit >= SKID_EMIT_STEP) {
+            skidSinceEmit -= SKID_EMIT_STEP;
+            // local z = distance places the pair under the rear tires right now.
+            laySkidSegment(runnerX - SKID_REAR_OFFSET, distance, peak);
+            laySkidSegment(runnerX + SKID_REAR_OFFSET, distance, peak);
+          }
+        }
+      } else {
+        skidBrakeHeld = 0;
+        skidSinceEmit = 0;
+      }
+
+      // Fade laid marks by age, and recycle once faded out or scrolled well behind the camera.
+      for (const s of skidMarks) {
+        if (!s.active) continue;
+        s.age += dt;
+        const fade = 1 - s.age / SKID_FADE;
+        if (fade <= 0 || s.localZ - distance < -20) {
+          s.active = false;
+          s.mesh.visible = false;
+          s.mat.opacity = 0;
+        } else {
+          s.mat.opacity = s.peak * fade;
+        }
+      }
+    }
+
     const resetRun = (): void => {
       distance = 0;
       scoreSystem.reset();
@@ -1007,6 +1099,7 @@ export class RunSceneFactory {
       chaserWanted = false;
       chaserReceding = false;
       world.position.z = 0;
+      clearSkidMarks();
       trafficDirector.reset(); // fresh procedural sequence — every run different
       resetWorldPieces();
       runnerController.reset();
@@ -1146,6 +1239,7 @@ export class RunSceneFactory {
       updateCoinSparkles(dt);
       updateChaser(dt, elapsed, isRunning);
       updateRivals(dt, isRunning);
+      updateSkidMarks(dt, isRunning);
 
       world.position.z = -distance;
       cameraController.update(dt, elapsed, state, isRunning ? runnerController.getPosition().x : 0);
