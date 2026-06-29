@@ -103,6 +103,17 @@ const chaserHideZ = -9.5; // hide once it has slid off the bottom (just behind t
 const chaserApproachLerp = 5.2; // fast to appear
 const chaserRecedeSpeed = 0.9; // metres/second — slow, steady fall-back (takes several seconds)
 const introChaserSideOffset = 1.05;
+// 好敵手 Rivals — two pace cars racing AHEAD. Rubber-banded BOTH ways around the race pace
+// (= the clean distance-ramped speed): the closer you get the faster they go (never
+// overtakeable), the further you fall the more they ease off (catchable when you drive clean).
+// Mistakes + braking drop your real speed below the pace → they pull toward the fog.
+const RIVAL_START_GAP = 15; // m ahead at the start (clearly in view)
+const RIVAL_TARGET_GAP = 20; // m ahead they settle at when you match the pace
+const RIVAL_RUBBER_K = 0.18; // rubber-band strength: speed adjust (m/s) per metre of gap error
+const RIVAL_SPEED_MIN = 0.82; // rival speed floor as a fraction of pace (they keep going — no waiting)
+const RIVAL_SPEED_MAX = 1.16; // …and ceiling (they edge ahead, never run off absurdly)
+const RIVAL_MIN_GAP = 8; // they never let you pull right onto their bumper
+const RIVAL_LANE_OFFSET = 6; // the second rival rides this far further ahead
 // 鬼 Schwarzes Loch: a fixed point high in the sky (scene space) that tapped cars are sucked UP into.
 const BLACK_HOLE_POS = { x: 0, y: 9, z: 13 };
 // 鬼 Anzapfen: only the nearest cars within this many metres ahead bleed coins.
@@ -372,6 +383,18 @@ export class RunSceneFactory {
       forwardRotationY: vehicle.run.forwardRotationY,
       bounds: vehicle.run.bounds
     });
+    // 好敵手 The two rivals you race — sporty cars the rubber-band holds just ahead, in the
+    // outer lanes. (Placeholder models; Phase 4 gives them a dedicated unlockable car.)
+    const rivals = [
+      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), laneX: laneSystem.getLaneX(-1), ahead: 0 },
+      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), laneX: laneSystem.getLaneX(1), ahead: RIVAL_LANE_OFFSET }
+    ];
+    for (const r of rivals) {
+      r.mesh.rotation.y = vehicle.run.forwardRotationY; // drive the same way as the player
+      r.mesh.scale.setScalar(0.92);
+      r.mesh.visible = false;
+    }
+    let rivalGap = RIVAL_START_GAP; // m the nearer rival sits ahead of the player
     const scoreSystem = new ScoreSystem();
     const biome = FEUDAL_JAPAN_BIOME_CONTENT;
     const trackLoopLength = biome.track.segmentLength * biome.track.segmentCount;
@@ -525,7 +548,7 @@ export class RunSceneFactory {
     });
 
     world.name = "playable_feudal_japan_world";
-    scene.add(world, runner, chaser, speedLines, blackHole);
+    scene.add(world, runner, chaser, speedLines, blackHole, rivals[0].mesh, rivals[1].mesh);
     collisionSystem.register(runnerController);
 
     chaser.position.set(introChaserSideOffset, 0, introChaserZ);
@@ -945,6 +968,10 @@ export class RunSceneFactory {
       weakFails = 0;
       braking = false;
       brakeLoss = 0;
+      rivalGap = RIVAL_START_GAP;
+      for (const r of rivals) {
+        r.mesh.visible = false;
+      }
       gameOverInfo = undefined;
       cleanRunTimer = 0;
       introChaserTimer = introChaserDuration;
@@ -1092,6 +1119,7 @@ export class RunSceneFactory {
       updateMoon(dt);
       updateCoinSparkles(dt);
       updateChaser(dt, elapsed, isRunning);
+      updateRivals(dt, isRunning);
 
       world.position.z = -distance;
       cameraController.update(dt, elapsed, state, isRunning ? runnerController.getPosition().x : 0);
@@ -1537,6 +1565,28 @@ export class RunSceneFactory {
         if (m.position.y < -3.5) {
           seedPetal(d, 6); // recycle to the top of the field
         }
+      }
+    }
+
+    // 好敵手 The two rivals racing ahead. Their speed rubber-bands around the clean race pace
+    // based on the current gap (closer → faster, so never overtakeable; farther → slower, so
+    // catchable when you drive clean). Your mistakes + braking drop your real speed below the
+    // pace, so the gap grows and they pull toward the fog. [Phase 3b: gap in the fog for 10 s = lose.]
+    function updateRivals(dt: number, isRunning: boolean): void {
+      if (!isRunning) {
+        for (const r of rivals) {
+          r.mesh.visible = false;
+        }
+        return;
+      }
+      const pace = getRunSpeed(); // the clean, distance-ramped race pace
+      const player = currentSpeed(); // your real speed (penalty + braking folded in)
+      let rivalSpeed = pace - RIVAL_RUBBER_K * (rivalGap - RIVAL_TARGET_GAP);
+      rivalSpeed = Math.max(pace * RIVAL_SPEED_MIN, Math.min(pace * RIVAL_SPEED_MAX, rivalSpeed));
+      rivalGap = Math.max(RIVAL_MIN_GAP, rivalGap + (rivalSpeed - player) * dt);
+      for (const r of rivals) {
+        r.mesh.visible = true;
+        r.mesh.position.set(r.laneX, 0, rivalGap + r.ahead); // ahead in scene space; fog fades them as the gap grows
       }
     }
 
