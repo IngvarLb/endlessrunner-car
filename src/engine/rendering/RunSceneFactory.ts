@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { GameEvents } from "../../app/GameEvents";
-import type { GameConfig } from "../../app/GameConfig";
+import type { DifficultyMode, GameConfig } from "../../app/GameConfig";
 import type { GameState } from "../../game/state/GameStateTypes";
 import { CollisionSystem } from "../physics/CollisionSystem";
 import { CollectibleSystem } from "../../game/collectibles/CollectibleSystem";
@@ -55,6 +55,8 @@ export type RunScene = AppScene & {
   getSpeedKmh(): number;
   /** Hold the brake (S / ArrowDown / swipe-down) — sheds speed with a realistic braking distance. */
   setBraking(on: boolean): void;
+  /** Race difficulty — sets how often the rival cars blunder (easy = often, hard = almost never). */
+  setDifficulty(mode: DifficultyMode): void;
   /** Current macro-biome leg (0 village · 1 neon · 2 forest) + whether the village is in its autumn season — drives the per-biome soundtrack. */
   getMacroBiome(): { legIndex: number; autumn: boolean };
   consumeGameOver(): GameOverInfo | undefined;
@@ -103,24 +105,24 @@ const chaserHideZ = -9.5; // hide once it has slid off the bottom (just behind t
 const chaserApproachLerp = 5.2; // fast to appear
 const chaserRecedeSpeed = 0.9; // metres/second — slow, steady fall-back (takes several seconds)
 const introChaserSideOffset = 1.05;
-// 好敵手 Rivals — two pace cars racing AHEAD. Their speed depends ONLY on how close you are
-// (no reverse rubber-band — they never slow down to wait for you). Far away they cruise at a
-// fraction of YOUR clean pace, so a clean run reels them in by being genuinely faster; the
-// closer you get the harder they defend (up past your pace), so you can never overtake. Slip
-// up and your real speed drops below their cruise → you fall back and must earn the gap again.
-const RIVAL_START_GAP = 15; // m ahead at the start (clearly in view)
-const RIVAL_BASE_FRACTION = 0.95; // far-away cruise as a fraction of your clean pace (you're faster when clean)
-const RIVAL_DEFEND_FRACTION = 1.16; // right on their bumper they accelerate to this × pace → never overtakeable
-const RIVAL_PROX_GAP = 18; // within this gap they start defending (ramping up toward DEFEND)
-const RIVAL_MIN_GAP = 8; // closest you can get — full defend here
-const RIVAL_LANE_OFFSET = 6; // the second rival rides this far further ahead
-const RIVAL_VANISH_FRACTION = 0.82; // rivals are "lost in the fog" once the gap exceeds this × fog.far
+// 好敵手 Rivals — two pace cars racing AHEAD, each at 100% of your clean pace, so the gap holds
+// steady when nobody errs. You fall back when YOU slip; you reel a rival in when IT blunders
+// (they stumble at a difficulty-set rate). Lose both into the fog for 10 s → the police catch you.
+const RIVAL_START_GAP = 15; // m the nearer rival sits ahead at the start (clearly in view)
+const RIVAL_SECOND_STAGGER = 6; // the second rival starts this much further ahead than the first
+const RIVAL_MIN_GAP = 8; // closest you can get — they hold station here, you can't pass them
+const RIVAL_VANISH_FRACTION = 0.82; // a rival is "lost in the fog" once its gap exceeds this × fog.far
 const RIVAL_LOSE_SECONDS = 10; // both rivals lost this long → the police catch you & you lose
-// A mistake doesn't just cost you speed — it makes the rivals SURGE toward the horizon. This is
-// what lets them reach the fog fast: ~3 big mistakes push them in (vs. dozens on the speed dip
-// alone). A single mistake is still recoverable — clean driving reels the surge back in.
-const RIVAL_MISTAKE_KICK = 20; // m the rivals jump ahead on a big mistake (a crash)
-const RIVAL_SLIP_KICK = 10; // m they jump on a small slip (lane-edge) — half a crash. Lane changes: none.
+// The rivals cruise at 100% of your clean pace — the gap HOLDS when you're both clean (there is
+// no automatic catch-up). Only two things move it: YOUR mistakes (you slow, they pull away) and
+// THEIR mistakes (a rival briefly slows, so you reel it back in). How often they blunder is the
+// difficulty knob below.
+const RIVAL_MISTAKE_DIP = 0.34; // a blunder drops that rival to (1 − dip) × pace for a moment
+const RIVAL_MISTAKE_RECOVER = 0.25; // fraction of pace the rival regains per second (linear)
+const RIVAL_PENALTY_FLOOR = 0.45; // a blundering rival never crawls below this fraction of pace
+// Blunders per second, PER rival, by difficulty. leicht → they stumble often (very forgiving);
+// mittel → now and then; schwer → almost never, so your own mistakes stick and you must drive clean.
+const RIVAL_MISTAKE_RATES: Record<DifficultyMode, number> = { easy: 0.09, medium: 0.04, hard: 0.014 };
 // 鬼 Schwarzes Loch: a fixed point high in the sky (scene space) that tapped cars are sucked UP into.
 const BLACK_HOLE_POS = { x: 0, y: 9, z: 13 };
 // 鬼 Anzapfen: only the nearest cars within this many metres ahead bleed coins.
@@ -146,7 +148,7 @@ export class RunSceneFactory {
     const scene = new THREE.Scene();
     scene.name = "run_scene";
     scene.background = new THREE.Color(0x58c7f3);
-    scene.fog = new THREE.Fog(0x58c7f3, 28, 104);
+    scene.fog = new THREE.Fog(0x58c7f3, 28, 92);
 
     const sceneLights = LightingRig.addTo(scene, config.quality);
     // 将 Nachtjagd night fade — lerp lights + sky/fog between day and a deep indigo night.
@@ -423,9 +425,10 @@ export class RunSceneFactory {
       sprite.scale.set(worldH * (canvas.width / canvas.height), worldH, 1);
       return sprite;
     };
+    // Each rival tracks its OWN gap + speed penalty, so they blunder (and fall back) independently.
     const rivals = [
-      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), plate: makePlateLabel("わ12"), laneX: laneSystem.getLaneX(-1), ahead: 0 },
-      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), plate: makePlateLabel("を56"), laneX: laneSystem.getLaneX(1), ahead: RIVAL_LANE_OFFSET }
+      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), plate: makePlateLabel("わ12"), laneX: laneSystem.getLaneX(-1), startGap: RIVAL_START_GAP, gap: RIVAL_START_GAP, penalty: 1 },
+      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), plate: makePlateLabel("を56"), laneX: laneSystem.getLaneX(1), startGap: RIVAL_START_GAP + RIVAL_SECOND_STAGGER, gap: RIVAL_START_GAP + RIVAL_SECOND_STAGGER, penalty: 1 }
     ];
     for (const r of rivals) {
       r.mesh.rotation.y = vehicle.run.forwardRotationY; // drive the same way as the player
@@ -433,7 +436,7 @@ export class RunSceneFactory {
       r.mesh.visible = false;
       r.plate.visible = false;
     }
-    let rivalGap = RIVAL_START_GAP; // m the nearer rival sits ahead of the player
+    let rivalMistakeRate = RIVAL_MISTAKE_RATES.medium; // set from the difficulty setting on run start
     let rivalBeaconPhase = 0; // drives the plate's gentle bob
     let rivalsLostTimer = 0; // s both rivals have been lost in the fog (10 s → arrest)
     const scoreSystem = new ScoreSystem();
@@ -1101,9 +1104,10 @@ export class RunSceneFactory {
       weakFails = 0;
       braking = false;
       brakeLoss = 0;
-      rivalGap = RIVAL_START_GAP;
       rivalsLostTimer = 0;
       for (const r of rivals) {
+        r.gap = r.startGap;
+        r.penalty = 1;
         r.mesh.visible = false;
         r.plate.visible = false;
       }
@@ -1705,10 +1709,10 @@ export class RunSceneFactory {
       }
     }
 
-    // 好敵手 The two rivals racing ahead. Their speed rubber-bands around the clean race pace
-    // based on the current gap (closer → faster, so never overtakeable; farther → slower, so
-    // catchable when you drive clean). Your mistakes + braking drop your real speed below the
-    // pace, so the gap grows and they pull toward the fog. [Phase 3b: gap in the fog for 10 s = lose.]
+    // 好敵手 The two rivals racing ahead. Each holds 100% of your clean pace, so the gap is steady
+    // while nobody errs. When YOU slip, your real speed drops below pace and the gap grows (they
+    // pull toward the fog). When a RIVAL blunders (difficulty-set chance), it briefly slows and you
+    // reel it back in. [Phase 3b: BOTH lost in the fog for 10 s = arrest.]
     function updateRivals(dt: number, isRunning: boolean): void {
       if (!isRunning) {
         for (const r of rivals) {
@@ -1719,26 +1723,30 @@ export class RunSceneFactory {
       }
       const pace = getRunSpeed(); // the clean, distance-ramped race pace
       const player = currentSpeed(); // your real speed (penalty + braking folded in)
-      // Proximity-only speed: far → BASE_FRACTION of pace (slower than a clean you); on their
-      // bumper → DEFEND_FRACTION (faster than you). No floor below BASE → they never wait for you.
-      const defend = Math.max(0, Math.min(1, (RIVAL_PROX_GAP - rivalGap) / (RIVAL_PROX_GAP - RIVAL_MIN_GAP)));
-      const rivalSpeed = pace * (RIVAL_BASE_FRACTION + (RIVAL_DEFEND_FRACTION - RIVAL_BASE_FRACTION) * defend);
-      rivalGap = Math.max(RIVAL_MIN_GAP, rivalGap + (rivalSpeed - player) * dt);
       rivalBeaconPhase += dt;
       const bob = Math.sin(rivalBeaconPhase * 3) * 0.1;
+      const vanishGap = fog.far * RIVAL_VANISH_FRACTION;
+      let nearestGap = Infinity;
       for (const r of rivals) {
-        const z = rivalGap + r.ahead;
+        // Occasional blunder — a Poisson-style per-frame roll → the rival briefly loses pace,
+        // so a clean you closes the gap. Rarer on higher difficulty (rivalMistakeRate).
+        if (Math.random() < rivalMistakeRate * dt) {
+          r.penalty = Math.max(RIVAL_PENALTY_FLOOR, r.penalty - RIVAL_MISTAKE_DIP);
+        }
+        const rivalSpeed = pace * r.penalty; // 100% of your clean pace unless it's mid-blunder
+        r.gap = Math.max(RIVAL_MIN_GAP, r.gap + (rivalSpeed - player) * dt);
+        r.penalty = Math.min(1, r.penalty + RIVAL_MISTAKE_RECOVER * dt);
         r.mesh.visible = true;
-        r.mesh.position.set(r.laneX, 0, z); // ahead in scene space; fog fades them as the gap grows
+        r.mesh.position.set(r.laneX, 0, r.gap); // ahead in scene space; fog fades them as the gap grows
         r.plate.visible = true;
-        r.plate.position.set(r.laneX, 2.55 + bob, z); // the plate number floats over the car
+        r.plate.position.set(r.laneX, 2.55 + bob, r.gap); // the plate number floats over the car
+        nearestGap = Math.min(nearestGap, r.gap);
       }
 
-      // Both rivals are "lost in the fog" once the nearer one is deep enough that the haze has
-      // swallowed it. Sustained loss counts down to the arrest (the police close in — updateChaser);
-      // reeling them back into view eases the danger off.
-      const vanishGap = fog.far * RIVAL_VANISH_FRACTION;
-      if (rivalGap > vanishGap) {
+      // Both rivals are "lost in the fog" only once even the NEAREST one is deep enough that the
+      // haze has swallowed it. Sustained loss counts down to the arrest (police close in —
+      // updateChaser); reeling either back into view eases the danger off.
+      if (nearestGap > vanishGap) {
         rivalsLostTimer += dt;
         if (rivalsLostTimer >= RIVAL_LOSE_SECONDS) {
           registerRivalsEscaped();
@@ -1997,7 +2005,6 @@ export class RunSceneFactory {
       }
 
       runnerController.dipSmall();
-      rivalGap += RIVAL_SLIP_KICK; // a slip nudges the rivals ahead too — half a crash
       weakFails = Math.min(2, weakFails + 1);
       pressure = Math.max(pressure, 50);
       // 龍 Zu schnell shrinks this window — the police slide up from behind for a shorter time.
@@ -2047,7 +2054,6 @@ export class RunSceneFactory {
       }
 
       runnerController.dipBig();
-      rivalGap += RIVAL_MISTAKE_KICK; // the rivals surge toward the fog — this is what loses them
       runnerController.applyStrongHit();
       scoreSystem.resetCombo();
       weakFails = Math.min(2, weakFails + 1);
@@ -2092,6 +2098,9 @@ export class RunSceneFactory {
       getSpeedKmh: () => currentSpeed() * SPEED_TO_KMH,
       setBraking: (on: boolean) => {
         braking = on;
+      },
+      setDifficulty: (mode: DifficultyMode) => {
+        rivalMistakeRate = RIVAL_MISTAKE_RATES[mode];
       },
       getMacroBiome: () => {
         const legIndex = biomeManager.biomeIndexForZ(distance);

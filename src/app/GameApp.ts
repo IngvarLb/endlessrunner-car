@@ -1,4 +1,4 @@
-import { DEFAULT_GAME_CONFIG, type GameConfig, type QualityMode } from "./GameConfig";
+import { DEFAULT_GAME_CONFIG, type DifficultyMode, type GameConfig, type QualityMode } from "./GameConfig";
 import { GameEvents } from "./GameEvents";
 import { GameLoop } from "./GameLoop";
 import { ServiceRegistry } from "./ServiceRegistry";
@@ -316,6 +316,7 @@ export class GameApp {
       catchWindowSec: () => this.runAbilities?.catchWindowSec(),
       onCrash: (side) => this.resolveCrash(side)
     });
+    this.runScene.setDifficulty(this.saveData.settings.difficulty); // rival blunder rate for this run
     this.stateMachine.transition("countdown", reason);
     this.runNumericCountdown();
   }
@@ -687,6 +688,12 @@ export class GameApp {
                 <button class="fr-qbtn fr-set-q" type="button" data-quality="medium"><span class="fr-srow-jp">中</span>MED</button>
                 <button class="fr-qbtn fr-set-q" type="button" data-quality="high"><span class="fr-srow-jp">高</span>HIGH</button>
               </div>
+              <div class="fr-set-secthead fr-set-secthead--gfx"><span class="fr-set-num">04</span><span class="fr-set-sectlabel">難度 · SCHWIERIGKEIT</span></div>
+              <div class="fr-set-quality">
+                <button class="fr-qbtn fr-set-d" type="button" data-difficulty="easy"><span class="fr-srow-jp">易</span>LEICHT</button>
+                <button class="fr-qbtn fr-set-d" type="button" data-difficulty="medium"><span class="fr-srow-jp">中</span>MITTEL</button>
+                <button class="fr-qbtn fr-set-d" type="button" data-difficulty="hard"><span class="fr-srow-jp">難</span>SCHWER</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1011,6 +1018,12 @@ export class GameApp {
         this.bindButton(button, () => this.setQualitySetting(quality));
       }
     }
+    for (const button of Array.from(ui.querySelectorAll<HTMLButtonElement>(".fr-set-d"))) {
+      const difficulty = button.dataset.difficulty as DifficultyMode | undefined;
+      if (difficulty) {
+        this.bindButton(button, () => this.setDifficultySetting(difficulty));
+      }
+    }
     for (const button of Array.from(ui.querySelectorAll<HTMLButtonElement>(".fr-settings-close"))) {
       this.bindButton(button, () => this.toggleSettingsPanel());
     }
@@ -1029,6 +1042,9 @@ export class GameApp {
     this.setToggleUi(".fr-set-perf", settings.showPerfHud);
     for (const button of Array.from(this.frSettings.querySelectorAll<HTMLButtonElement>(".fr-set-q"))) {
       button.classList.toggle("is-active", button.dataset.quality === settings.quality);
+    }
+    for (const button of Array.from(this.frSettings.querySelectorAll<HTMLButtonElement>(".fr-set-d"))) {
+      button.classList.toggle("is-active", button.dataset.difficulty === settings.difficulty);
     }
   }
 
@@ -1070,6 +1086,19 @@ export class GameApp {
     });
     this.config.quality = quality;
     this.renderer?.setQuality(quality);
+    this.syncSettingsUi();
+  }
+
+  private setDifficultySetting(difficulty: DifficultyMode): void {
+    if (this.saveData.settings.difficulty === difficulty) {
+      return;
+    }
+
+    this.saveData = saveSaveData({
+      ...this.saveData,
+      settings: { ...this.saveData.settings, difficulty }
+    });
+    this.runScene?.setDifficulty(difficulty); // applies to the next run (and the current one)
     this.syncSettingsUi();
   }
 

@@ -1,4 +1,4 @@
-import type { QualityMode } from "../../app/GameConfig";
+import type { DifficultyMode, QualityMode } from "../../app/GameConfig";
 
 /** Per-vehicle progression: meters drive the Passive mastery level, mainLevel the coin-bought Main. */
 export type VehicleProgress = {
@@ -23,6 +23,7 @@ export type SaveData = {
     sfxVolume: number;
     muted: boolean;
     quality: QualityMode;
+    difficulty: DifficultyMode;
     reducedMotion: boolean;
     showPerfHud: boolean;
   };
@@ -42,6 +43,7 @@ export const DEFAULT_SAVE_DATA: SaveData = {
     sfxVolume: 0.75,
     muted: false,
     quality: "medium",
+    difficulty: "medium",
     reducedMotion: false,
     showPerfHud: false
   }

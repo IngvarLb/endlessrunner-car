@@ -1,4 +1,4 @@
-import type { QualityMode } from "../../app/GameConfig";
+import type { DifficultyMode, QualityMode } from "../../app/GameConfig";
 import {
   canAffordVehicle,
   getAllVehicles,
@@ -13,6 +13,7 @@ import { DEFAULT_SAVE_DATA, type SaveData, type VehicleProgress } from "./SaveDa
 
 const saveKey = "feudal-runner-save-v1";
 const qualityModes: QualityMode[] = ["low", "medium", "high"];
+const difficultyModes: DifficultyMode[] = ["easy", "medium", "hard"];
 
 export type UnlockVehicleResult =
   | { ok: true; saveData: SaveData; vehicleId: string }
@@ -178,6 +179,7 @@ function normalizeSaveData(value: unknown): SaveData {
       sfxVolume: normalizeNumber(settings.sfxVolume, DEFAULT_SAVE_DATA.settings.sfxVolume),
       muted: typeof settings.muted === "boolean" ? settings.muted : DEFAULT_SAVE_DATA.settings.muted,
       quality: normalizeQuality(settings.quality),
+      difficulty: normalizeDifficulty(settings.difficulty),
       reducedMotion:
         typeof settings.reducedMotion === "boolean" ? settings.reducedMotion : DEFAULT_SAVE_DATA.settings.reducedMotion,
       showPerfHud:
@@ -258,6 +260,12 @@ function normalizeQuality(value: unknown): QualityMode {
   return typeof value === "string" && qualityModes.includes(value as QualityMode)
     ? (value as QualityMode)
     : DEFAULT_SAVE_DATA.settings.quality;
+}
+
+function normalizeDifficulty(value: unknown): DifficultyMode {
+  return typeof value === "string" && difficultyModes.includes(value as DifficultyMode)
+    ? (value as DifficultyMode)
+    : DEFAULT_SAVE_DATA.settings.difficulty;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -19,6 +19,11 @@ export type SegmentKind =
 
 export type QualityMode = "low" | "medium" | "high";
 
+// Race difficulty — controls how often the rival cars blunder (and thus how forgiving your own
+// mistakes are). easy = they stumble often; hard = they almost never do. Labels in the UI are
+// German (leicht/mittel/schwer); these are the stable stored values.
+export type DifficultyMode = "easy" | "medium" | "hard";
+
 export type GameConfig = {
   seed?: number;
   quality: QualityMode;
