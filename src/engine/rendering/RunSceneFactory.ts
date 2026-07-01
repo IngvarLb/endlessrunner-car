@@ -40,7 +40,7 @@ import { LightingRig } from "./LightingRig";
 import { TurretSystem } from "./TurretSystem";
 
 export type GameOverInfo = {
-  reason: "obstacle" | "weak-fails";
+  reason: "obstacle" | "weak-fails" | "rivals-escaped";
 };
 
 export type RunScene = AppScene & {
@@ -114,6 +114,8 @@ const RIVAL_DEFEND_FRACTION = 1.16; // right on their bumper they accelerate to 
 const RIVAL_PROX_GAP = 18; // within this gap they start defending (ramping up toward DEFEND)
 const RIVAL_MIN_GAP = 8; // closest you can get — full defend here
 const RIVAL_LANE_OFFSET = 6; // the second rival rides this far further ahead
+const RIVAL_VANISH_FRACTION = 0.82; // rivals are "lost in the fog" once the gap exceeds this × fog.far
+const RIVAL_LOSE_SECONDS = 10; // both rivals lost this long → the police catch you & you lose
 // 鬼 Schwarzes Loch: a fixed point high in the sky (scene space) that tapped cars are sucked UP into.
 const BLACK_HOLE_POS = { x: 0, y: 9, z: 13 };
 // 鬼 Anzapfen: only the nearest cars within this many metres ahead bleed coins.
@@ -389,28 +391,36 @@ export class RunSceneFactory {
     // + track it into the fog. A billboard sprite from a canvas texture — always faces the camera.
     const makePlateLabel = (text: string): THREE.Sprite => {
       const canvas = document.createElement("canvas");
-      canvas.width = 256;
-      canvas.height = 128;
       const ctx = canvas.getContext("2d")!;
-      ctx.font = "900 64px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif";
+      const fontPx = 76;
+      const font = `900 ${fontPx}px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif`;
+      // Size the canvas to FIT the text (+ padding) so nothing gets clipped at the sides.
+      ctx.font = font;
+      const padX = 22;
+      const padY = 14;
+      canvas.width = Math.ceil(ctx.measureText(text).width) + padX * 2;
+      canvas.height = fontPx + padY * 2;
+      ctx.font = font; // resizing the canvas resets the context — re-apply
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.lineJoin = "round";
       ctx.lineWidth = 11;
       ctx.strokeStyle = "rgba(8,10,16,0.92)"; // dark outline so the bare text reads on any background
-      ctx.strokeText(text, 128, 70);
+      ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
       ctx.fillStyle = "#eafdff"; // bright plate text
-      ctx.fillText(text, 128, 70);
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
       const tex = new THREE.CanvasTexture(canvas);
       tex.minFilter = THREE.LinearFilter;
       tex.anisotropy = 4;
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-      sprite.scale.set(2.4, 1.2, 1);
+      // Compact: ~0.7 m tall, width follows the canvas aspect so the text is never stretched or cut.
+      const worldH = 0.7;
+      sprite.scale.set(worldH * (canvas.width / canvas.height), worldH, 1);
       return sprite;
     };
     const rivals = [
-      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), plate: makePlateLabel("わ 12-34"), laneX: laneSystem.getLaneX(-1), ahead: 0 },
-      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), plate: makePlateLabel("を 56-78"), laneX: laneSystem.getLaneX(1), ahead: RIVAL_LANE_OFFSET }
+      { mesh: mergeByMaterial(models.createVehicle("shogun-gtr")), plate: makePlateLabel("わ12"), laneX: laneSystem.getLaneX(-1), ahead: 0 },
+      { mesh: mergeByMaterial(models.createVehicle("kitsune-rally")), plate: makePlateLabel("を56"), laneX: laneSystem.getLaneX(1), ahead: RIVAL_LANE_OFFSET }
     ];
     for (const r of rivals) {
       r.mesh.rotation.y = vehicle.run.forwardRotationY; // drive the same way as the player
@@ -420,6 +430,7 @@ export class RunSceneFactory {
     }
     let rivalGap = RIVAL_START_GAP; // m the nearer rival sits ahead of the player
     let rivalBeaconPhase = 0; // drives the plate's gentle bob
+    let rivalsLostTimer = 0; // s both rivals have been lost in the fog (10 s → arrest)
     const scoreSystem = new ScoreSystem();
     const biome = FEUDAL_JAPAN_BIOME_CONTENT;
     const trackLoopLength = biome.track.segmentLength * biome.track.segmentCount;
@@ -1086,6 +1097,7 @@ export class RunSceneFactory {
       braking = false;
       brakeLoss = 0;
       rivalGap = RIVAL_START_GAP;
+      rivalsLostTimer = 0;
       for (const r of rivals) {
         r.mesh.visible = false;
         r.plate.visible = false;
@@ -1716,12 +1728,28 @@ export class RunSceneFactory {
         r.plate.visible = true;
         r.plate.position.set(r.laneX, 2.55 + bob, z); // the plate number floats over the car
       }
+
+      // Both rivals are "lost in the fog" once the nearer one is deep enough that the haze has
+      // swallowed it. Sustained loss counts down to the arrest (the police close in — updateChaser);
+      // reeling them back into view eases the danger off.
+      const vanishGap = fog.far * RIVAL_VANISH_FRACTION;
+      if (rivalGap > vanishGap) {
+        rivalsLostTimer += dt;
+        if (rivalsLostTimer >= RIVAL_LOSE_SECONDS) {
+          registerRivalsEscaped();
+        }
+      } else {
+        rivalsLostTimer = Math.max(0, rivalsLostTimer - dt * 2.5);
+      }
     }
 
     function updateChaser(dt: number, _elapsed: number, isRunning: boolean): void {
       const isCatchWindowActive = lightMistakeWindowTimer > 0;
       const isIntroActive = introChaserTimer > 0;
-      const wantChaser = isRunning && (isIntroActive || isCatchWindowActive);
+      // 好敵手 As you lose the rivals into the fog, the police mirror your deficit — closing in
+      // from behind as the 10 s deadline runs down (and catching you at the end).
+      const rivalDanger = Math.min(1, rivalsLostTimer / RIVAL_LOSE_SECONDS);
+      const wantChaser = isRunning && (isIntroActive || isCatchWindowActive || rivalDanger > 0.001);
 
       if (wantChaser && !chaserWanted) {
         // Police drives up from far behind (off-screen) — never pops in close.
@@ -1745,7 +1773,11 @@ export class RunSceneFactory {
       const pressureOffset = THREE.MathUtils.clamp(pressure / 100, 0, 1);
       const sideOffset = isIntroActive ? introChaserSideOffset : 0;
       if (wantChaser) {
-        const targetZ = isCatchWindowActive ? catchWindowChaserZ + pressureOffset * 0.85 : introChaserZ;
+        let targetZ = chaserSpawnZ; // far behind unless a driver pulls it closer
+        if (isIntroActive) targetZ = Math.max(targetZ, introChaserZ);
+        if (isCatchWindowActive) targetZ = Math.max(targetZ, catchWindowChaserZ + pressureOffset * 0.85);
+        // Rival deficit: from far behind at first loss, right onto your bumper as the deadline ends.
+        if (rivalDanger > 0.001) targetZ = Math.max(targetZ, THREE.MathUtils.lerp(chaserSpawnZ, -2.2, rivalDanger));
         chaser.position.z = THREE.MathUtils.lerp(chaser.position.z, targetZ, Math.min(1, dt * chaserApproachLerp));
       } else {
         chaser.position.z -= chaserRecedeSpeed * dt; // constant slow fall-back, no easing
@@ -1906,6 +1938,28 @@ export class RunSceneFactory {
         });
       }
       return merged;
+    }
+
+    // Both rivals have been lost in the fog too long → you were too slow, the police catch up
+    // and arrest you. THE run's only game over (crashes/mistakes just cost speed now).
+    function registerRivalsEscaped(): void {
+      if (gameOverInfo) {
+        return;
+      }
+      gameOverInfo = { reason: "rivals-escaped" };
+      pressure = 100;
+      scoreSystem.resetCombo();
+      runnerController.applyStrongHit();
+      cameraController.shake(0.5, 0.3);
+      events?.emit("runner:hit", {
+        hit: {
+          source: "chaser",
+          severity: "fatal",
+          worldPosition: { x: runnerController.getPosition().x, y: 0.45, z: runnerController.getPosition().z }
+        },
+        shieldConsumed: false,
+        pressureAfter: pressure
+      });
     }
 
     // A SMALL mistake (steered into the lane edge). No longer ends the run — it just shaves a
