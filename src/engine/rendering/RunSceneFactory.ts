@@ -116,6 +116,11 @@ const RIVAL_MIN_GAP = 8; // closest you can get — full defend here
 const RIVAL_LANE_OFFSET = 6; // the second rival rides this far further ahead
 const RIVAL_VANISH_FRACTION = 0.82; // rivals are "lost in the fog" once the gap exceeds this × fog.far
 const RIVAL_LOSE_SECONDS = 10; // both rivals lost this long → the police catch you & you lose
+// A mistake doesn't just cost you speed — it makes the rivals SURGE toward the horizon. This is
+// what lets them reach the fog fast: ~3 big mistakes push them in (vs. dozens on the speed dip
+// alone). A single mistake is still recoverable — clean driving reels the surge back in.
+const RIVAL_MISTAKE_KICK = 20; // m the rivals jump ahead on a big mistake (a crash)
+const RIVAL_SLIP_KICK = 10; // m they jump on a small slip (lane-edge) — half a crash. Lane changes: none.
 // 鬼 Schwarzes Loch: a fixed point high in the sky (scene space) that tapped cars are sucked UP into.
 const BLACK_HOLE_POS = { x: 0, y: 9, z: 13 };
 // 鬼 Anzapfen: only the nearest cars within this many metres ahead bleed coins.
@@ -1992,6 +1997,7 @@ export class RunSceneFactory {
       }
 
       runnerController.dipSmall();
+      rivalGap += RIVAL_SLIP_KICK; // a slip nudges the rivals ahead too — half a crash
       weakFails = Math.min(2, weakFails + 1);
       pressure = Math.max(pressure, 50);
       // 龍 Zu schnell shrinks this window — the police slide up from behind for a shorter time.
@@ -2041,6 +2047,7 @@ export class RunSceneFactory {
       }
 
       runnerController.dipBig();
+      rivalGap += RIVAL_MISTAKE_KICK; // the rivals surge toward the fog — this is what loses them
       runnerController.applyStrongHit();
       scoreSystem.resetCombo();
       weakFails = Math.min(2, weakFails + 1);
